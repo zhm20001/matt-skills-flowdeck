@@ -262,110 +262,110 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>AI 编程流程板</h1>
-      <div class="sub">追踪 .scratch/ 产物 · grill → to-spec → to-tickets → implement · 适配任意 Agent</div>
+      <h1 data-i18n="doc.title">AI 编程流程板</h1>
+      <div class="sub" data-i18n="head.sub">追踪 .scratch/ 产物 · grill → to-spec → to-tickets → implement · 适配任意 Agent</div>
     </div>
     <div class="spacer"></div>
     <div class="frontierbox">
-      <button id="frontierBadge" class="chip" hidden title="全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单"></button>
+      <button id="frontierBadge" class="chip" hidden data-i18n-title="frontier.badge.title" title="全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单"></button>
       <div id="frontierPanel" class="menu" hidden></div>
     </div>
-    <span id="manualBadge" class="chip" hidden title="惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新"></span>
+    <span id="manualBadge" class="chip" hidden data-i18n-title="manual.badge.title" title="惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新"></span>
     <div class="sub" id="meta"></div>
     <div class="rootbox">
-      <input id="rootInput" title="要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json" placeholder="粘贴要追踪的项目目录路径">
-      <button id="rootMenuBtn" title="浏览常用目录：网页上切换过的目录自动收录，点一条立即切回" aria-label="展开常用目录下拉">▾</button>
+      <input id="rootInput" data-i18n-title="root.input.title" data-i18n-placeholder="root.input.placeholder" title="要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json" placeholder="粘贴要追踪的项目目录路径">
+      <button id="rootMenuBtn" data-i18n-title="rootmenu.btn.title" data-i18n-aria="rootmenu.btn.aria" title="浏览常用目录：网页上切换过的目录自动收录，点一条立即切回" aria-label="展开常用目录下拉">▾</button>
       <div id="rootMenu" class="menu" hidden></div>
     </div>
-    <button id="rootsBtn" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
-    <button id="themeBtn" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
+    <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
+    <button id="themeBtn" data-i18n-title="theme.btn.title" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
     <button id="langBtn" title="切换界面语言：中文 / EN（记忆在本浏览器里）">EN</button>
-    <button id="switchBtn" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
-    <button id="refreshBtn">立即刷新</button>
-    <button id="snapshotBtn" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
-    <button id="settingsBtn" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
-    <button id="skillsBtn" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）">技能包</button>
+    <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
+    <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
+    <button id="snapshotBtn" data-i18n="snapshot.btn.label" data-i18n-title="snapshot.btn.title" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
+    <button id="settingsBtn" data-i18n="settings.btn.label" data-i18n-title="settings.btn.title" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
+    <button id="skillsBtn" data-i18n="skills.btn.label" data-i18n-title="skills.btn.title" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）">技能包</button>
   </header>
 
   <div class="banner" id="err" role="alert"></div>
   <div class="tabs" id="tabs"></div>
   <div id="main"></div>
-  <footer id="foot"></footer>
+  <footer id="foot" data-i18n="foot.note"></footer>
 </div>
 <div id="skillsModal" class="modal" hidden>
   <div class="mask" id="skillsMask"></div>
-  <div class="box" role="dialog" aria-modal="true" aria-label="Matt 技能包全景介绍">
+  <div class="box" role="dialog" aria-modal="true" data-i18n-aria="skills.modal.aria" aria-label="Matt 技能包全景介绍">
     <div class="head">
-      <div class="title">Matt 技能包 · 全景介绍</div>
+      <div class="title" data-i18n="skills.modal.title">Matt 技能包 · 全景介绍</div>
       <div class="sub" id="skillsCount"></div>
       <div style="flex:1"></div>
-      <button id="skillsClose" title="关闭（Esc）">关闭</button>
+      <button id="skillsClose" data-i18n="modal.close.label" data-i18n-title="modal.close.title" title="关闭（Esc）">关闭</button>
     </div>
     <div class="body">
-      <nav id="skillsNav" aria-label="技能列表"></nav>
+      <nav id="skillsNav" data-i18n-aria="skills.nav.aria" aria-label="技能列表"></nav>
       <article id="skillsDoc" class="md"></article>
     </div>
   </div>
 </div>
-<div id="toast" aria-live="polite">已复制，去粘贴给任意 Agent 即可</div>
+<div id="toast" aria-live="polite" data-i18n="toast.copied">已复制，去粘贴给任意 Agent 即可</div>
 
 <!-- 设置弹窗：集中修改 config.json 可改字段（pollMs 即时生效；host/port 重启生效；令牌只写不读） -->
 <div id="settingsModal" class="modal" hidden>
   <div class="mask" id="settingsMask"></div>
-  <div class="box settings-box" role="dialog" aria-modal="true" aria-label="设置">
+  <div class="box settings-box" role="dialog" aria-modal="true" data-i18n-aria="settings.modal.aria" aria-label="设置">
     <div class="head">
-      <div class="title">设置</div>
-      <div class="sub">保存即写进 config.json</div>
+      <div class="title" data-i18n="settings.btn.label">设置</div>
+      <div class="sub" data-i18n="settings.sub">保存即写进 config.json</div>
       <div style="flex:1"></div>
-      <button id="settingsClose" title="关闭（Esc）">关闭</button>
+      <button id="settingsClose" data-i18n="modal.close.label" data-i18n-title="modal.close.title" title="关闭（Esc）">关闭</button>
     </div>
     <div class="body">
       <article id="settingsBody">
         <div class="frow">
-          <label for="setPollMs">轮询间隔 pollMs</label>
+          <label for="setPollMs" data-i18n="set.pollMs.label">轮询间隔 pollMs</label>
           <input id="setPollMs" type="number" min="1000" step="100">
-          <div class="hint">毫秒。网页每隔多久重读一次 .scratch；保存即生效，下限 1000。</div>
+          <div class="hint" data-i18n="set.pollMs.hint">毫秒。网页每隔多久重读一次 .scratch；保存即生效，下限 1000。</div>
         </div>
         <div class="frow">
-          <label for="setPollMode">轮询模式 pollMode</label>
+          <label for="setPollMode" data-i18n="set.pollMode.label">轮询模式 pollMode</label>
           <select id="setPollMode">
-            <option value="observe">观测（可见才轮询）</option>
-            <option value="display">展示（常规定时轮询）</option>
-            <option value="manual">惰性（只手动刷新）</option>
+            <option value="observe" data-i18n="set.pollMode.observe">观测（可见才轮询）</option>
+            <option value="display" data-i18n="set.pollMode.display">展示（常规定时轮询）</option>
+            <option value="manual" data-i18n="set.pollMode.manual">惰性（只手动刷新）</option>
           </select>
-          <div class="hint">观测：页面可见才定时轮询、不可见停表、回前台立即一拍（默认）；展示：大屏常亮场景的定时轮询；惰性：零自动请求，用「立即刷新」。存 config.json，跨浏览器一致。</div>
+          <div class="hint" data-i18n="set.pollMode.hint">观测：页面可见才定时轮询、不可见停表、回前台立即一拍（默认）；展示：大屏常亮场景的定时轮询；惰性：零自动请求，用「立即刷新」。存 config.json，跨浏览器一致。</div>
         </div>
         <div class="frow">
-          <label for="setNotify">桌面通知</label>
+          <label for="setNotify" data-i18n="set.notify.label">桌面通知</label>
           <input id="setNotify" type="checkbox">
-          <div class="hint">票关闭、迷雾增减、阶段推进时弹桌面通知（默认关，开启即向浏览器申请权限；回前台时积压变化聚合成一条）。偏好只存本浏览器，不进 config.json；惰性轮询下零自动拍零通知。</div>
+          <div class="hint" data-i18n="set.notify.hint">票关闭、迷雾增减、阶段推进时弹桌面通知（默认关，开启即向浏览器申请权限；回前台时积压变化聚合成一条）。偏好只存本浏览器，不进 config.json；惰性轮询下零自动拍零通知。</div>
         </div>
         <div class="frow">
-          <label for="setHost">监听地址 host</label>
+          <label for="setHost" data-i18n="set.host.label">监听地址 host</label>
           <input id="setHost" type="text" placeholder="127.0.0.1">
-          <div class="hint">重启服务后生效。默认 127.0.0.1 仅本机；0.0.0.0 局域网可开（建议配合访问令牌）。</div>
+          <div class="hint" data-i18n="set.host.hint">重启服务后生效。默认 127.0.0.1 仅本机；0.0.0.0 局域网可开（建议配合访问令牌）。</div>
         </div>
         <div class="frow">
-          <label for="setPort">端口 port</label>
+          <label for="setPort" data-i18n="set.port.label">端口 port</label>
           <input id="setPort" type="number" min="1" max="65535" placeholder="3210">
-          <div class="hint">重启服务后生效；被占用时服务会自动向后试 10 个。</div>
+          <div class="hint" data-i18n="set.port.hint">重启服务后生效；被占用时服务会自动向后试 10 个。</div>
         </div>
         <div class="frow">
-          <label for="setToken">访问令牌 token</label>
+          <label for="setToken" data-i18n="set.token.label">访问令牌 token</label>
           <input id="setToken" type="password" autocomplete="off">
           <div class="hint" id="setTokenHint"></div>
         </div>
         <div class="frow" id="setTokenClearRow" hidden>
           <label></label>
-          <button id="setTokenClear">清除令牌…</button>
-          <div class="hint">清除 = 关闭鉴权：/api/* 不再要求令牌（局域网暴露时同网段任何设备都可访问）。</div>
+          <button id="setTokenClear" data-i18n="set.token.clear.label">清除令牌…</button>
+          <div class="hint" data-i18n="set.token.clear.hint">清除 = 关闭鉴权：/api/* 不再要求令牌（局域网暴露时同网段任何设备都可访问）。</div>
         </div>
         <div class="frow">
-          <label>配置文件</label>
+          <label data-i18n="set.config.label">配置文件</label>
           <div class="hint" id="setConfigPath"></div>
         </div>
         <div class="factions">
-          <button id="settingsSave" class="primary">保存</button>
+          <button id="settingsSave" class="primary" data-i18n="set.save.label">保存</button>
           <span class="hint" id="setSaveHint"></span>
         </div>
       </article>
@@ -376,13 +376,13 @@
 <!-- 项目总览弹窗（票 03）：常用目录跨项目只读盘点；数据打开才取（按需单拍），行点击 = 既有换目录操作 -->
 <div id="rootsModal" class="modal" hidden>
   <div class="mask" id="rootsMask"></div>
-  <div class="box roots-box" role="dialog" aria-modal="true" aria-label="项目总览">
+  <div class="box roots-box" role="dialog" aria-modal="true" data-i18n-aria="roots.modal.aria" aria-label="项目总览">
     <div class="head">
-      <div class="title">项目总览</div>
+      <div class="title" data-i18n="roots.modal.title">项目总览</div>
       <div class="sub" id="rootsMeta"></div>
       <div style="flex:1"></div>
-      <button id="rootsRefresh" title="重新盘点全部常用目录">重新盘点</button>
-      <button id="rootsClose" title="关闭（Esc）">关闭</button>
+      <button id="rootsRefresh" data-i18n="roots.refresh.label" data-i18n-title="roots.refresh.title" title="重新盘点全部常用目录">重新盘点</button>
+      <button id="rootsClose" data-i18n="modal.close.label" data-i18n-title="modal.close.title" title="关闭（Esc）">关闭</button>
     </div>
     <div class="body">
       <article id="rootsBody"></article>
@@ -393,12 +393,12 @@
 <!-- 规格阅读弹窗：全宽精读当前 effort 的 spec（内容取打开时刻的快照，轮询不打扰） -->
 <div id="readModal" class="modal" hidden>
   <div class="mask" id="readMask"></div>
-  <div class="box" role="dialog" aria-modal="true" aria-label="规格阅读">
+  <div class="box" role="dialog" aria-modal="true" data-i18n-aria="read.modal.aria" aria-label="规格阅读">
     <div class="head">
       <div class="title" id="readTitle"></div>
       <div class="sub" id="readMeta"></div>
       <div style="flex:1"></div>
-      <button id="readClose" title="关闭（Esc）">关闭</button>
+      <button id="readClose" data-i18n="modal.close.label" data-i18n-title="modal.close.title" title="关闭（Esc）">关闭</button>
     </div>
     <div class="body">
       <article id="readDoc" class="md"></article>
@@ -453,6 +453,333 @@ var UI_TEXT = {
   'stage.implement.subtitle': { zh: '逐票实现 → 全部关闭', en: 'Ticket by ticket → all closed' },
   'lang.btn.label': { zh: 'EN', en: '中文' },
   'lang.btn.title': { zh: '切换界面语言为英文（记忆在本浏览器里）', en: 'Switch the interface language to Chinese (remembered in this browser)' },
+
+  /* ── 票 02 收口：其余界面人话全部进表，渲染层一律按键取词 ──
+     带 {slot} 的词用 tf() 填槽（语序由两种语言各自安排，渲染层不做拼接）；
+     判据字段名（map.md / spec.md / Destination / Status / Blocked by / Not yet specified /
+     issues/ / config.json / .scratch / token / pollMs）与路径、技能名一律保持原文，不随语言翻。 */
+
+  // 顶栏与文档标题
+  'doc.title': { zh: 'AI 编程流程板', en: 'AI Coding Workflow Deck' },
+  'head.sub': { zh: '追踪 .scratch/ 产物 · grill → to-spec → to-tickets → implement · 适配任意 Agent', en: 'Tracks .scratch/ artifacts · grill → to-spec → to-tickets → implement · works with any agent' },
+  'frontier.badge.title': { zh: '全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单', en: 'Fog total plus frontier ticket count across efforts — how much is still undecided and what you can do now. Click for the frontier list' },
+  'frontier.badge.text': { zh: '迷雾 {fog} · 前沿 {frontier}', en: 'Fog {fog} · Frontier {frontier}' },
+  'manual.badge.title': { zh: '惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新', en: 'Passive polling: no automatic requests, the data is from the last scan — press Refresh for a new one' },
+  'manual.badge.text': { zh: '手动模式 · {when} 盘点', en: 'Manual mode · scanned {when}' },
+  'manual.badge.bare': { zh: '手动模式', en: 'Manual mode' },
+  'root.input.title': { zh: '要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json', en: 'Project directory to track (it needs a .scratch/). Absolute paths work; it takes effect at once and is written to config.json' },
+  'root.input.placeholder': { zh: '粘贴要追踪的项目目录路径', en: 'Paste the project directory path to track' },
+  'rootmenu.btn.title': { zh: '浏览常用目录：网页上切换过的目录自动收录，点一条立即切回', en: 'Browse recent directories: ones you switched to on this page are collected, click one to switch back' },
+  'rootmenu.btn.aria': { zh: '展开常用目录下拉', en: 'Open the recent directories menu' },
+  'roots.btn.label': { zh: '项目', en: 'Projects' },
+  'roots.btn.title': { zh: '项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）', en: 'Project overview: every recent directory scanned read-only (chain stage, ticket counts, fog on one screen; click a row to switch)' },
+  'theme.btn.title': { zh: '在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）', en: 'Switch between paper light and GitHub dark (remembered in this browser)' },
+  'theme.btn.dark': { zh: '🌙 暗色', en: '🌙 Dark' },
+  'theme.btn.light': { zh: '☀️ 纸面', en: '☀️ Paper' },
+  'switch.btn.label': { zh: '换目录', en: 'Switch' },
+  'switch.btn.title': { zh: '切换追踪目录：立即生效并写进 config.json', en: 'Switch the tracked directory: takes effect at once and is written to config.json' },
+  'refresh.btn.label': { zh: '立即刷新', en: 'Refresh' },
+  'snapshot.btn.label': { zh: '导出快照', en: 'Export snapshot' },
+  'snapshot.btn.title': { zh: '把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档', en: 'Export the raw body of the latest scan as a timestamped JSON file (to archive or hand to another agent). Ticket bodies are excluded — they load on click; a snapshot is a scan archive' },
+  'settings.btn.label': { zh: '设置', en: 'Settings' },
+  'settings.btn.title': { zh: '集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读', en: 'Edit the settings in one place (written to config.json): the poll interval applies at once; host/port apply after a restart; the access token is write-only' },
+  'skills.btn.label': { zh: '技能包', en: 'Skills' },
+  'skills.btn.title': { zh: 'Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）', en: 'Matt skills overview: categories, purpose and triggers for 35 skills (static docs under docs/skill-intros/)' },
+  'toast.copied': { zh: '已复制，去粘贴给任意 Agent 即可', en: 'Copied — paste it to any agent' },
+  'foot.note': { zh: '数据来源：追踪目录里的 .scratch/ · 轮询模式与间隔由 config.json 决定（pollMode / pollMs，可在「设置」里改）', en: 'Data source: .scratch/ in the tracked directory · pollMode / pollMs come from config.json (editable under Settings)' },
+
+  // 弹窗外壳（三窗共用的关闭件与各窗标题）
+  'modal.close.label': { zh: '关闭', en: 'Close' },
+  'modal.close.title': { zh: '关闭（Esc）', en: 'Close (Esc)' },
+  'skills.modal.aria': { zh: 'Matt 技能包全景介绍', en: 'Matt skills overview' },
+  'skills.modal.title': { zh: 'Matt 技能包 · 全景介绍', en: 'Matt Skills · Overview' },
+  'skills.nav.aria': { zh: '技能列表', en: 'Skill list' },
+  'settings.modal.aria': { zh: '设置', en: 'Settings' },
+  'settings.sub': { zh: '保存即写进 config.json', en: 'Saving writes to config.json' },
+  'roots.modal.aria': { zh: '项目总览', en: 'Project overview' },
+  'roots.modal.title': { zh: '项目总览', en: 'Project overview' },
+  'roots.refresh.label': { zh: '重新盘点', en: 'Rescan' },
+  'roots.refresh.title': { zh: '重新盘点全部常用目录', en: 'Rescan every recent directory' },
+  'read.modal.aria': { zh: '规格阅读', en: 'Reading view' },
+
+  // 设置弹窗表单
+  'set.pollMs.label': { zh: '轮询间隔 pollMs', en: 'Poll interval pollMs' },
+  'set.pollMs.hint': { zh: '毫秒。网页每隔多久重读一次 .scratch；保存即生效，下限 1000。', en: 'Milliseconds. How often the page re-reads .scratch; applies on save, minimum 1000.' },
+  'set.pollMode.label': { zh: '轮询模式 pollMode', en: 'Poll mode pollMode' },
+  'set.pollMode.hint': { zh: '观测：页面可见才定时轮询、不可见停表、回前台立即一拍（默认）；展示：大屏常亮场景的定时轮询；惰性：零自动请求，用「立即刷新」。存 config.json，跨浏览器一致。', en: 'Observe: polls only while the tab is visible, stops when hidden and fires at once on return (default); Display: plain timed polling for an always-on screen; Passive: no automatic requests, use Refresh. Stored in config.json, consistent across browsers.' },
+  'set.pollMode.observe': { zh: '观测（可见才轮询）', en: 'Observe (visible only)' },
+  'set.pollMode.display': { zh: '展示（常规定时轮询）', en: 'Display (regular timer)' },
+  'set.pollMode.manual': { zh: '惰性（只手动刷新）', en: 'Passive (manual refresh)' },
+  'set.notify.label': { zh: '桌面通知', en: 'Desktop notifications' },
+  'set.notify.hint': { zh: '票关闭、迷雾增减、阶段推进时弹桌面通知（默认关，开启即向浏览器申请权限；回前台时积压变化聚合成一条）。偏好只存本浏览器，不进 config.json；惰性轮询下零自动拍零通知。', en: 'Notify on tickets closing, fog changing and stages advancing (off by default; enabling asks the browser for permission; changes that piled up collapse into one message). The preference lives in this browser only, not in config.json; passive mode fires nothing.' },
+  'set.host.label': { zh: '监听地址 host', en: 'Bind address host' },
+  'set.host.hint': { zh: '重启服务后生效。默认 127.0.0.1 仅本机；0.0.0.0 局域网可开（建议配合访问令牌）。', en: 'Applies after a restart. Default 127.0.0.1 is local only; 0.0.0.0 opens the LAN (pair it with an access token).' },
+  'set.port.label': { zh: '端口 port', en: 'Port' },
+  'set.port.hint': { zh: '重启服务后生效；被占用时服务会自动向后试 10 个。', en: 'Applies after a restart; if it is taken the server tries the next 10 ports.' },
+  'set.token.label': { zh: '访问令牌 token', en: 'Access token' },
+  'set.token.on': { zh: '已启用——输入新值可替换', en: 'Enabled — type a new value to replace it' },
+  'set.token.off': { zh: '留空 = 不启用', en: 'Leave empty to disable' },
+  'set.token.hint-on': { zh: '非空时 /api/* 的每个请求都要携带令牌（X-FlowDeck-Token 头或 ?token=）。输入新值保存即替换。', en: 'While it is set, every /api/* request must carry it (X-FlowDeck-Token header or ?token=). Type a new value and save to replace it.' },
+  'set.token.hint-off': { zh: '设一个共享口令：0.0.0.0 局域网暴露时挡住同网段未授权访问；本机 127.0.0.1 用法可留空。', en: 'A shared passphrase: it blocks unauthorised devices on the LAN when bound to 0.0.0.0; leave empty for local 127.0.0.1 use.' },
+  'set.token.clear.label': { zh: '清除令牌…', en: 'Clear token…' },
+  'set.token.clear.hint': { zh: '清除 = 关闭鉴权：/api/* 不再要求令牌（局域网暴露时同网段任何设备都可访问）。', en: 'Clearing disables auth: /api/* stops requiring a token (any device on the LAN can then read it).' },
+  'set.token.cleared': { zh: '已标记清除：保存后令牌置空（关闭鉴权）。', en: 'Clearance marked: saving empties the token (auth off).' },
+  'set.token.confirm': { zh: '确定清除访问令牌？清除后 /api/* 不再要求令牌——局域网暴露场景等于无鉴权。', en: 'Clear the access token? Afterwards /api/* asks for no token — on the LAN that means no auth at all.' },
+  'set.config.label': { zh: '配置文件', en: 'Config file' },
+  'set.config.path': { zh: '{path}（也可手改，下一拍生效）', en: '{path} (hand-editing works too, next scan picks it up)' },
+  'set.config.unknown': { zh: '（未知）', en: '(unknown)' },
+  'set.save.label': { zh: '保存', en: 'Save' },
+  'set.field.pollMs': { zh: '轮询间隔', en: 'poll interval' },
+  'set.field.pollMode': { zh: '轮询模式', en: 'poll mode' },
+  'set.field.host': { zh: '监听地址', en: 'bind address' },
+  'set.field.port': { zh: '端口', en: 'port' },
+  'set.field.token': { zh: '访问令牌', en: 'access token' },
+  'set.field.root': { zh: '追踪目录', en: 'tracked directory' },
+  'set.applied': { zh: '已生效：{fields}', en: 'Applied: {fields}' },
+  'set.applied-restart': { zh: '重启后生效：{fields}', en: 'Applies after restart: {fields}' },
+  'set.saved': { zh: '已保存', en: 'Saved' },
+  'set.save-failed': { zh: '保存失败：{msg}', en: 'Saving failed: {msg}' },
+  'sep.list': { zh: '、', en: ', ' },
+  'sep.parts': { zh: '；', en: '; ' },
+
+  // 通知开关与快照导出的 toast
+  'notify.unsupported': { zh: '这个浏览器不支持桌面通知，开不了', en: 'This browser has no desktop notifications, so the switch cannot stay on' },
+  'notify.enabled': { zh: '桌面通知已开启', en: 'Desktop notifications are on' },
+  'notify.denied': { zh: '浏览器已拒绝本页面的通知权限：在站点设置里允许后回来再开', en: 'The browser already denied notifications for this page: allow them in site settings, then switch it back on' },
+  'notify.not-granted': { zh: '没拿到通知权限（没有选「允许」），未开启', en: 'No notification permission granted (Allow was not chosen), staying off' },
+  'notify.denied-result': { zh: '通知权限被拒绝：在浏览器站点设置里允许后回来再开', en: 'Notification permission denied: allow it in browser site settings, then switch it back on' },
+  'snapshot.none': { zh: '还没有可导出的盘点', en: 'No scan to export yet' },
+  'snapshot.done': { zh: '已导出快照', en: 'Snapshot exported' },
+  'snapshot.failed': { zh: '导出快照失败：{msg}', en: 'Snapshot export failed: {msg}' },
+
+  // 顶栏状态行与换目录 / 常用目录
+  'meta.tracking': { zh: '追踪：{root}', en: 'Tracking: {root}' },
+  'meta.refreshed': { zh: ' · 已刷新 {when}', en: ' · refreshed {when}' },
+  'meta.config-title': { zh: '配置文件：{path}（追踪目录、端口、轮询间隔都在里面改）', en: 'Config file: {path} (tracked directory, port and poll interval all live there)' },
+  'switch.failed': { zh: '换目录失败：{msg}', en: 'Switching directory failed: {msg}' },
+  'switch.ok': { zh: '已切换到 {root}，并写进了 config.json', en: 'Switched to {root}, written into config.json' },
+  'refresh.failed': { zh: '刷新失败：{msg}（服务还在跑吗？）', en: 'Refresh failed: {msg} (is the server still running?)' },
+  'roots.remove-failed': { zh: '删除常用目录失败：{msg}', en: 'Removing the recent directory failed: {msg}' },
+  'menu.empty': { zh: '切换过的目录会出现在这里', en: 'Directories you switch to show up here' },
+  'menu.no-match': { zh: '没有匹配的常用目录', en: 'No matching recent directory' },
+  'menu.current': { zh: '当前', en: 'Current' },
+  'menu.missing': { zh: '目录不存在', en: 'Missing' },
+  'menu.del.title': { zh: '从常用目录里删掉这一条（立即写回 config.json，删错了重新切一次就会收回来）', en: 'Delete this entry from the recent list (written back to config.json at once; switch to it again to bring it back)' },
+  'menu.pick.title': { zh: '点一下切换到这个目录', en: 'Click to switch to this directory' },
+  'menu.missing.title': { zh: '这个目录在本机上不存在：不能切换，但可以删除', en: 'This directory does not exist on this machine: it cannot be picked, but it can be deleted' },
+
+  // 前沿面板
+  'frontier.empty': { zh: '现在没有前沿票：剩下的票要么被认领、要么还被依赖阻塞。', en: 'No frontier tickets right now: the rest are claimed or still blocked by dependencies.' },
+  'frontier.row.title': { zh: '点一下切到 effort {effort}', en: 'Click to switch to effort {effort}' },
+  'frontier.row.aria': { zh: '前沿票 {key} {title}。按 Enter 切换到所属 effort {effort}', en: 'Frontier ticket {key} {title}. Press Enter to switch to its effort {effort}' },
+
+  // 链卡（阶段格 / 下一步卡 / 进度行 / git 旁证）
+  'chain.h2': { zh: '流程链 · {title}', en: 'Workflow chain · {title}' },
+  'status.done': { zh: '完成', en: 'Done' },
+  'status.current': { zh: '当前', en: 'Current' },
+  'status.pending': { zh: '待命', en: 'Pending' },
+  'infer.note': { zh: '此格不是由本阶段产物证成，而是由更晚阶段的产物推定完成', en: 'This cell is not proven by this stage artifacts; a later stage implies the stage was walked through' },
+  'infer.aria': { zh: '{infer}：{note}', en: '{infer}: {note}' },
+  'stage.skill.label': { zh: '{name} 介绍', en: '{name} intro' },
+  'stage.skill.title': { zh: '打开技能包弹窗，定位到「{name}」的介绍', en: 'Open the skills overview on the {name} intro' },
+  'stage.cell.title': { zh: '点一下复制这段阶段指引词\n{hint}', en: 'Click to copy this stage prompt\n{hint}' },
+  'stage.cell.aria': { zh: '{name}·{status}。{hint}', en: '{name}·{status}. {hint}' },
+  'stage.cell.aria-infer': { zh: '{name}·{status}·{infer}：{note}。{hint}', en: '{name}·{status}·{infer}: {note}. {hint}' },
+  'next.label': { zh: '下一步', en: 'Next step' },
+  'next.label.done': { zh: '全部完成', en: 'All done' },
+  'next.done-text': { zh: '四个阶段全部完成：地图、规格、票、实现都齐了。', en: 'All four stages are done: map, spec, tickets and implementation.' },
+  'next.copy': { zh: '复制指引词', en: 'Copy the prompt' },
+  'next.done-copy': { zh: '「{title}」的四个流程阶段已全部完成，请帮我收尾归档。', en: 'All four stages of {title} are complete — help me wrap it up and archive it.' },
+  'chain.progress': { zh: '阶段进度 {progress}% · 票 {closed}/{tickets} 已关闭', en: 'Stage progress {progress}% · tickets {closed}/{tickets} closed' },
+  'chain.blocked': { zh: ' · {blocked} 张被阻塞', en: ' · {blocked} blocked' },
+  'git.line': { zh: '旁证 · 最近提交 {hash} · {when} · {subject}', en: 'Side evidence · last commit {hash} · {when} · {subject}' },
+  'git.title': { zh: 'git 只读信息仅作展示旁证，不参与完成判据（判据只认票 Status 行）。提交时间：{when}', en: 'Read-only git info is display side evidence only, never a completion criterion (only the ticket Status line counts). Commit time: {when}' },
+  'rel.justnow': { zh: '刚刚', en: 'just now' },
+  'rel.minutes': { zh: '{n} 分钟前', en: '{n} min ago' },
+  'rel.hours': { zh: '{n} 小时前', en: '{n} h ago' },
+  'rel.days': { zh: '{n} 天前', en: '{n} d ago' },
+
+  // 票表
+  'tab.all': { zh: '全部', en: 'All' },
+  'tab.all.title': { zh: '一屏纵览所有 effort 的链状态、迷雾与最近活跃；进行中在前、完工默认折叠', en: 'Every effort chain, fog and latest activity on one screen; active first, finished ones collapsed by default' },
+  'tab.root': { zh: '根 .scratch/', en: '.scratch/ root' },
+  'tickets.h2': { zh: '票（issues/）· 点一行可复制实现指引', en: 'Tickets (issues/) · click a row to copy its implementation prompt' },
+  'tickets.none': { zh: '这个 effort 还没有票。', en: 'This effort has no tickets yet.' },
+  'tickets.tiers.aria': { zh: '按 triage 档位过滤票表', en: 'Filter the ticket table by triage tier' },
+  'tickets.tier.title': { zh: '只看 {tier} 档的进行中票（再点一下回全量）', en: 'Show only open {tier} tickets (click again for all)' },
+  'tickets.tier-empty': { zh: '「{tier}」档现在没有进行中的票。', en: 'No open tickets in the {tier} tier right now.' },
+  'th.key': { zh: '编号', en: 'Key' },
+  'th.title': { zh: '标题', en: 'Title' },
+  'th.state': { zh: '状态', en: 'State' },
+  'th.type': { zh: '类型', en: 'Type' },
+  'th.blocked': { zh: '阻塞于', en: 'Blocked by' },
+  'th.progress': { zh: '进度', en: 'Progress' },
+  'th.updated': { zh: '更新于', en: 'Updated' },
+  'th.actions': { zh: '操作', en: 'Actions' },
+  'ticket.claiming': { zh: '（{who} 认领中）', en: ' ({who} claimed)' },
+  'ticket.state-closed': { zh: '已关闭', en: 'Closed' },
+  'ticket.state-open': { zh: '进行中', en: 'In progress' },
+  'ticket.warn.title': { zh: '字段行写法漂移（票仍有效）\n{msgs}', en: 'Field line drifted (the ticket is still valid)\n{msgs}' },
+  'ticket.warn.aria': { zh: '警告：{msgs}', en: 'Warning: {msgs}' },
+  'ticket.view': { zh: '查看', en: 'View' },
+  'ticket.view.title': { zh: '弹窗读这张票的全文（含 Comments；打开期间轮询刷新不打扰）', en: 'Read this ticket in full in a dialog (Comments included; polling stays out of your way)' },
+  'ticket.view.aria': { zh: '查看票 {key} 的全文', en: 'Read ticket {key} in full' },
+  'ticket.row.title': { zh: '点一下复制这张票的实现指引词', en: 'Click to copy this ticket implementation prompt' },
+  'ticket.row.aria': { zh: '票 {key} {title}，进行中。按 Enter 复制实现指引{warn}', en: 'Ticket {key} {title}, open. Press Enter to copy the implementation prompt{warn}' },
+  'ticket.row.warn': { zh: '。警告：{msgs}', en: '. Warning: {msgs}' },
+  'sep.blocked': { zh: '、#', en: ', #' },
+  'copy.ticket': { zh: '请实现票 {key}（{path}）：{title}。完成后把该票文件里的 Status 行改为 resolved。', en: 'Implement ticket #{key} ({path}): {title}. When it is done, change the Status line in that ticket file to resolved.' },
+
+  // 地图与规格
+  'map.h2': { zh: '地图（map.md）', en: 'Map (map.md)' },
+  'map.none': { zh: '还没有 map.md。', en: 'No map.md yet.' },
+  'map.dest': { zh: '终点', en: 'Destination' },
+  'map.dest-empty': { zh: '（Destination 还空着）', en: '(Destination is still empty)' },
+  'map.decisions': { zh: '决策 {n} 条', en: '{n} decisions' },
+  'map.fog': { zh: '迷雾 {n} 条（Not yet specified）', en: '{n} items in the fog (Not yet specified)' },
+  'map.out-of-scope': { zh: '不做（Out of scope）', en: 'Out of scope' },
+  'map.progress': { zh: '地图进度', en: 'Map progress' },
+  'spec.h2': { zh: '规格（spec.md）', en: 'Spec (spec.md)' },
+  'spec.none': { zh: '还没有 spec.md。', en: 'No spec.md yet.' },
+  'spec.read': { zh: '展开阅读', en: 'Read full' },
+  'spec.read.title': { zh: '全宽弹窗阅读这篇规格（Markdown 渲染；打开期间的轮询刷新不会打扰）', en: 'Read this spec full width in a dialog (Markdown rendered; polling refresh stays out of your way)' },
+  'spec.title-label': { zh: '标题', en: 'Title' },
+  'spec.no-title': { zh: '（无标题）', en: '(no title)' },
+  'spec.length-label': { zh: '篇幅', en: 'Length' },
+  'spec.length': { zh: '{n} 个非空白字符', en: '{n} non-whitespace characters' },
+  'read.spec-title': { zh: '规格 · {title}', en: 'Spec · {title}' },
+  'read.issue-meta': { zh: '{path} · 更新于 {when}', en: '{path} · updated {when}' },
+  'read.issue-loading': { zh: '取票原文中…', en: 'Loading the ticket…' },
+  'read.issue-failed': { zh: '票原文加载失败：{msg}', en: 'Ticket body failed to load: {msg}' },
+
+  // 空态页（工作约定 + 建骨架指令）
+  'empty.h2': { zh: '这里还没有任何 .scratch 产物', en: 'No .scratch artifacts here yet' },
+  'empty.p': { zh: '流程板是被动追踪：任何 Agent 只要按下面的约定把产物写进 {root}/.scratch/，这里就会自动出现进度。把下面的「工作约定」整段复制给你的 Agent（贴进系统提示或对话开头都行）：', en: 'The deck is passive tracking: any agent that writes artifacts into {root}/.scratch/ following the convention below shows up here as progress. Copy the whole convention below into your agent (system prompt or the start of a chat both work):' },
+  'empty.copy-agreement': { zh: '复制工作约定', en: 'Copy the working convention' },
+  'empty.scaffold-h2': { zh: '起步一个 effort', en: 'Start one effort' },
+  'empty.scaffold-p': { zh: '或者先从一个小 effort 开始——把下面这段复制给你的 Agent，它就知道第一批产物怎么落：', en: 'Or begin with one small effort — copy the block below to your agent and it knows which artifacts to write first:' },
+  'empty.copy-scaffold': { zh: '复制建骨架指令', en: 'Copy the scaffold prompt' },
+  'empty.agreement': {
+    zh: [
+      '本项目的 AI 编程流程遵循 .scratch 产物约定，请严格照做：',
+      '1. 拷问（grilling）：结论写入 .scratch/<特性名>/map.md，必须含「## Destination」一节；还没定的事写进「## Not yet specified」。',
+      '2. 规格（to-spec）：把讨论沉淀为 .scratch/<特性名>/spec.md。',
+      '3. 拆票（to-tickets）：每张票一个文件，路径 .scratch/<特性名>/issues/<两位编号>-<短名>.md，',
+      '   正文含行内字段「Status:」（ready-for-agent / claimed / resolved）、「Type:」（research/prototype/grilling/task）、「Blocked by: #编号」。',
+      '4. 实现（implement）：逐票实现；每完成一张票，就把该票文件里的 Status 行改为 resolved。',
+    ].join('\n'),
+    en: [
+      'The AI coding flow in this project follows the .scratch artifact convention — follow it exactly:',
+      '1. Grilling (grilling): write the conclusions into .scratch/<feature>/map.md, which must contain a "## Destination" section; put anything still undecided under "## Not yet specified".',
+      '2. Spec (to-spec): distill the discussion into .scratch/<feature>/spec.md.',
+      '3. Tickets (to-tickets): one file per ticket, at .scratch/<feature>/issues/<NN>-<short-name>.md,',
+      '   body containing the inline fields "Status:" (ready-for-agent / claimed / resolved), "Type:" (research/prototype/grilling/task) and "Blocked by: #NN".',
+      '4. Implementation (implement): work the tickets one at a time; when a ticket is done, change its Status line to resolved.',
+    ].join('\n'),
+  },
+  'empty.scaffold': {
+    zh: '请新建一个 effort 骨架：在当前追踪目录下创建 .scratch/<特性名>/map.md（特性名自定，建议小写短横线英文），文件里写「## Destination」一节（说清这个 effort 的终点是什么）和「## Not yet specified」一节（还没定的事逐条列在这里）。完成后流程板下一拍盘点就会出现这个新 effort（Grill 阶段进行中）。',
+    en: 'Create a new effort skeleton: under the tracked directory write .scratch/<feature>/map.md (pick the feature name, lower-case dashed English works well), with a "## Destination" section (what this effort ends up achieving) and a "## Not yet specified" section (list each open question). Once it lands, the next scan on the deck shows the new effort with the Grill stage in progress.',
+  },
+
+  // 全部视图
+  'all.h2': { zh: '全部 effort · 一屏纵览（{n} 个）', en: 'All efforts · one-screen overview ({n})' },
+  'all.hide-done': { zh: '隐藏完工', en: 'Hide finished' },
+  'all.show-done': { zh: '显示完工', en: 'Show finished' },
+  'all.toggle.title': { zh: '完工 effort（四格全绿）是否占版面；折叠与开关偏好只记本浏览器', en: 'Whether finished efforts (four green cells) take space; the collapse preference is remembered in this browser only' },
+  'all.th.effort': { zh: 'Effort', en: 'Effort' },
+  'all.th.chain': { zh: '链（四格缩影）', en: 'Chain (four cells)' },
+  'all.th.progress': { zh: '进度', en: 'Progress' },
+  'all.th.tickets': { zh: '票', en: 'Tickets' },
+  'all.th.fog': { zh: '迷雾', en: 'Fog' },
+  'all.th.latest': { zh: '最近活跃', en: 'Latest' },
+  'all.cell.title': { zh: '{stage} · {status}', en: '{stage} · {status}' },
+  'all.row.aria': { zh: '{effort}：进度 {progress}%，票 {closed}/{tickets} 已关闭，迷雾 {fog} 条。按 Enter 切换到这个 effort', en: '{effort}: progress {progress}%, tickets {closed}/{tickets} closed, {fog} fog items. Press Enter to switch to this effort' },
+  'all.row.title': { zh: '点一下切换到这个 effort', en: 'Click to switch to this effort' },
+  'all.done-collapsed': { zh: '✓ 完工 effort：{n} 个 · 已折叠（点开展开）', en: '✓ Finished efforts: {n} · collapsed (click to expand)' },
+  'all.done-expanded': { zh: '✓ 完工 effort（{n} 个）· 点收起', en: '✓ Finished efforts ({n}) · click to collapse' },
+  'all.expand.title': { zh: '展开完工 effort 明细行', en: 'Expand the finished effort rows' },
+  'all.collapse.title': { zh: '折叠完工 effort 明细行', en: 'Collapse the finished effort rows' },
+
+  // 技能包弹窗外壳（正文 Markdown 是票 03 的范围）
+  'skill.cat.overview': { zh: '总览', en: 'Overview' },
+  'skill.cat.engineering': { zh: '工程流程', en: 'Engineering' },
+  'skill.cat.productivity': { zh: '效率与协作', en: 'Productivity' },
+  'skill.cat.misc': { zh: '专项工具', en: 'Specialised tools' },
+  'skill.cat.in-progress': { zh: '开发中', en: 'In progress' },
+  'skills.count': { zh: '{n} 篇介绍 · 来源 docs/skill-intros/', en: '{n} docs · from docs/skill-intros/' },
+  'skills.missing': { zh: '技能文档缺失（docs/skill-intros/ 没有内容）', en: 'No skill docs (docs/skill-intros/ is empty)' },
+  'skills.dev-chip': { zh: '开发中', en: 'In progress' },
+  'skills.doc-loading': { zh: '加载中…', en: 'Loading…' },
+  'skills.list-loading': { zh: '加载清单中…', en: 'Loading the list…' },
+  'skills.doc-failed': { zh: '这篇介绍加载失败：{msg}', en: 'This intro failed to load: {msg}' },
+  'skills.list-failed': { zh: '技能清单加载失败：{msg}', en: 'The skill list failed to load: {msg}' },
+  'skills.link.title': { zh: '在弹窗里打开这篇介绍', en: 'Open this intro in the dialog' },
+
+  // 项目总览弹窗
+  'ov.meta': { zh: '{n} 个目录 · 打开时盘点', en: '{n} directories · scanned on open' },
+  'ov.empty': { zh: '还没有常用目录：在网页上切换过的目录会自动收录到这里。', en: 'No recent directories yet: ones you switch to on this page are collected here automatically.' },
+  'ov.th.project': { zh: '项目', en: 'Project' },
+  'ov.th.stage': { zh: '链阶段', en: 'Stage' },
+  'ov.th.tickets': { zh: '票', en: 'Tickets' },
+  'ov.th.fog': { zh: '迷雾', en: 'Fog' },
+  'ov.th.note': { zh: '备注', en: 'Notes' },
+  'ov.stage-done': { zh: '全部完成', en: 'All done' },
+  'ov.stage-none': { zh: '无产物目录', en: 'No artifacts' },
+  'ov.current': { zh: '当前', en: 'Current' },
+  'ov.no-scratch': { zh: '无产物', en: 'No artifacts' },
+  'ov.unreadable': { zh: '不可读', en: 'Unreadable' },
+  'ov.row.title': { zh: '点一下切换到这个项目（既有换目录操作，写进 config.json）', en: 'Click to switch to this project (the usual directory switch, written to config.json)' },
+  'ov.row.aria': { zh: '{name}：{stage}，票 {closed}/{tickets}，迷雾 {fog}。按 Enter 切换到这个项目', en: '{name}: {stage}, tickets {closed}/{tickets}, fog {fog}. Press Enter to switch to this project' },
+  'ov.row.stage-unknown': { zh: '链阶段未知', en: 'stage unknown' },
+  'ov.row.no-scratch.title': { zh: '目录存在但没有 .scratch/（无产物）', en: 'The directory exists but has no .scratch/ (no artifacts)' },
+  'ov.row.unreadable.title': { zh: '目录读不了：可能不存在或无权限', en: 'The directory cannot be read: missing or no permission' },
+  'ov.loading': { zh: '盘点常用目录中…', en: 'Scanning recent directories…' },
+  'ov.failed': { zh: '项目总览加载失败：{msg}', en: 'Project overview failed to load: {msg}' },
+
+  // 桌面通知文案（阶段名与链格同用 stage.<id>.title 一列，不再各自抄一份）
+  'notify.title': { zh: '流程板{root}', en: 'Flowdeck{root}' },
+  'notify.title-sep': { zh: ' · {root}', en: ' · {root}' },
+  'notify.root-name': { zh: '.scratch 根目录', en: '.scratch/ root' },
+  'notify.stage-complete': { zh: '四阶段完成', en: 'all four stages done' },
+  'notify.effort-new': { zh: '新 effort：{name}', en: 'New effort: {name}' },
+  'notify.ticket-closed': { zh: '{name}：票 #{key} 已关闭', en: '{name}: ticket #{key} closed' },
+  'notify.ticket-reopened': { zh: '{name}：票 #{key} 重新打开', en: '{name}: ticket #{key} reopened' },
+  'notify.fog': { zh: '{name}：迷雾 {from}→{to}', en: '{name}: fog {from}→{to}' },
+  'notify.stage-advance': { zh: '{name}：阶段推进 {from} → {to}', en: '{name}: stage advanced {from} → {to}' },
+  'notify.stage-rewind': { zh: '{name}：阶段回落 {from} → {to}', en: '{name}: stage fell back {from} → {to}' },
+  'notify.backlog': { zh: '离开期间有 {n} 项变化', en: '{n} changes while you were away' },
+
+  // 401 的界面侧补救指引（客户端自己的文案，不走服务端 code 表）
+  'hint.token': { zh: '需要访问令牌：在地址后加 ?token=你的令牌 再打开本页', en: 'An access token is required: append ?token=<your token> to the URL and reopen this page.' },
+
+  /* 服务端错误码的人话（票 02）：键 = 'err.' + 响应里的 code（code 命名法见 server.mjs sendErr）。
+     中文态不看这张表（直接出服务端 error 原文，逐字节零回归）；英文态命中即出英文句，
+     未知 code 回退原文。原文里的绝对路径不在英文句里复述——输入框与顶栏状态行都还看得到目录。
+     刻意不列的 code：state.failed / roots.failed / issue.failed——服务端这三处的 error 是异常正文
+     本身（没有固定前缀），翻不成整句，一律回退原文。 */
+  'err.url.unparseable': { zh: '请求 URL 无法解析。', en: 'The request URL cannot be parsed.' },
+  'err.auth.token-required': { zh: '需要有效的访问令牌：URL 加 ?token=… 或请求头 X-FlowDeck-Token。', en: 'A valid access token is required: add ?token=<your token> to the URL, or send the X-FlowDeck-Token header.' },
+  'err.host.forbidden': { zh: 'Host 头不是本机地址，已拒绝。', en: 'The Host header is not a local address — request refused (this guards against DNS rebinding).' },
+  'err.write.header': { zh: '请求缺少 X-FlowDeck 头或 Content-Type 不是 JSON，已拒绝。', en: 'The request is missing the X-FlowDeck header or its Content-Type is not JSON — refused.' },
+  'err.write.too-large': { zh: '请求体超过 30KB 上限。', en: 'The request body exceeds the 30KB limit.' },
+  'err.write.bad-json': { zh: '请求体不是合法 JSON。', en: 'The request body is not valid JSON.' },
+  'err.config.poll-ms': { zh: 'pollMs 需为不小于 1000 的数字（毫秒）。', en: 'pollMs must be a number of at least 1000 (milliseconds).' },
+  'err.config.poll-mode': { zh: 'pollMode 需为 observe / display / manual 之一。', en: 'pollMode must be one of observe / display / manual.' },
+  'err.config.host': { zh: 'host 需为非空的主机名或 IP（如 127.0.0.1、0.0.0.0、localhost）。', en: 'host must be a non-empty hostname or IP (for example 127.0.0.1, 0.0.0.0, localhost).' },
+  'err.config.port': { zh: 'port 需为 1–65535 的整数。', en: 'port must be an integer between 1 and 65535.' },
+  'err.config.token': { zh: 'token 需为字符串；空串表示清除令牌（关闭鉴权）。', en: 'token must be a string; an empty string clears it (auth off).' },
+  'err.config.root-empty': { zh: 'root 不能为空。填一个含 .scratch/ 的项目目录。', en: 'root cannot be empty — give a project directory that contains .scratch/.' },
+  'err.config.root-missing': { zh: '这个目录不存在或不是目录。', en: 'That directory does not exist or is not a directory.' },
+  'err.config.no-fields': { zh: '没有可保存的字段（支持 root / pollMs / pollMode / host / port / token）。', en: 'Nothing to save (accepted fields: root / pollMs / pollMode / host / port / token).' },
+  'err.config.save-failed': { zh: '写 config.json 失败。', en: 'Writing config.json failed.' },
+  'err.roots.remove-empty': { zh: 'remove 不能为空。填要删掉的那条常用目录路径。', en: 'remove cannot be empty — give the recent directory path to delete.' },
+  'err.roots.save-failed': { zh: '写 config.json 失败。', en: 'Writing config.json failed.' },
+  'err.issue.bad-params': { zh: 'effort 或 ticket 参数不合法（effort 是目录名，ticket 是票号数字）。', en: 'The effort or ticket parameter is invalid (effort is a directory name, ticket is a number).' },
+  'err.issue.no-effort': { zh: '没有这个 effort。', en: 'There is no such effort.' },
+  'err.issue.no-ticket': { zh: '没有这张票。', en: 'There is no such ticket.' },
+  'err.skills.list-failed': { zh: '盘点技能文档失败。', en: 'Scanning the skill docs failed.' },
+  'err.skills.no-doc': { zh: '没有这个技能文档。', en: 'There is no such skill doc.' },
 }
 
 /** 按键取词（当前语言列）。 */
@@ -460,6 +787,31 @@ function t(key) {
   var e = UI_TEXT[key]
   if (!e) return ''
   return lang === 'en' ? e.en : e.zh
+}
+
+/** 填槽取词：{name} 占位由 vars 填——语序写在各语言列里，渲染层不做字符串拼接。 */
+function tf(key, vars) {
+  var s = t(key)
+  if (!vars) return s
+  return s.replace(/\{(\w+)\}/g, function (all, k) {
+    return vars[k] === undefined || vars[k] === null ? all : String(vars[k])
+  })
+}
+
+/** 静态壳重取词（票 02）：markup 里写死的是中文默认态，语言一切就按 data-i18n* 就地重挂。
+    文档标题与 <html lang> 同在这里（读屏与断字规则要选对语言）。动态区（#main、各弹窗正文、
+    状态行）不走这条通道——由 render() 与各自的渲染函数按当前语言重画。 */
+function applyStaticCopy() {
+  document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN')
+  document.title = t('doc.title')
+  ;[['[data-i18n]', 'textContent', null], ['[data-i18n-title]', null, 'title'],
+    ['[data-i18n-placeholder]', null, 'placeholder'], ['[data-i18n-aria]', null, 'aria-label']].forEach(function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll(row[0]), function (n) {
+      var text = t(n.getAttribute(row[0]))
+      if (row[1]) n[row[1]] = text
+      else n.setAttribute(row[2], text)
+    })
+  })
 }
 
 /** 浏览器偏好语言里有没有英文系（en / en-US / en-GB…）。 */
@@ -481,6 +833,7 @@ var lang = (function () {
   if (v === 'en' || v === 'zh') return v
   return browserWantsEnglish() ? 'en' : 'zh'
 })()
+applyStaticCopy() // 首帧前把静态壳调到所选语言（英文浏览器不闪中文）
 
 /* 访问令牌（服务端 config.json 的 token 非空时启用）：
    地址带 ?token=… 打开 → 收下、记忆到 localStorage、把地址栏抹干净（刷新/分享不带令牌）；
@@ -488,10 +841,10 @@ var lang = (function () {
 ;(function () {
   try { apiToken = localStorage.getItem(TOKEN_KEY) || '' } catch (e) {}
   try {
-    var t = new URLSearchParams(location.search).get('token')
-    if (t) {
-      apiToken = t
-      try { localStorage.setItem(TOKEN_KEY, t) } catch (e) {}
+    var tok = new URLSearchParams(location.search).get('token')
+    if (tok) {
+      apiToken = tok
+      try { localStorage.setItem(TOKEN_KEY, tok) } catch (e) {}
       history.replaceState(null, '', location.pathname)
     }
   } catch (e) {}
@@ -512,7 +865,19 @@ function apiHeaders(extra) {
    返回 { ok, status, data, errorText, etag }；opts.text = true 按纯文本读响应（技能单篇）；
    opts.rawBody = true 时 ok 应答额外带 raw（响应体原文字符串，快照导出用——不重新序列化，
    与在线数据同源；旧测试桩没有 r.text 时回落 r.json，raw 缺席）。 */
-var TOKEN_HINT = '需要访问令牌：在地址后加 ?token=你的令牌 再打开本页'
+
+/* 服务端错误的人话（票 02）：code 是稳定契约键、error 是原文。中文态永远出原文（逐字节零回归），
+   英文态按 'err.' + code 查表措辞，查不到（服务端新加 code 而界面没跟上）回退原文——界面不猜。 */
+function codeText(code, fallback) {
+  if (lang !== 'en' || !code) return fallback
+  var e = UI_TEXT['err.' + code]
+  return e ? e.en : fallback
+}
+
+function errText(data, status) {
+  if (data && data.error) return codeText(data.code, data.error)
+  return 'HTTP ' + status
+}
 
 function apiFetch(path, opts) {
   var o = opts || {}
@@ -526,27 +891,27 @@ function apiFetch(path, opts) {
   if (o.body !== undefined) { init.method = 'POST'; init.body = o.body }
   return fetch(path, init).then(function (r) {
     var etag = r.headers && r.headers.get ? r.headers.get('ETag') : ''
-    if (r.status === 401) return { ok: false, status: 401, data: null, errorText: TOKEN_HINT, etag: etag }
+    if (r.status === 401) return { ok: false, status: 401, data: null, errorText: codeText('auth.token-required', t('hint.token')), etag: etag }
     if (r.status === 304) return { ok: false, status: 304, data: null, errorText: '', etag: etag }
     // rawBody 通道：自己读原文再 JSON.parse，保证 data 与 raw 出自同一份响应体
     if (o.rawBody && typeof r.text === 'function') {
-      return r.text().then(function (t) {
+      return r.text().then(function (txt) {
         if (!r.ok) {
           var err = null
-          try { err = JSON.parse(t) } catch (e) {}
-          return { ok: false, status: r.status, data: err, errorText: (err && err.error) ? err.error : ('HTTP ' + r.status), etag: etag }
+          try { err = JSON.parse(txt) } catch (e) {}
+          return { ok: false, status: r.status, data: err, errorText: errText(err, r.status), etag: etag }
         }
         var parsed = null
-        try { parsed = JSON.parse(t) } catch (e) {} // 空体/坏体与 r.json() 失败同款兜底：data=null，调用方跳过
-        return { ok: true, status: r.status, data: parsed, errorText: '', etag: etag, raw: t }
+        try { parsed = JSON.parse(txt) } catch (e) {} // 空体/坏体与 r.json() 失败同款兜底：data=null，调用方跳过
+        return { ok: true, status: r.status, data: parsed, errorText: '', etag: etag, raw: txt }
       })
     }
     var read = o.text ? r.text() : r.json()
     return read.then(function (data) {
-      if (!r.ok) return { ok: false, status: r.status, data: data, errorText: (data && data.error) ? data.error : ('HTTP ' + r.status), etag: etag }
+      if (!r.ok) return { ok: false, status: r.status, data: data, errorText: errText(data, r.status), etag: etag }
       return { ok: true, status: r.status, data: data, errorText: '', etag: etag }
     }, function () {
-      return { ok: r.ok, status: r.status, data: null, errorText: r.ok ? '' : ('HTTP ' + r.status), etag: etag }
+      return { ok: r.ok, status: r.status, data: null, errorText: errText(null, r.status), etag: etag }
     })
   })
 }
@@ -593,7 +958,7 @@ function copyText(text) {
     document.body.removeChild(ta)
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function () { toast('已复制，去粘贴给任意 Agent 即可') }, fallback)
+    navigator.clipboard.writeText(text).then(function () { toast(t('toast.copied')) }, fallback)
   } else fallback()
 }
 
@@ -604,7 +969,7 @@ function currentEffort() {
 }
 
 function effortTabLabel(e) {
-  return e.slug === '__root' ? '根 .scratch/' : e.slug
+  return e.slug === '__root' ? t('tab.root') : e.slug
 }
 
 /* 前沿票判定（票 02）：open、未被认领、Blocked by 所列票全部已关闭——「当前该干什么」。
@@ -635,11 +1000,21 @@ function frontierTotals() {
 }
 
 /** 推定含义的说明文字（链格 title 与 aria-label 同载一份，兜底层不藏进悬停）。 */
-var INFER_NOTE = '此格不是由本阶段产物证成，而是由更晚阶段的产物推定完成'
+function inferNote() { return t('infer.note') }
 
-function ticketCopy(eff, t) {
-  return '请实现票 ' + t.key + '（' + state.root + '/.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + t.fileName + '）：' + t.title +
-    '。完成后把该票文件里的 Status 行改为 resolved。'
+/* 指引词取列（票 02）：四阶段的 evidence/hint/copyText/inferLabel 由 flowchain.mjs 一次派发两列，
+   界面只按当前语言选列——不在这里另写一套措辞。英文列缺席（旧载荷）回落中文列，不空着。 */
+function guideText(s, field) {
+  if (lang === 'en' && s.en && s.en[field] !== undefined && s.en[field] !== '') return s.en[field]
+  return s[field]
+}
+
+function ticketCopy(eff, tk) {
+  return tf('copy.ticket', {
+    key: tk.key,
+    path: state.root + '/.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + tk.fileName,
+    title: tk.title,
+  })
 }
 
 /* ── triage 档位过滤（票 01）：六档单选 chip，点亮=只看该档、再点回全量 ──
@@ -662,13 +1037,13 @@ function fmtRelative(iso) {
   if (isNaN(d.getTime())) return '—'
   var s = Math.floor((Date.now() - d.getTime()) / 1000)
   if (s < 0) s = 0 // 时钟略超前的提交按「刚刚」展示，不出负数
-  if (s < 60) return '刚刚'
+  if (s < 60) return t('rel.justnow')
   var m = Math.floor(s / 60)
-  if (m < 60) return m + ' 分钟前'
+  if (m < 60) return tf('rel.minutes', { n: m })
   var h = Math.floor(m / 60)
-  if (h < 24) return h + ' 小时前'
+  if (h < 24) return tf('rel.hours', { n: h })
   var day = Math.floor(h / 24)
-  if (day < 30) return day + ' 天前'
+  if (day < 30) return tf('rel.days', { n: day })
   return fmtUpdatedAt(iso)
 }
 
@@ -684,16 +1059,16 @@ function renderTabs() {
     box.appendChild(b)
   })
   // 「全部」伪条目（票 02）：主区换跨 effort 汇总视图；effort 切换条本票不动（超 12 个的复议线在 map）
-  var all = el('button', null, '全部')
+  var all = el('button', null, t('tab.all'))
   if (selected === ALL_VIEW) all.className = 'on'
-  all.title = '一屏纵览所有 effort 的链状态、迷雾与最近活跃；进行中在前、完工默认折叠'
+  all.title = t('tab.all.title')
   all.addEventListener('click', function () { selected = ALL_VIEW; render() })
   box.appendChild(all)
 }
 
 function renderChain(eff) {
   var card = el('div', 'card')
-  card.appendChild(el('h2', null, '流程链 · ' + eff.title))
+  card.appendChild(el('h2', null, tf('chain.h2', { title: eff.title })))
   var chain = el('div', 'chain')
   eff.chain.stages.forEach(function (s, i) {
     if (i > 0) chain.appendChild(el('div', 'arrow', '→'))
@@ -708,23 +1083,24 @@ function renderChain(eff) {
     names.appendChild(el('div', 'name', stageName))
     names.appendChild(el('div', 'tiny', t('stage.' + s.id + '.subtitle') || s.subtitle))
     head.appendChild(names)
-    var statusLabel = s.status === 'done' ? '完成' : s.status === 'current' ? '当前' : '待命'
+    var statusLabel = t('status.' + s.status)
     head.appendChild(el('span', 'chip', statusLabel))
     st.appendChild(head)
-    if (s.inferLabel) {
-      var infer = el('span', 'chip infer', s.inferLabel)
-      infer.title = INFER_NOTE
-      infer.setAttribute('aria-label', s.inferLabel + '：' + INFER_NOTE)
+    var inferLabel = guideText(s, 'inferLabel')
+    if (inferLabel) {
+      var infer = el('span', 'chip infer', inferLabel)
+      infer.title = inferNote()
+      infer.setAttribute('aria-label', tf('infer.aria', { infer: inferLabel, note: inferNote() }))
       st.appendChild(infer)
     }
-    st.appendChild(el('div', 'evidence', s.evidence))
+    st.appendChild(el('div', 'evidence', guideText(s, 'evidence')))
     // 技能联动（票 05）：阶段定义旁硬编码的技能名（flowchain.mjs 的 FLOW_STAGES.skills，与指引词
     // 同源同漂移）——点开技能包弹窗并定位到该篇介绍（复用单篇懒加载端点，零新增机制）
     if (s.skills && s.skills.length) {
       var srow = el('div', 'skillrow')
       s.skills.forEach(function (name) {
-        var sb = el('button', null, name + ' 介绍')
-        sb.title = '打开技能包弹窗，定位到「' + name + '」的介绍'
+        var sb = el('button', null, tf('stage.skill.label', { name: name }))
+        sb.title = tf('stage.skill.title', { name: name })
         sb.addEventListener('click', function (ev) {
           ev.stopPropagation() // 链格本身可点（复制指引词）：按钮点击别冒泡上去
           openSkillsModal(name)
@@ -735,24 +1111,30 @@ function renderChain(eff) {
     }
     // 键盘层 + 兜底层：链格可 Tab 停留、Enter/Space 与点按同路复制本格指引词；
     // title 是鼠标福利，aria-label 同载状态、推定含义与指引全文（不再只藏在悬停里）。
-    st.title = '点一下复制这段阶段指引词\n' + s.hint
-    st.setAttribute('aria-label', stageName + '·' + statusLabel + (s.inferLabel ? '·' + s.inferLabel + '：' + INFER_NOTE : '') + '。' + s.hint)
-    clickable(st, function () { copyText(s.copyText) })
+    var hint = guideText(s, 'hint')
+    st.title = tf('stage.cell.title', { hint: hint })
+    st.setAttribute('aria-label', inferLabel
+      ? tf('stage.cell.aria-infer', { name: stageName, status: statusLabel, infer: inferLabel, note: inferNote(), hint: hint })
+      : tf('stage.cell.aria', { name: stageName, status: statusLabel, hint: hint }))
+    clickable(st, function () { copyText(guideText(s, 'copyText')) })
     chain.appendChild(st)
   })
   card.appendChild(chain)
 
   var cur = eff.chain.stages.filter(function (s) { return s.status === 'current' })[0]
   var next = el('div', 'card next' + (eff.chain.complete ? ' done-all' : ''))
-  next.appendChild(el('span', 'label', eff.chain.complete ? '全部完成' : '下一步'))
-  next.appendChild(el('div', 'txt', eff.chain.complete ? '四个阶段全部完成：地图、规格、票、实现都齐了。' : (cur ? cur.hint : '')))
-  var btn = el('button', 'primary', '复制指引词')
-  btn.addEventListener('click', function () { copyText(eff.chain.complete ? '「' + eff.title + '」的四个流程阶段已全部完成，请帮我收尾归档。' : cur.copyText) })
+  next.appendChild(el('span', 'label', t(eff.chain.complete ? 'next.label.done' : 'next.label')))
+  next.appendChild(el('div', 'txt', eff.chain.complete ? t('next.done-text') : (cur ? guideText(cur, 'hint') : '')))
+  var btn = el('button', 'primary', t('next.copy'))
+  btn.addEventListener('click', function () {
+    copyText(eff.chain.complete ? tf('next.done-copy', { title: eff.title }) : guideText(cur, 'copyText'))
+  })
   next.appendChild(btn)
   card.appendChild(next)
 
   var c = eff.chain.counts
-  var line = el('div', 'sub', '阶段进度 ' + eff.chain.progress + '% · 票 ' + c.closed + '/' + c.tickets + ' 已关闭' + (c.blocked ? ' · ' + c.blocked + ' 张被阻塞' : ''))
+  var line = el('div', 'sub', tf('chain.progress', { progress: eff.chain.progress, closed: c.closed, tickets: c.tickets }) +
+    (c.blocked ? tf('chain.blocked', { blocked: c.blocked }) : ''))
   var bar = el('div', 'bar')
   var fill = el('i')
   fill.style.width = eff.chain.progress + '%'
@@ -762,8 +1144,8 @@ function renderChain(eff) {
   // git 旁证（票 01）：最近一次提交一行；null 时整块不渲染（零降级噪音），绝不参与完成判据
   if (eff.git) {
     var g = el('div', 'sub gitline')
-    g.textContent = '旁证 · 最近提交 ' + eff.git.hash + ' · ' + fmtRelative(eff.git.date) + ' · ' + eff.git.subject
-    g.title = 'git 只读信息仅作展示旁证，不参与完成判据（判据只认票 Status 行）。提交时间：' + fmtUpdatedAt(eff.git.date)
+    g.textContent = tf('git.line', { hash: eff.git.hash, when: fmtRelative(eff.git.date), subject: eff.git.subject })
+    g.title = tf('git.title', { when: fmtUpdatedAt(eff.git.date) })
     card.appendChild(g)
   }
   return card
@@ -779,15 +1161,15 @@ function fmtUpdatedAt(iso) {
 
 function renderTickets(eff) {
   var card = el('div', 'card')
-  card.appendChild(el('h2', null, '票（issues/）· 点一行可复制实现指引'))
+  card.appendChild(el('h2', null, t('tickets.h2')))
   if (!eff.tickets.length) {
-    card.appendChild(el('div', 'sub', '这个 effort 还没有票。'))
+    card.appendChild(el('div', 'sub', t('tickets.none')))
     return card
   }
   // 六档 chip：点亮=只看该档（已关闭票不参与），再点回全量；过滤态经渲染签名保持
   var tiers = el('div', 'tiers')
   tiers.setAttribute('role', 'group')
-  tiers.setAttribute('aria-label', '按 triage 档位过滤票表')
+  tiers.setAttribute('aria-label', t('tickets.tiers.aria'))
   TRIAGE_TIERS.forEach(function (tier) {
     var count = eff.tickets.filter(function (t) { return t.state !== 'closed' && t.status === tier.id }).length
     var chip = el('button', 'tierchip' + (ticketFilter === tier.id ? ' on' : ''))
@@ -796,7 +1178,7 @@ function renderTickets(eff) {
     chip.appendChild(document.createTextNode(tier.id))
     var cnt = el('span', 'cnt', String(count))
     chip.appendChild(cnt)
-    chip.title = '只看 ' + tier.id + ' 档的进行中票（再点一下回全量）'
+    chip.title = tf('tickets.tier.title', { tier: tier.id })
     chip.setAttribute('aria-pressed', ticketFilter === tier.id ? 'true' : 'false')
     chip.addEventListener('click', function () {
       ticketFilter = ticketFilter === tier.id ? null : tier.id
@@ -809,51 +1191,54 @@ function renderTickets(eff) {
     ? eff.tickets.filter(function (t) { return t.state !== 'closed' && t.status === ticketFilter })
     : eff.tickets
   if (!visible.length) {
-    card.appendChild(el('div', 'sub', '「' + ticketFilter + '」档现在没有进行中的票。'))
+    card.appendChild(el('div', 'sub', tf('tickets.tier-empty', { tier: ticketFilter })))
     return card
   }
   var table = el('table')
   var thead = el('thead')
   var hr = el('tr')
-  var headers = ['编号', '标题', '状态', '类型', '阻塞于', '进度', '更新于', '操作']
-  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  var headers = ['th.key', 'th.title', 'th.state', 'th.type', 'th.blocked', 'th.progress', 'th.updated', 'th.actions']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, t(h))) })
   thead.appendChild(hr)
   table.appendChild(thead)
   var tbody = el('tbody')
-  visible.forEach(function (t) {
-    var tr = el('tr', 'ticket' + (t.state === 'closed' ? ' closed' : ''))
-    tr.appendChild(el('td', 'key', t.key))
-    var tdTitle = el('td', 'title', t.title + (t.claimedBy ? '（' + t.claimedBy + ' 认领中）' : ''))
-    var warnInline = warnMessages(t.formatWarnings).join('；')
-    if (t.formatWarnings && t.formatWarnings.length) {
+  // 回调形参用 tk 不用 t：t() 是取词函数，本函数体内两个都要（旧代码只碰票，撞不上）
+  visible.forEach(function (tk) {
+    var tr = el('tr', 'ticket' + (tk.state === 'closed' ? ' closed' : ''))
+    tr.appendChild(el('td', 'key', tk.key))
+    var tdTitle = el('td', 'title', tk.title + (tk.claimedBy ? tf('ticket.claiming', { who: tk.claimedBy }) : ''))
+    var warnInline = warnMessages(tk.formatWarnings).join(t('sep.parts'))
+    if (tk.formatWarnings && tk.formatWarnings.length) {
       var warn = el('span', 'warn', '!')
-      warn.title = '字段行写法漂移（票仍有效）\n' + warnMessages(t.formatWarnings).join('\n')
+      warn.title = tf('ticket.warn.title', { msgs: warnMessages(tk.formatWarnings).join('\n') })
       // 兜底层：警告原文进 aria-label（role=img 给徽标一个可读名），title 仍是鼠标福利
       warn.setAttribute('role', 'img')
-      warn.setAttribute('aria-label', '警告：' + warnInline)
+      warn.setAttribute('aria-label', tf('ticket.warn.aria', { msgs: warnInline }))
       tdTitle.appendChild(warn)
     }
     tr.appendChild(tdTitle)
-    tr.appendChild(el('td', t.state === 'closed' ? 'state-closed' : 'state-open', t.state === 'closed' ? '已关闭' : '进行中'))
-    tr.appendChild(el('td', null, t.type || '—'))
-    tr.appendChild(el('td', null, t.blockedBy && t.blockedBy.length ? '#' + t.blockedBy.join('、#') : '—'))
-    tr.appendChild(el('td', null, t.progress === null || t.progress === undefined ? '—' : t.progress + '%'))
-    tr.appendChild(el('td', null, fmtUpdatedAt(t.updatedAt)))
+    tr.appendChild(el('td', tk.state === 'closed' ? 'state-closed' : 'state-open', t(tk.state === 'closed' ? 'ticket.state-closed' : 'ticket.state-open')))
+    tr.appendChild(el('td', null, tk.type || '—'))
+    tr.appendChild(el('td', null, tk.blockedBy && tk.blockedBy.length ? '#' + tk.blockedBy.join(t('sep.blocked')) : '—'))
+    tr.appendChild(el('td', null, tk.progress === null || tk.progress === undefined ? '—' : tk.progress + '%'))
+    tr.appendChild(el('td', null, fmtUpdatedAt(tk.updatedAt)))
     var tdAct = el('td')
-    var viewBtn = el('button', null, '查看')
-    viewBtn.title = '弹窗读这张票的全文（含 Comments；打开期间轮询刷新不打扰）'
-    viewBtn.setAttribute('aria-label', '查看票 ' + t.key + ' 的全文')
+    var viewBtn = el('button', null, t('ticket.view'))
+    viewBtn.title = t('ticket.view.title')
+    viewBtn.setAttribute('aria-label', tf('ticket.view.aria', { key: tk.key }))
     // 按钮在可点行内：拦住冒泡，别把行点击（复制指引）也触发上
-    viewBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openIssueModal(eff, t) })
+    viewBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openIssueModal(eff, tk) })
     tdAct.appendChild(viewBtn)
     tr.appendChild(tdAct)
-    if (t.state !== 'closed') {
+    if (tk.state !== 'closed') {
       // 键盘层：票行可 Tab 停留、Enter/Space 与点按同路复制；兜底层：aria-label 同载警告原文
-      tr.title = '点一下复制这张票的实现指引词'
-      tr.setAttribute('aria-label', '票 ' + t.key + ' ' + t.title + '，进行中。按 Enter 复制实现指引' + (warnInline ? '。警告：' + warnInline : ''))
-      clickable(tr, function () { copyText(ticketCopy(eff, t)) })
+      tr.title = t('ticket.row.title')
+      tr.setAttribute('aria-label', tf('ticket.row.aria', {
+        key: tk.key, title: tk.title, warn: warnInline ? tf('ticket.row.warn', { msgs: warnInline }) : '',
+      }))
+      clickable(tr, function () { copyText(ticketCopy(eff, tk)) })
     } else {
-      tr.title = '已关闭'
+      tr.title = t('ticket.state-closed')
     }
     tbody.appendChild(tr)
   })
@@ -872,26 +1257,26 @@ function warnBadge(warnings) {
   var warn = el('span', 'warn', '!')
   warn.title = warnMessages(warnings).join('\n')
   warn.setAttribute('role', 'img')
-  warn.setAttribute('aria-label', '警告：' + warnMessages(warnings).join('；'))
+  warn.setAttribute('aria-label', tf('ticket.warn.aria', { msgs: warnMessages(warnings).join(t('sep.parts')) }))
   return warn
 }
 
 function renderMapSpec(eff) {
   var cols = el('div', 'cols')
   var mapCard = el('div', 'card')
-  var mapHead = el('h2', null, '地图（map.md）')
+  var mapHead = el('h2', null, t('map.h2'))
   if (eff.map.formatWarnings && eff.map.formatWarnings.length) mapHead.appendChild(warnBadge(eff.map.formatWarnings))
   mapCard.appendChild(mapHead)
   if (!eff.map.exists) {
-    mapCard.appendChild(el('div', 'sub', '还没有 map.md。'))
+    mapCard.appendChild(el('div', 'sub', t('map.none')))
   } else {
     var dest = el('div', 'kv')
-    dest.appendChild(el('b', null, '终点'))
-    dest.appendChild(document.createTextNode(eff.map.destination || '（Destination 还空着）'))
+    dest.appendChild(el('b', null, t('map.dest')))
+    dest.appendChild(document.createTextNode(eff.map.destination || t('map.dest-empty')))
     mapCard.appendChild(dest)
     if (eff.map.decisions.length) {
       var d = el('div', 'kv')
-      d.appendChild(el('b', null, '决策 ' + eff.map.decisions.length + ' 条'))
+      d.appendChild(el('b', null, tf('map.decisions', { n: eff.map.decisions.length })))
       var ul = el('ul', 'plain')
       eff.map.decisions.forEach(function (x) { ul.appendChild(el('li', null, x.title + (x.gist ? ' — ' + x.gist : ''))) })
       d.appendChild(ul)
@@ -899,7 +1284,7 @@ function renderMapSpec(eff) {
     }
     if (eff.map.fog.length) {
       var f = el('div', 'kv')
-      f.appendChild(el('b', null, '迷雾 ' + eff.map.fog.length + ' 条（Not yet specified）'))
+      f.appendChild(el('b', null, tf('map.fog', { n: eff.map.fog.length })))
       var ful = el('ul', 'plain fog')
       eff.map.fog.forEach(function (x) { ful.appendChild(el('li', null, x)) })
       f.appendChild(ful)
@@ -907,7 +1292,7 @@ function renderMapSpec(eff) {
     }
     if (eff.map.outOfScope.length) {
       var o = el('div', 'kv')
-      o.appendChild(el('b', null, '不做（Out of scope）'))
+      o.appendChild(el('b', null, t('map.out-of-scope')))
       var oul = el('ul', 'plain')
       eff.map.outOfScope.forEach(function (x) { oul.appendChild(el('li', null, x)) })
       o.appendChild(oul)
@@ -915,7 +1300,7 @@ function renderMapSpec(eff) {
     }
     if (eff.map.progress !== null && eff.map.progress !== undefined) {
       var p = el('div', 'kv')
-      p.appendChild(el('b', null, '地图进度'))
+      p.appendChild(el('b', null, t('map.progress')))
       p.appendChild(document.createTextNode(eff.map.progress + '%'))
       mapCard.appendChild(p)
     }
@@ -923,26 +1308,26 @@ function renderMapSpec(eff) {
 
   var specCard = el('div', 'card')
   var specHead = el('div', 'cardhead')
-  var specTitle = el('h2', null, '规格（spec.md）')
+  var specTitle = el('h2', null, t('spec.h2'))
   if (eff.spec.formatWarnings && eff.spec.formatWarnings.length) specTitle.appendChild(warnBadge(eff.spec.formatWarnings))
   specHead.appendChild(specTitle)
   if (eff.spec.exists) {
-    var readBtn = el('button', null, '展开阅读')
-    readBtn.title = '全宽弹窗阅读这篇规格（Markdown 渲染；打开期间的轮询刷新不会打扰）'
+    var readBtn = el('button', null, t('spec.read'))
+    readBtn.title = t('spec.read.title')
     readBtn.addEventListener('click', function () { openReadingModal(eff) })
     specHead.appendChild(readBtn)
   }
   specCard.appendChild(specHead)
   if (!eff.spec.exists) {
-    specCard.appendChild(el('div', 'sub', '还没有 spec.md。'))
+    specCard.appendChild(el('div', 'sub', t('spec.none')))
   } else {
     var s1 = el('div', 'kv')
-    s1.appendChild(el('b', null, '标题'))
-    s1.appendChild(document.createTextNode(eff.spec.title || '（无标题）'))
+    s1.appendChild(el('b', null, t('spec.title-label')))
+    s1.appendChild(document.createTextNode(eff.spec.title || t('spec.no-title')))
     specCard.appendChild(s1)
     var s2 = el('div', 'kv')
-    s2.appendChild(el('b', null, '篇幅'))
-    s2.appendChild(document.createTextNode(eff.spec.contentLength + ' 个非空白字符'))
+    s2.appendChild(el('b', null, t('spec.length-label')))
+    s2.appendChild(document.createTextNode(tf('spec.length', { n: eff.spec.contentLength })))
     specCard.appendChild(s2)
     var viewer = el('div', 'md spec-preview')
     renderMarkdown(eff.spec.content, viewer)
@@ -955,36 +1340,26 @@ function renderMapSpec(eff) {
   return cols
 }
 
-var AGREEMENT = [
-  '本项目的 AI 编程流程遵循 .scratch 产物约定，请严格照做：',
-  '1. 拷问（grilling）：结论写入 .scratch/<特性名>/map.md，必须含「## Destination」一节；还没定的事写进「## Not yet specified」。',
-  '2. 规格（to-spec）：把讨论沉淀为 .scratch/<特性名>/spec.md。',
-  '3. 拆票（to-tickets）：每张票一个文件，路径 .scratch/<特性名>/issues/<两位编号>-<短名>.md，',
-  '   正文含行内字段「Status:」（ready-for-agent / claimed / resolved）、「Type:」（research/prototype/grilling/task）、「Blocked by: #编号」。',
-  '4. 实现（implement）：逐票实现；每完成一张票，就把该票文件里的 Status 行改为 resolved。',
-].join('\n')
-
-/* 建 effort 骨架指令（票 05）：空态页「工作约定」旁的第二段一键复制——粘给任意 Agent 即可起步
-   新 effort。单段纯文本、路径相对追踪目录、一句动作一句预期盘点变化，与票行实现指引同风格
-  （不另起模板体系）。 */
-var SCAFFOLD_HINT = '请新建一个 effort 骨架：在当前追踪目录下创建 .scratch/<特性名>/map.md（特性名自定，建议小写短横线英文），文件里写「## Destination」一节（说清这个 effort 的终点是什么）和「## Not yet specified」一节（还没定的事逐条列在这里）。完成后流程板下一拍盘点就会出现这个新 effort（Grill 阶段进行中）。'
-
+/* 空态页两段可复制文本（工作约定 / 建骨架指令）在 UI_TEXT 的 empty.agreement / empty.scaffold
+   （两列都是整段多行文本）。骨架指令的形态：单段纯文本、路径相对追踪目录、一句动作一句预期
+   盘点变化，与票行实现指引同风格（不另起模板体系）。 */
 function renderEmpty() {
   var card = el('div', 'card empty')
-  card.appendChild(el('h2', null, '这里还没有任何 .scratch 产物'))
-  var p = el('div', 'sub', '流程板是被动追踪：任何 Agent 只要按下面的约定把产物写进 ' + (state ? state.root : '') + '/.scratch/，这里就会自动出现进度。把下面的「工作约定」整段复制给你的 Agent（贴进系统提示或对话开头都行）：')
+  card.appendChild(el('h2', null, t('empty.h2')))
+  var p = el('div', 'sub', tf('empty.p', { root: state ? state.root : '' }))
   card.appendChild(p)
-  var pre = el('pre', 'agreement', AGREEMENT)
-  card.appendChild(pre)
-  var btn = el('button', 'primary', '复制工作约定')
-  btn.addEventListener('click', function () { copyText(AGREEMENT) })
+  var agreement = t('empty.agreement')
+  card.appendChild(el('pre', 'agreement', agreement))
+  var btn = el('button', 'primary', t('empty.copy-agreement'))
+  btn.addEventListener('click', function () { copyText(agreement) })
   card.appendChild(btn)
   // 第二段（票 05）：不想从整段约定开始，就先建一个 effort 骨架起步
-  card.appendChild(el('h2', null, '起步一个 effort'))
-  card.appendChild(el('div', 'sub', '或者先从一个小 effort 开始——把下面这段复制给你的 Agent，它就知道第一批产物怎么落：'))
-  card.appendChild(el('pre', 'agreement', SCAFFOLD_HINT))
-  var scaffoldBtn = el('button', 'primary', '复制建骨架指令')
-  scaffoldBtn.addEventListener('click', function () { copyText(SCAFFOLD_HINT) })
+  card.appendChild(el('h2', null, t('empty.scaffold-h2')))
+  card.appendChild(el('div', 'sub', t('empty.scaffold-p')))
+  var scaffold = t('empty.scaffold')
+  card.appendChild(el('pre', 'agreement', scaffold))
+  var scaffoldBtn = el('button', 'primary', t('empty.copy-scaffold'))
+  scaffoldBtn.addEventListener('click', function () { copyText(scaffold) })
   card.appendChild(scaffoldBtn)
   return card
 }
@@ -1018,10 +1393,10 @@ function render() {
 function renderAllView() {
   var card = el('div', 'card')
   var head = el('div', 'cardhead')
-  head.appendChild(el('h2', null, '全部 effort · 一屏纵览（' + state.efforts.length + ' 个）'))
+  head.appendChild(el('h2', null, tf('all.h2', { n: state.efforts.length })))
   var showDone = lsFlag(ALL_SHOW_DONE_KEY, true)
-  var toggle = el('button', null, showDone ? '隐藏完工' : '显示完工')
-  toggle.title = '完工 effort（四格全绿）是否占版面；折叠与开关偏好只记本浏览器'
+  var toggle = el('button', null, t(showDone ? 'all.hide-done' : 'all.show-done'))
+  toggle.title = t('all.toggle.title')
   toggle.setAttribute('aria-pressed', showDone ? 'true' : 'false')
   toggle.addEventListener('click', function () {
     setLsFlag(ALL_SHOW_DONE_KEY, !showDone)
@@ -1041,8 +1416,8 @@ function renderAllView() {
   var table = el('table')
   var thead = el('thead')
   var hr = el('tr')
-  var headers = ['Effort', '链（四格缩影）', '进度', '票', '迷雾', '最近活跃']
-  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  var headers = ['all.th.effort', 'all.th.chain', 'all.th.progress', 'all.th.tickets', 'all.th.fog', 'all.th.latest']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, t(h))) })
   thead.appendChild(hr)
   table.appendChild(thead)
   var tbody = el('tbody')
@@ -1066,10 +1441,9 @@ function effortRow(e) {
   tr.appendChild(tdName)
   var tdChain = el('td')
   var lets = el('span', 'stagelets')
-  var statusZh = { done: '完成', current: '当前', pending: '待命' }
   e.chain.stages.forEach(function (s) {
     var d = el('span', 'stagelet ' + s.status)
-    d.title = s.title + ' · ' + statusZh[s.status]
+    d.title = tf('all.cell.title', { stage: t('stage.' + s.id + '.title') || s.title, status: t('status.' + s.status) })
     d.setAttribute('aria-hidden', 'true') // 缩影格是装饰，状态色之外的信息进整行 aria-label
     lets.appendChild(d)
   })
@@ -1079,10 +1453,11 @@ function effortRow(e) {
   tr.appendChild(el('td', null, e.chain.counts.closed + '/' + e.chain.counts.tickets))
   tr.appendChild(el('td', null, String((e.map && e.map.fogCount) || 0)))
   tr.appendChild(el('td', null, e.latestAt ? fmtRelative(e.latestAt) : '—'))
-  var aria = effortTabLabel(e) + '：进度 ' + e.chain.progress + '%，票 ' + e.chain.counts.closed + '/' + e.chain.counts.tickets +
-    ' 已关闭，迷雾 ' + ((e.map && e.map.fogCount) || 0) + ' 条。按 Enter 切换到这个 effort'
-  tr.title = '点一下切换到这个 effort'
-  tr.setAttribute('aria-label', aria)
+  tr.title = t('all.row.title')
+  tr.setAttribute('aria-label', tf('all.row.aria', {
+    effort: effortTabLabel(e), progress: e.chain.progress, closed: e.chain.counts.closed,
+    tickets: e.chain.counts.tickets, fog: (e.map && e.map.fogCount) || 0,
+  }))
   clickable(tr, function () { selected = e.slug; render() })
   return tr
 }
@@ -1090,10 +1465,10 @@ function effortRow(e) {
 /** 完工组的折叠/展开行（一行计数；点它切折叠态，偏好记本浏览器）。 */
 function doneGroupRow(count, collapsed) {
   var tr = el('tr', 'donegroup')
-  var td = el('td', null, collapsed ? '✓ 完工 effort：' + count + ' 个 · 已折叠（点开展开）' : '✓ 完工 effort（' + count + ' 个）· 点收起')
+  var td = el('td', null, tf(collapsed ? 'all.done-collapsed' : 'all.done-expanded', { n: count }))
   td.colSpan = 6
   tr.appendChild(td)
-  tr.title = collapsed ? '展开完工 effort 明细行' : '折叠完工 effort 明细行'
+  tr.title = t(collapsed ? 'all.expand.title' : 'all.collapse.title')
   tr.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
   clickable(tr, function () {
     setLsFlag(ALL_DONE_COLLAPSED_KEY, !collapsed)
@@ -1145,8 +1520,8 @@ function restoreScrolls(rootEl, snap) {
 
 function renderMeta(ok) {
   var m = document.getElementById('meta')
-  m.textContent = '追踪：' + (state ? state.root : '—') + (ok && lastOk ? ' · 已刷新 ' + lastOk : '')
-  if (state && state.configPath) m.title = '配置文件：' + state.configPath + '（追踪目录、端口、轮询间隔都在里面改）'
+  m.textContent = tf('meta.tracking', { root: state ? state.root : '—' }) + (ok && lastOk ? tf('meta.refreshed', { when: lastOk }) : '')
+  if (state && state.configPath) m.title = tf('meta.config-title', { path: state.configPath })
 }
 
 /* 按模式排表（票 06 三档）：
@@ -1164,7 +1539,7 @@ function schedulePoll() {
 function applyPollModeUI() {
   var b = document.getElementById('manualBadge')
   if (pollMode === 'manual') {
-    b.textContent = '手动模式' + (lastOk ? ' · ' + lastOk + ' 盘点' : '')
+    b.textContent = lastOk ? tf('manual.badge.text', { when: lastOk }) : t('manual.badge.bare')
     b.hidden = false
   } else {
     b.hidden = true
@@ -1187,11 +1562,12 @@ function notifyOn() {
    两处靠注释互指钉住，同 frontierOf / isFrontierTicket 先例）——改那边必须同步这里。
    事件只从「下一拍还在的 effort」推导：effort 消失零事件零误报；仅 mtime 变化（updatedAt /
    latestAt / git 旁证 / generatedAt）不进比较面；换目录两拍不可比，root 不同零事件。 */
-var NOTIFY_STAGE_LABELS = { grill: 'Grill 拷问', spec: 'To-Spec 规格', tickets: 'To-Tickets 拆票', implement: 'Implement 实现' }
 var NOTIFY_STAGE_RANK = { grill: 0, spec: 1, tickets: 2, implement: 3 }
 
-function notifyEffortName(slug) { return slug === '__root' ? '.scratch 根目录' : slug }
-function notifyStageLabel(id) { return id ? (NOTIFY_STAGE_LABELS[id] || id) : '四阶段完成' }
+/* 通知里的人话一律按当前语言查词表（票 02）：阶段名与链格共用 stage.<id>.title 同一列，
+   不再另抄一份标签表——两处同源才不会漂移。 */
+function notifyEffortName(slug) { return slug === '__root' ? t('notify.root-name') : slug }
+function notifyStageLabel(id) { return id ? (t('stage.' + id + '.title') || id) : t('notify.stage-complete') }
 function notifyStageRank(id) {
   if (!id) return 4
   return Object.prototype.hasOwnProperty.call(NOTIFY_STAGE_RANK, id) ? NOTIFY_STAGE_RANK[id] : -1
@@ -1207,7 +1583,7 @@ function deriveNotifyEvents(prev, next) {
     var name = notifyEffortName(ne.slug)
     var pe = prevBySlug[ne.slug]
     if (!pe) {
-      events.push({ kind: 'effort-new', effort: ne.slug, text: '新 effort：' + name })
+      events.push({ kind: 'effort-new', effort: ne.slug, text: tf('notify.effort-new', { name: name }) })
       return
     }
     var prevTickets = {}
@@ -1215,17 +1591,20 @@ function deriveNotifyEvents(prev, next) {
     ;(ne.tickets || []).forEach(function (t) {
       var pt = prevTickets[t.key]
       if (!pt) return
-      if (pt.state !== 'closed' && t.state === 'closed') events.push({ kind: 'ticket-closed', effort: ne.slug, key: t.key, text: name + '：票 #' + t.key + ' 已关闭' })
-      else if (pt.state === 'closed' && t.state !== 'closed') events.push({ kind: 'ticket-reopened', effort: ne.slug, key: t.key, text: name + '：票 #' + t.key + ' 重新打开' })
+      if (pt.state !== 'closed' && t.state === 'closed') events.push({ kind: 'ticket-closed', effort: ne.slug, key: t.key, text: tf('notify.ticket-closed', { name: name, key: t.key }) })
+      else if (pt.state === 'closed' && t.state !== 'closed') events.push({ kind: 'ticket-reopened', effort: ne.slug, key: t.key, text: tf('notify.ticket-reopened', { name: name, key: t.key }) })
     })
     var fogPrev = (pe.map && pe.map.fogCount) || 0
     var fogNext = (ne.map && ne.map.fogCount) || 0
-    if (fogPrev !== fogNext) events.push({ kind: 'fog', effort: ne.slug, from: fogPrev, to: fogNext, text: name + '：迷雾 ' + fogPrev + '→' + fogNext })
+    if (fogPrev !== fogNext) events.push({ kind: 'fog', effort: ne.slug, from: fogPrev, to: fogNext, text: tf('notify.fog', { name: name, from: fogPrev, to: fogNext }) })
     var prevStep = pe.chain && pe.chain.currentId ? pe.chain.currentId : null
     var nextStep = ne.chain && ne.chain.currentId ? ne.chain.currentId : null
     if (prevStep !== nextStep) {
+      var advanced = notifyStageRank(nextStep) > notifyStageRank(prevStep)
       events.push({ kind: 'stage', effort: ne.slug, from: prevStep, to: nextStep,
-        text: name + '：阶段' + (notifyStageRank(nextStep) > notifyStageRank(prevStep) ? '推进' : '回落') + ' ' + notifyStageLabel(prevStep) + ' → ' + notifyStageLabel(nextStep) })
+        text: tf(advanced ? 'notify.stage-advance' : 'notify.stage-rewind', {
+          name: name, from: notifyStageLabel(prevStep), to: notifyStageLabel(nextStep),
+        }) })
     }
   })
   return events
@@ -1234,7 +1613,8 @@ function deriveNotifyEvents(prev, next) {
 /* 单条通知：点击 = 聚焦窗口并切到事件涉及的 effort（只改选中项，零写）。 */
 function fireNotification(body, effortSlug) {
   try {
-    var n = new Notification('流程板' + (state && state.rootName ? ' · ' + state.rootName : ''), { body: body })
+    var rootPart = state && state.rootName ? tf('notify.title-sep', { root: state.rootName }) : ''
+    var n = new Notification(tf('notify.title', { root: rootPart }), { body: body })
     n.addEventListener('click', function () {
       window.focus()
       if (effortSlug && state && state.efforts.some(function (e) { return e.slug === effortSlug })) {
@@ -1254,7 +1634,7 @@ function dispatchNotifications(prev, next, opts) {
   var evts = deriveNotifyEvents(prev, next)
   if (!evts.length) return
   if (opts.backlog) {
-    fireNotification('离开期间有 ' + evts.length + ' 项变化', null)
+    fireNotification(tf('notify.backlog', { n: evts.length }), null)
     return
   }
   evts.forEach(function (e) { fireNotification(e.text, e.effort) })
@@ -1295,7 +1675,7 @@ function refresh(force) {
     // 下拉开着时：数据没变就不动 DOM（不打扰浏览）；变了就原位重画，保持展开、不抢焦点。
     if (rootMenuState.open && rootMenuSignature() !== rootMenuSig) renderRootMenu()
   }).catch(function (e) {
-    showErr('刷新失败：' + (e && e.message ? e.message : e) + '（服务还在跑吗？）')
+    showErr(tf('refresh.failed', { msg: e && e.message ? e.message : e }))
   }).finally(function () {
     schedulePoll()
   })
@@ -1310,15 +1690,15 @@ function switchRoot() {
   apiFetch('/api/config', { body: JSON.stringify({ root: raw }) }).then(function (res) {
     btn.disabled = false
     if (!res.ok) {
-      showErr('换目录失败：' + res.errorText)
+      showErr(tf('switch.failed', { msg: res.errorText }))
       return
     }
     selected = null
-    toast('已切换到 ' + res.data.root + '，并写进了 config.json')
+    toast(tf('switch.ok', { root: res.data.root }))
     refresh(true)
   }).catch(function (e) {
     btn.disabled = false
-    showErr('换目录失败：' + (e && e.message ? e.message : e))
+    showErr(tf('switch.failed', { msg: e && e.message ? e.message : e }))
   })
 }
 
@@ -1327,7 +1707,6 @@ function switchRoot() {
    当前追踪目录永远置顶展示（带「当前」标示，未入存储列表时也展示）——纯界面行为，不写回。 */
 var rootMenuState = { open: false, hl: 0, typed: false }
 var rootMenuSig = ''   // 最近一次渲染的数据签名：轮询刷新时数据没变就不重画（不动 DOM 也就不动焦点）
-var ROOT_MENU_EMPTY_HINT = '切换过的目录会出现在这里'
 
 function showErr(msg) {
   var b = document.getElementById('err')
@@ -1380,29 +1759,29 @@ function renderRootMenu() {
   box.hidden = false
   var storedEmpty = rootMenuStoredEmpty()
   if (!entries.length) {
-    box.appendChild(el('div', 'menu-empty', storedEmpty ? ROOT_MENU_EMPTY_HINT : '没有匹配的常用目录'))
+    box.appendChild(el('div', 'menu-empty', t(storedEmpty ? 'menu.empty' : 'menu.no-match')))
   } else {
     entries.forEach(function (e, i) {
       var opt = el('div', 'opt' + (e.exists ? '' : ' missing') + (i === rootMenuState.hl ? ' hl' : ''))
       var main = el('div', 'main', baseName(e.path))
-      if (e.current) main.appendChild(el('span', 'chip cur', '当前'))
-      if (!e.exists) main.appendChild(el('span', 'chip', '目录不存在'))
+      if (e.current) main.appendChild(el('span', 'chip cur', t('menu.current')))
+      if (!e.exists) main.appendChild(el('span', 'chip', t('menu.missing')))
       opt.appendChild(main)
       opt.appendChild(el('div', 'sub', e.path))
       var del = el('button', 'del', '✕')
-      del.title = '从常用目录里删掉这一条（立即写回 config.json，删错了重新切一次就会收回来）'
+      del.title = t('menu.del.title')
       del.addEventListener('click', function (ev) { ev.stopPropagation(); removeRecentRoot(e.path) })
       opt.appendChild(del)
       if (e.exists) {
-        opt.title = '点一下切换到这个目录'
+        opt.title = t('menu.pick.title')
         // 键盘层：下拉项可 Tab 停留、Enter/Space 与点按同路切换（失效条目不可点，也不进 Tab 序）
         clickable(opt, function () { pickRecentRoot(e.path) })
       } else {
-        opt.title = '这个目录在本机上不存在：不能切换，但可以删除'
+        opt.title = t('menu.missing.title')
       }
       box.appendChild(opt)
     })
-    if (storedEmpty) box.appendChild(el('div', 'menu-empty', ROOT_MENU_EMPTY_HINT))
+    if (storedEmpty) box.appendChild(el('div', 'menu-empty', t('menu.empty')))
   }
   rootMenuSig = rootMenuSignature()
 }
@@ -1425,13 +1804,13 @@ function pickRecentRoot(path) {
 function removeRecentRoot(path) {
   apiFetch('/api/recent-roots', { body: JSON.stringify({ remove: path }) }).then(function (res) {
     if (!res.ok) {
-      showErr('删除常用目录失败：' + res.errorText)
+      showErr(tf('roots.remove-failed', { msg: res.errorText }))
       return
     }
     if (state) state.recentRoots = res.data.recentRoots || []
     renderRootMenu()
   }).catch(function (e) {
-    showErr('删除常用目录失败：' + (e && e.message ? e.message : e))
+    showErr(tf('roots.remove-failed', { msg: e && e.message ? e.message : e }))
   })
 }
 
@@ -1446,9 +1825,9 @@ function updateFrontierBadge() {
     closeFrontierPanel()
     return
   }
-  var t = frontierTotals()
+  var tot = frontierTotals()
   b.hidden = false
-  b.textContent = '迷雾 ' + t.fog + ' · 前沿 ' + t.frontier
+  b.textContent = tf('frontier.badge.text', { fog: tot.fog, frontier: tot.frontier })
 }
 
 function closeFrontierPanel() {
@@ -1464,17 +1843,17 @@ function renderFrontierPanel() {
     .map(function (e) { return { eff: e, list: frontierOf(e) } })
     .filter(function (g) { return g.list.length })
   if (!groups.length) {
-    box.appendChild(el('div', 'fempty', '现在没有前沿票：剩下的票要么被认领、要么还被依赖阻塞。'))
+    box.appendChild(el('div', 'fempty', t('frontier.empty')))
     return
   }
   groups.forEach(function (g) {
     box.appendChild(el('div', 'fgroup', effortTabLabel(g.eff)))
-    g.list.forEach(function (t) {
+    g.list.forEach(function (tk) {
       var row = el('div', 'fticket')
-      row.appendChild(el('span', 'key', '#' + t.key))
-      row.appendChild(document.createTextNode(t.title))
-      row.title = '点一下切到 effort ' + effortTabLabel(g.eff)
-      row.setAttribute('aria-label', '前沿票 ' + t.key + ' ' + t.title + '。按 Enter 切换到所属 effort ' + effortTabLabel(g.eff))
+      row.appendChild(el('span', 'key', '#' + tk.key))
+      row.appendChild(document.createTextNode(tk.title))
+      row.title = tf('frontier.row.title', { effort: effortTabLabel(g.eff) })
+      row.setAttribute('aria-label', tf('frontier.row.aria', { key: tk.key, title: tk.title, effort: effortTabLabel(g.eff) }))
       clickable(row, function () {
         selected = g.eff.slug
         closeFrontierPanel()
@@ -1505,7 +1884,7 @@ document.addEventListener('keydown', function (ev) {
 /* 主题：纸感亮色 ⇄ GitHub 暗色，选择记忆在 localStorage */
 function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark' }
 function applyThemeButton() {
-  document.getElementById('themeBtn').textContent = isDark() ? '☀️ 纸面' : '🌙 暗色'
+  document.getElementById('themeBtn').textContent = t(isDark() ? 'theme.btn.light' : 'theme.btn.dark')
 }
 document.getElementById('themeBtn').addEventListener('click', function () {
   var next = isDark() ? 'light' : 'dark'
@@ -1516,18 +1895,35 @@ document.getElementById('themeBtn').addEventListener('click', function () {
 })
 applyThemeButton()
 
-/* 界面语言（english-ui 票 01）：顶栏按钮中/英显式互切——改语言态、记进本浏览器、就地重渲染，
-   不刷新页面也不重发盘点请求（切换是纯界面行为，数据一个字没变）。 */
 function applyLangButton() {
   var b = document.getElementById('langBtn')
   b.textContent = t('lang.btn.label')
   b.title = t('lang.btn.title')
 }
+
+/* 界面语言（english-ui 票 01/02）：顶栏按钮中/英显式互切——改语言态、记进本浏览器、就地重渲染，
+   不刷新页面也不重发盘点请求（切换是纯界面行为，数据一个字没变）。
+   票 02 后界面人话全在词表里，切换 = 把每一处取词重跑一遍：静态壳（applyStaticCopy）、主区
+   （render）、顶栏状态行与徽标、以及「此刻开着的那些窗/下拉」——关着的窗开窗时自然按新语言
+   现画，不必提前重画。 */
+function applyLang() {
+  applyStaticCopy()
+  applyLangButton()
+  applyThemeButton()
+  render()
+  renderMeta(!!lastOk)
+  applyPollModeUI()
+  if (rootMenuState.open) renderRootMenu()
+  if (frontierState.open) renderFrontierPanel()
+  if (skillsModalCtl.isOpen()) renderSkillsNav()
+  if (rootsModalCtl.isOpen() && lastRoots) renderRootsRows(lastRoots)
+  if (readModalCtl.isOpen() && readModalHead) renderReadHead()
+  if (settingsModalCtl.isOpen()) renderSettingsDynamic()
+}
 document.getElementById('langBtn').addEventListener('click', function () {
   lang = lang === 'en' ? 'zh' : 'en'
   try { localStorage.setItem(LANG_KEY, lang) } catch (e) {}
-  applyLangButton()
-  render()
+  applyLang()
 })
 applyLangButton()
 
@@ -1640,7 +2036,6 @@ function makeModal(el) {
    行内容全部经 textContent 组装进安全 DOM，不走 innerHTML。 */
 var skillsState = { list: null, current: null, cache: {} }
 var skillsModalCtl = makeModal(document.getElementById('skillsModal'))
-var SKILL_CATEGORY_LABELS = { overview: '总览', engineering: '工程流程', productivity: '效率与协作', misc: '专项工具', 'in-progress': '开发中' }
 
 /** 行内语法：**粗体**、`代码`、*斜体*、词边界 _斜体_、[文字](链接)。链接指向同目录 .md 的在弹窗内跳转，其余新开标签页。 */
 function mdInline(line) {
@@ -1672,7 +2067,7 @@ function mdInline(line) {
       if (/^(\.\/)?[A-Za-z0-9-]+\.md$/.test(href)) {
         var name = href.replace(/^\.\/|\.md$/g, '')
         a.href = '#'
-        a.title = '在弹窗里打开这篇介绍'
+        a.title = t('skills.link.title')
         a.addEventListener('click', function (ev) { ev.preventDefault(); openSkillDoc(name) })
       } else {
         a.href = href
@@ -1807,9 +2202,9 @@ function renderSkillsNav() {
   var count = document.getElementById('skillsCount')
   nav.textContent = ''
   var list = skillsState.list || []
-  count.textContent = list.length ? list.length + ' 篇介绍 · 来源 docs/skill-intros/' : ''
+  count.textContent = list.length ? tf('skills.count', { n: list.length }) : ''
   if (!list.length) {
-    nav.appendChild(el('div', 'cat', '技能文档缺失（docs/skill-intros/ 没有内容）'))
+    nav.appendChild(el('div', 'cat', t('skills.missing')))
     return
   }
   var cats = []
@@ -1819,12 +2214,12 @@ function renderSkillsNav() {
     byCat[s.category].push(s)
   })
   cats.forEach(function (cat) {
-    nav.appendChild(el('div', 'cat', SKILL_CATEGORY_LABELS[cat] || cat))
+    nav.appendChild(el('div', 'cat', t('skill.cat.' + cat) || cat))
     byCat[cat].forEach(function (s) {
       var b = el('button', 'item' + (s.name === skillsState.current ? ' on' : ''))
       var nm = el('span', 'nm')
       nm.appendChild(document.createTextNode(s.title))
-      if (s.inProgress) nm.appendChild(el('span', 'chip', '开发中'))
+      if (s.inProgress) nm.appendChild(el('span', 'chip', t('skills.dev-chip')))
       b.appendChild(nm)
       b.appendChild(el('span', 'en', s.name))
       b.title = s.summary
@@ -1843,7 +2238,7 @@ function loadSkillDoc(name) {
     return
   }
   box.textContent = ''
-  box.appendChild(el('div', 'loading', '加载中…'))
+  box.appendChild(el('div', 'loading', t('skills.doc-loading')))
   apiFetch('/api/skills/' + encodeURIComponent(name), { text: true }).then(function (res) {
     if (!res.ok) throw new Error(res.errorText)
     return res.data // text 模式：data 即文档原文
@@ -1855,7 +2250,7 @@ function loadSkillDoc(name) {
   }).catch(function (e) {
     if (!skillsModalCtl.isOpen()) return
     box.textContent = ''
-    box.appendChild(el('div', 'loading', '这篇介绍加载失败：' + (e && e.message ? e.message : e)))
+    box.appendChild(el('div', 'loading', tf('skills.doc-failed', { msg: e && e.message ? e.message : e })))
   })
 }
 
@@ -1874,14 +2269,14 @@ function openSkillsModal(focusName) {
   skillsModalCtl.open() // 六件套（显隐/焦点/Esc/遮罩/滚动锁/圈禁）归工厂
   if (skillsState.list === null) {
     // 内容逻辑留在这里：清单懒加载，只在第一次打开时拉一次；回来后优先定位 focusName（技能联动），否则默认总览
-    document.getElementById('skillsDoc').appendChild(el('div', 'loading', '加载清单中…'))
+    document.getElementById('skillsDoc').appendChild(el('div', 'loading', t('skills.list-loading')))
     apiFetch('/api/skills').then(function (res) {
       if (!res.ok) throw new Error(res.errorText)
       skillsState.list = (res.data && res.data.skills) || []
       renderSkillsNav()
       openSkillDoc(focusName || (skillsState.list.length ? skillsState.list[0].name : ''))
     }).catch(function (e) {
-      showErr('技能清单加载失败：' + (e && e.message ? e.message : e))
+      showErr(tf('skills.list-failed', { msg: e && e.message ? e.message : e }))
       skillsModalCtl.close()
     })
   } else if (focusName) {
@@ -1895,12 +2290,26 @@ document.getElementById('skillsClose').addEventListener('click', function () { s
    内容取打开时刻的盘点快照（eff 对象是当次 render 持有的引用，轮询换数据会另造新对象），
    所以打开期间后台刷新不会重画弹窗——不打扰阅读；显隐/焦点/Esc/遮罩/滚动锁/圈禁归 makeModal。 */
 var readModalCtl = makeModal(document.getElementById('readModal'))
+/* 弹窗头部的「要素」而非成品字符串：换语言只重组标题行（正文是打开时刻的快照，不动）。 */
+var readModalHead = null
+
+function renderReadHead() {
+  if (!readModalHead) return
+  var h = readModalHead
+  if (h.kind === 'spec') {
+    document.getElementById('readTitle').textContent = tf('read.spec-title', { title: h.eff.title })
+    document.getElementById('readMeta').textContent = '.scratch/' + (h.eff.slug === '__root' ? '' : h.eff.slug + '/') + 'spec.md'
+  } else {
+    document.getElementById('readTitle').textContent = h.tk.title
+    document.getElementById('readMeta').textContent = tf('read.issue-meta', { path: issueFilePath(h.eff, h.tk), when: fmtUpdatedAt(h.tk.updatedAt) })
+  }
+}
 
 function openReadingModal(eff) {
   if (readModalCtl.isOpen() || !eff.spec.exists) return
   // 内容逻辑留在这里：快照渲染（标题、路径、正文）先行，再交工厂开窗聚焦
-  document.getElementById('readTitle').textContent = '规格 · ' + eff.title
-  document.getElementById('readMeta').textContent = '.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'spec.md'
+  readModalHead = { kind: 'spec', eff: eff }
+  renderReadHead()
   var doc = document.getElementById('readDoc')
   renderMarkdown(eff.spec.content, doc)
   doc.scrollTop = 0
@@ -1914,8 +2323,8 @@ document.getElementById('readClose').addEventListener('click', function () { rea
    打开期间的轮询刷新不碰弹窗。元信息（标题、路径、更新时间）用票行手里的盘点数据，请求回来即换正文。 */
 var issueModalSeq = 0 // 打开序号：关掉再开另一张时，前一张的迟到应答不得落进后一张的弹窗
 
-function issueFilePath(eff, t) {
-  return '.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + t.fileName
+function issueFilePath(eff, tk) {
+  return '.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + tk.fileName
 }
 
 /* 票正文的机器字段行剥除：与 renderMarkdown 头部剥除同一判准的行级版——票的字段行在标题行
@@ -1941,17 +2350,17 @@ function stripTicketFieldLines(text) {
   return out.join('\n')
 }
 
-function openIssueModal(eff, t) {
+function openIssueModal(eff, tk) {
   if (readModalCtl.isOpen()) return
   var seq = ++issueModalSeq
-  document.getElementById('readTitle').textContent = t.title
-  document.getElementById('readMeta').textContent = issueFilePath(eff, t) + ' · 更新于 ' + fmtUpdatedAt(t.updatedAt)
+  readModalHead = { kind: 'issue', eff: eff, tk: tk }
+  renderReadHead()
   var doc = document.getElementById('readDoc')
   doc.textContent = ''
-  doc.appendChild(el('div', 'loading', '取票原文中…'))
+  doc.appendChild(el('div', 'loading', t('read.issue-loading')))
   doc.scrollTop = 0
   readModalCtl.open()
-  apiFetch('/api/issue?effort=' + encodeURIComponent(eff.slug) + '&ticket=' + encodeURIComponent(t.key), { text: true }).then(function (res) {
+  apiFetch('/api/issue?effort=' + encodeURIComponent(eff.slug) + '&ticket=' + encodeURIComponent(tk.key), { text: true }).then(function (res) {
     if (!res.ok) throw new Error(res.errorText)
     return res.data // text 模式：data 即票文件原文
   }).then(function (text) {
@@ -1961,7 +2370,7 @@ function openIssueModal(eff, t) {
   }).catch(function (e) {
     if (!readModalCtl.isOpen() || seq !== issueModalSeq) return
     doc.textContent = ''
-    doc.appendChild(el('div', 'loading', '票原文加载失败：' + (e && e.message ? e.message : e)))
+    doc.appendChild(el('div', 'loading', tf('read.issue-failed', { msg: e && e.message ? e.message : e })))
   })
 }
 
@@ -1970,21 +2379,28 @@ function openIssueModal(eff, t) {
    GET 不触碰常用目录排序。行点击 = 既有换目录操作（填输入框 + switchRoot），
    换完弹窗关闭、主区切到新 root。当前追踪目录置顶标「当前」（服务端排序）。 */
 var rootsModalCtl = makeModal(document.getElementById('rootsModal'))
-var OVERVIEW_STAGE_LABELS = { grill: 'Grill 拷问', spec: 'To-Spec 规格', tickets: 'To-Tickets 拆票', implement: 'Implement 实现', done: '全部完成' }
+var lastRoots = null // 最近一次盘点结果：换语言时原位重画，不重发请求
+
+/** 总览行「链阶段」列的取词：done 走总览专列，其余与链格同用 stage.<id>.title（一处词表）。
+    认不出的阶段出空串，由调用方按落点各自兜底（单元格「无产物目录」/ aria「链阶段未知」）。 */
+function overviewStageLabel(stage) {
+  if (stage === 'done') return t('ov.stage-done')
+  return t('stage.' + stage + '.title')
+}
 
 function renderRootsRows(roots) {
   var body = document.getElementById('rootsBody')
   body.textContent = ''
-  document.getElementById('rootsMeta').textContent = roots.length ? roots.length + ' 个目录 · 打开时盘点' : ''
+  document.getElementById('rootsMeta').textContent = roots.length ? tf('ov.meta', { n: roots.length }) : ''
   if (!roots.length) {
-    body.appendChild(el('div', 'sub', '还没有常用目录：在网页上切换过的目录会自动收录到这里。'))
+    body.appendChild(el('div', 'sub', t('ov.empty')))
     return
   }
   var table = el('table')
   var thead = el('thead')
   var hr = el('tr')
-  var headers = ['项目', '链阶段', '票', '迷雾', '备注']
-  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  var headers = ['ov.th.project', 'ov.th.stage', 'ov.th.tickets', 'ov.th.fog', 'ov.th.note']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, t(h))) })
   thead.appendChild(hr)
   table.appendChild(thead)
   var tbody = el('tbody')
@@ -1995,18 +2411,20 @@ function renderRootsRows(roots) {
     tdName.appendChild(el('div', 'name', r.name))
     tdName.appendChild(el('div', 'sub', r.path))
     tr.appendChild(tdName)
-    tr.appendChild(el('td', null, bad ? '—' : (OVERVIEW_STAGE_LABELS[r.stage] || '无产物目录')))
+    tr.appendChild(el('td', null, bad ? '—' : (overviewStageLabel(r.stage) || t('ov.stage-none'))))
     tr.appendChild(el('td', null, bad ? '—' : r.closed + '/' + r.tickets))
     tr.appendChild(el('td', null, bad ? '—' : String(r.fog)))
     var tdNote = el('td')
-    if (r.current) tdNote.appendChild(el('span', 'chip cur', '当前'))
-    if (r.status === 'no-scratch') tdNote.appendChild(el('span', 'chip', '无产物'))
-    if (r.status === 'unreadable') tdNote.appendChild(el('span', 'chip', '不可读'))
+    if (r.current) tdNote.appendChild(el('span', 'chip cur', t('ov.current')))
+    if (r.status === 'no-scratch') tdNote.appendChild(el('span', 'chip', t('ov.no-scratch')))
+    if (r.status === 'unreadable') tdNote.appendChild(el('span', 'chip', t('ov.unreadable')))
     tr.appendChild(tdNote)
     if (!bad) {
       // 可切目录：行点击 = 既有换目录流（零新机制）；不可读行置灰不可点
-      tr.title = '点一下切换到这个项目（既有换目录操作，写进 config.json）'
-      tr.setAttribute('aria-label', r.name + '：' + (OVERVIEW_STAGE_LABELS[r.stage] || '链阶段未知') + '，票 ' + r.closed + '/' + r.tickets + '，迷雾 ' + r.fog + '。按 Enter 切换到这个项目')
+      tr.title = t('ov.row.title')
+      tr.setAttribute('aria-label', tf('ov.row.aria', {
+        name: r.name, stage: overviewStageLabel(r.stage) || t('ov.row.stage-unknown'), closed: r.closed, tickets: r.tickets, fog: r.fog,
+      }))
       clickable(tr, function () {
         rootsModalCtl.close()
         var input = document.getElementById('rootInput')
@@ -2014,7 +2432,7 @@ function renderRootsRows(roots) {
         switchRoot()
       })
     } else {
-      tr.title = r.status === 'no-scratch' ? '目录存在但没有 .scratch/（无产物）' : '目录读不了：可能不存在或无权限'
+      tr.title = t(r.status === 'no-scratch' ? 'ov.row.no-scratch.title' : 'ov.row.unreadable.title')
     }
     tbody.appendChild(tr)
   })
@@ -2025,17 +2443,18 @@ function renderRootsRows(roots) {
 function loadRootsOverview() {
   var body = document.getElementById('rootsBody')
   body.textContent = ''
-  body.appendChild(el('div', 'loading', '盘点常用目录中…'))
+  body.appendChild(el('div', 'loading', t('ov.loading')))
   apiFetch('/api/roots-overview').then(function (res) {
     if (!res.ok) throw new Error(res.errorText)
     return res.data
   }).then(function (data) {
     if (!rootsModalCtl.isOpen()) return
-    renderRootsRows((data && data.roots) || [])
+    lastRoots = (data && data.roots) || []
+    renderRootsRows(lastRoots)
   }).catch(function (e) {
     if (!rootsModalCtl.isOpen()) return
     body.textContent = ''
-    body.appendChild(el('div', 'loading', '项目总览加载失败：' + (e && e.message ? e.message : e)))
+    body.appendChild(el('div', 'loading', tf('ov.failed', { msg: e && e.message ? e.message : e })))
   })
 }
 
@@ -2064,7 +2483,7 @@ function updateSnapshotBtn() {
 }
 
 function exportSnapshot() {
-  if (!lastSnapshot) { toast('还没有可导出的盘点'); return }
+  if (!lastSnapshot) { toast(t('snapshot.none')); return }
   try {
     var blob = new Blob([lastSnapshot], { type: 'application/json' })
     var url = URL.createObjectURL(blob)
@@ -2075,9 +2494,9 @@ function exportSnapshot() {
     a.click()
     document.body.removeChild(a)
     setTimeout(function () { URL.revokeObjectURL(url) }, 0)
-    toast('已导出快照')
+    toast(t('snapshot.done'))
   } catch (e) {
-    toast('导出快照失败：' + (e && e.message ? e.message : e))
+    toast(tf('snapshot.failed', { msg: e && e.message ? e.message : e }))
   }
 }
 document.getElementById('snapshotBtn').addEventListener('click', exportSnapshot)
@@ -2098,6 +2517,21 @@ function settingsSnapshotInitial() {
   }
 }
 
+/* 令牌区 + 配置文件行：随服务端盘点状态而变的几行文案。开窗时填一次，换语言时原地重挂
+   （表单里用户已输入的值不动，只换说明文字）。 */
+function renderSettingsDynamic() {
+  var tok = document.getElementById('setToken')
+  var enabled = !!(state && state.tokenEnabled)
+  tok.placeholder = t(enabled ? 'set.token.on' : 'set.token.off')
+  document.getElementById('setTokenHint').textContent = settingsState.clearToken
+    ? t('set.token.cleared')
+    : t(enabled ? 'set.token.hint-on' : 'set.token.hint-off')
+  document.getElementById('setTokenClearRow').hidden = !enabled
+  document.getElementById('setConfigPath').textContent = state && state.configPath
+    ? tf('set.config.path', { path: state.configPath })
+    : t('set.config.unknown')
+}
+
 function openSettings() {
   if (settingsModalCtl.isOpen()) return
   settingsState.clearToken = false
@@ -2108,15 +2542,8 @@ function openSettings() {
   document.getElementById('setPort').value = settingsState.initial.port
   // 桌面通知（票 04）：浏览器本地偏好，即时生效——不进下面的保存补丁（不写 config.json）
   document.getElementById('setNotify').checked = notifyOn()
-  var tok = document.getElementById('setToken')
-  tok.value = ''
-  var enabled = !!(state && state.tokenEnabled)
-  tok.placeholder = enabled ? '已启用——输入新值可替换' : '留空 = 不启用'
-  document.getElementById('setTokenHint').textContent = enabled
-    ? '非空时 /api/* 的每个请求都要携带令牌（X-FlowDeck-Token 头或 ?token=）。输入新值保存即替换。'
-    : '设一个共享口令：0.0.0.0 局域网暴露时挡住同网段未授权访问；本机 127.0.0.1 用法可留空。'
-  document.getElementById('setTokenClearRow').hidden = !enabled
-  document.getElementById('setConfigPath').textContent = state && state.configPath ? state.configPath + '（也可手改，下一拍生效）' : '（未知）'
+  document.getElementById('setToken').value = ''
+  renderSettingsDynamic()
   document.getElementById('setSaveHint').textContent = ''
   settingsModalCtl.open()
 }
@@ -2138,8 +2565,6 @@ function settingsChanges() {
   return patch
 }
 
-var SETTINGS_FIELD_LABELS = { pollMs: '轮询间隔', pollMode: '轮询模式', host: '监听地址', port: '端口', token: '访问令牌', root: '追踪目录' }
-
 /* 生效语义契约（HTTP 契约，与 server.mjs 的 EFFECT 常量互指）：服务端两词 immediate / restart。
    零依赖无构建，两端代码共享不了，靠这对常量与注释钉住。前端只特判 restart、
    其余一律按立即生效——跨端契约面从两词缩到一词，对未来的未知值也稳健。 */
@@ -2154,7 +2579,7 @@ function saveSettings() {
   apiFetch('/api/config', { body: JSON.stringify(patch) }).then(function (res) {
     btn.disabled = false
     if (!res.ok) {
-      document.getElementById('setSaveHint').textContent = '保存失败：' + res.errorText
+      document.getElementById('setSaveHint').textContent = tf('set.save-failed', { msg: res.errorText })
       return
     }
     // 令牌变更同步本地记忆与后续请求头（清除则抹去）；令牌值不进任何 DOM 文本
@@ -2168,18 +2593,18 @@ function saveSettings() {
     // 只特判 restart，其余（含未知值）一律按立即生效
     var immediate = [], restart = []
     keys.forEach(function (k) {
-      var label = SETTINGS_FIELD_LABELS[k] || k
+      var label = t('set.field.' + k) || k
       ;(res.data.applied && res.data.applied[k] === APPLY_RESTART ? restart : immediate).push(label)
     })
     var parts = []
-    if (immediate.length) parts.push('已生效：' + immediate.join('、'))
-    if (restart.length) parts.push('重启后生效：' + restart.join('、'))
-    toast(parts.join('；') || '已保存')
+    if (immediate.length) parts.push(tf('set.applied', { fields: immediate.join(t('sep.list')) }))
+    if (restart.length) parts.push(tf('set.applied-restart', { fields: restart.join(t('sep.list')) }))
+    toast(parts.join(t('sep.parts')) || t('set.saved'))
     refresh(true)
     settingsModalCtl.close()
   }).catch(function (e) {
     btn.disabled = false
-    document.getElementById('setSaveHint').textContent = '保存失败：' + (e && e.message ? e.message : e)
+    document.getElementById('setSaveHint').textContent = tf('set.save-failed', { msg: e && e.message ? e.message : e })
   })
 }
 
@@ -2187,11 +2612,11 @@ document.getElementById('settingsBtn').addEventListener('click', openSettings)
 document.getElementById('settingsClose').addEventListener('click', function () { settingsModalCtl.close() })
 document.getElementById('settingsSave').addEventListener('click', saveSettings)
 document.getElementById('setTokenClear').addEventListener('click', function () {
-  if (!window.confirm('确定清除访问令牌？清除后 /api/* 不再要求令牌——局域网暴露场景等于无鉴权。')) return
+  if (!window.confirm(t('set.token.confirm'))) return
   settingsState.clearToken = true
   document.getElementById('setToken').value = ''
   document.getElementById('setTokenClearRow').hidden = true
-  document.getElementById('setTokenHint').textContent = '已标记清除：保存后令牌置空（关闭鉴权）。'
+  document.getElementById('setTokenHint').textContent = t('set.token.cleared')
 })
 // 桌面通知开关（票 04）：开启即申请权限（权限时机由用户掌控，默认关）；被拒回落并提示
 // 补救路径（浏览器站点设置）；关闭即抹去本地偏好。全部走 localStorage，与保存按钮无关。
@@ -2203,26 +2628,26 @@ document.getElementById('setNotify').addEventListener('change', function () {
   }
   if (typeof Notification === 'undefined') {
     box.checked = false
-    toast('这个浏览器不支持桌面通知，开不了')
+    toast(t('notify.unsupported'))
     return
   }
   if (Notification.permission === 'granted') {
     try { localStorage.setItem(NOTIFY_KEY, '1') } catch (e) {}
-    toast('桌面通知已开启')
+    toast(t('notify.enabled'))
     return
   }
   if (Notification.permission === 'denied') {
     box.checked = false
-    toast('浏览器已拒绝本页面的通知权限：在站点设置里允许后回来再开')
+    toast(t('notify.denied'))
     return
   }
   Notification.requestPermission().then(function (result) {
     if (result === 'granted') {
       try { localStorage.setItem(NOTIFY_KEY, '1') } catch (e) {}
-      toast('桌面通知已开启')
+      toast(t('notify.enabled'))
     } else {
       box.checked = false
-      toast(result === 'denied' ? '通知权限被拒绝：在浏览器站点设置里允许后回来再开' : '没拿到通知权限（没有选「允许」），未开启')
+      toast(result === 'denied' ? t('notify.denied-result') : t('notify.not-granted'))
     }
   })
 })
@@ -2237,7 +2662,6 @@ document.addEventListener('visibilitychange', function () {
 })
 schedulePoll()
 refresh(true)
-document.getElementById('foot').textContent = '数据来源：追踪目录里的 .scratch/ · 轮询模式与间隔由 config.json 决定（pollMode / pollMs，可在「设置」里改）'
 </script>
 </body>
 </html>

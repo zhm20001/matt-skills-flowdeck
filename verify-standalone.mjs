@@ -453,6 +453,57 @@ async function runScenarios(tmp) {
   assert.equal(isFrontierTicket({ state: 'closed', blockedBy: [] }, fSet), false, '已关闭非前沿')
   ok('前沿口径：依赖全结不计阻塞、闭环/幽灵依赖双双阻塞不误判、open 未认领即前沿、claimed 两形态都不算')
 
+  // ── 指引词英文列（english-ui 票 02）：单一派生表加一列，判据分支只走一遍、两列同支 ──
+  const CJK_RE = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/
+  const enCols = (chain) => {
+    for (const s of chain.stages) {
+      assert.ok(s.en, '每个阶段都该带英文列：' + s.id)
+      for (const k of ['evidence', 'hint', 'copyText', 'inferLabel']) {
+        assert.equal(typeof s.en[k], 'string', s.id + '.en.' + k + ' 应为字符串')
+        assert.ok(!CJK_RE.test(s.en[k]), s.id + '.en.' + k + ' 不得含中文：' + s.en[k])
+      }
+      assert.notEqual(s.en.evidence, '', s.id + '：证据要有英文')
+      assert.notEqual(s.en.hint, '', s.id + '：指引要有英文')
+      // 英文 copyText 与 hint 同源，正如中文 copyText = hint（一键复制的是指引全文）
+      assert.equal(s.en.copyText, s.en.hint, s.id + '：英文 copyText 与 hint 同源')
+      // 推定标注两列同进出：同一分支的产物，不许一列有一列没
+      assert.equal(s.en.inferLabel !== '', s.inferLabel !== '', s.id + '：推定标注两列同进出')
+    }
+  }
+  // 分支对应：中文走「还没有 map.md」那支时，英文必须走同一支（不是随手一句英文）
+  const enNoMap = deriveChain({ slug: 'deck', map: { exists: false, destination: '', fogCount: 0 } })
+  enCols(enNoMap)
+  assert.equal(enNoMap.stages[0].evidence, '还没有 map.md', '中文列逐字不变（英文列是加列，不是改写）')
+  assert.match(enNoMap.stages[0].en.evidence, /^No map\.md/)
+  assert.match(enNoMap.stages[0].en.hint, /grilling/, '英文指引点名下一步用的技能名')
+  assert.match(enNoMap.stages[0].en.hint, /\.scratch\/deck\/map\.md/, '英文指引给出落盘路径（路径与判据字段不进词表）')
+  const enFog = deriveChain({ slug: 'deck', map: { exists: true, destination: 'ship it', fogCount: 2 }, spec: { exists: false, contentLength: 0 } })
+  enCols(enFog)
+  assert.equal(enFog.stages[0].evidence, 'map.md 已有，但迷雾还有 2 条（Not yet specified）', '中文列逐字不变')
+  assert.match(enFog.stages[0].en.evidence, /\b2\b/, '英文证据带同一个计数')
+  assert.match(enFog.stages[0].en.hint, /Not yet specified/, '英文指引沿用文件的英文小节名（判据不受语言影响）')
+  const enInferred = deriveChain({ slug: 'deck', map: { exists: false, destination: '', fogCount: 0 }, spec: { exists: true, contentLength: 42 } })
+  enCols(enInferred)
+  assert.equal(enInferred.stages[0].inferLabel, '推定 · 无 map')
+  assert.match(enInferred.stages[0].en.inferLabel, /no map/i, '推定标注随语言（无 map 的英文说法）')
+  assert.match(enInferred.stages[0].en.evidence, /infer/i, '推定完成的证据英文列说清是推定')
+  const enTickets = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [
+    { key: '01', state: 'open', blockedBy: [] },
+    { key: '02', state: 'open', blockedBy: ['01'] },
+  ] })
+  enCols(enTickets)
+  assert.match(enTickets.stages[2].en.evidence, /2 tickets/i, '拆票证据英文列带票数')
+  assert.match(enTickets.stages[3].en.hint, /Blocked by/, '英文指引仍点名判据字段名')
+  assert.match(enTickets.stages[3].en.hint, /Status[^\n]*resolved/, '英文指引仍要求 Status 行改 resolved')
+  assert.match(enTickets.stages[3].en.evidence, /blocked/i, '有阻塞时英文证据跟着说阻塞')
+  const enClosed = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [
+    { key: '01', state: 'closed', blockedBy: [] },
+  ] })
+  enCols(enClosed)
+  assert.match(enClosed.stages[3].en.hint, /all .*closed|全部关闭/i)
+  assert.match(enClosed.stages[3].en.evidence, /1 ticket|all/i, '全关时的证据英文列')
+  ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
+
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
   const { deriveEvents } = await import('./notify.mjs')
   const mkEffort = (slug, tickets, fogCount, currentId) => ({
@@ -1218,6 +1269,75 @@ async function runScenarios(tmp) {
     await new Promise((r) => setServer.server.close(r))
   }
   ok('设置服务端：POST /api/config 收 pollMs/host/port/token（逐字段校验、applied 生效语义、非法不写盘）；pollMs/令牌即时生效，host/port 重启生效')
+
+  // ── 错误码（english-ui 票 02）：JSON 错误响应带稳定 code，原人话照旧留着供日志 ──
+  const codeCfg = nodePath.join(tmp, 'config-codes.json')
+  await writeFile(codeCfg, JSON.stringify({ root: tmp, token: 'tok-code' }))
+  const codeServer = await startServer({ port: 0, configPath: codeCfg })
+  try {
+    const CU = codeServer.url
+    const cAuth = { 'X-FlowDeck-Token': 'tok-code' }
+    /** 带令牌的 POST（postJson 不带令牌，而本夹具特意开着令牌走完整防护链）。 */
+    const cPost = async (body) => {
+      const r = await rawHttp({
+        method: 'POST', url: CU + '/api/config',
+        headers: Object.assign({ 'Content-Type': 'application/json', 'X-FlowDeck': '1' }, cAuth),
+        body: JSON.stringify(body),
+      })
+      return JSON.parse(r.data)
+    }
+    const cGet = async (path) => JSON.parse(await (await fetch(CU + path, { headers: cAuth })).text())
+    /** code 是稳定契约形状，error 仍是原人话（界面按 code 措辞、日志读 error）。 */
+    const coded = (label, body, code) => {
+      assert.equal(body.code, code, label + ' 应带稳定 code：' + JSON.stringify(body))
+      assert.match(String(body.code), /^[a-z]+\.[a-z-]+$/, 'code 命名法：域.名字')
+      assert.ok(/[\u4e00-\u9fff]/.test(String(body.error)), label + ' 原文人话保留供日志：' + body.error)
+    }
+    coded('无令牌 401', JSON.parse(await (await fetch(CU + '/api/state')).text()), 'auth.token-required')
+    coded('pollMs 非法', await cPost({ pollMs: 10 }), 'config.poll-ms')
+    coded('pollMode 非法', await cPost({ pollMode: 'often' }), 'config.poll-mode')
+    coded('host 非法', await cPost({ host: 'bad host' }), 'config.host')
+    coded('port 非法', await cPost({ port: 70000 }), 'config.port')
+    coded('token 非字符串', await cPost({ token: 7 }), 'config.token')
+    coded('root 空', await cPost({ root: '   ' }), 'config.root-empty')
+    coded('root 不存在', await cPost({ root: '/tmp/fd-根本没这个目录-codes' }), 'config.root-missing')
+    coded('没有可保存字段', await cPost({ 没这字段: 1 }), 'config.no-fields')
+    coded('删除空路径', JSON.parse((await rawHttp({
+      method: 'POST', url: CU + '/api/recent-roots',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'X-FlowDeck-Token': 'tok-code' },
+      body: JSON.stringify({ remove: '' }),
+    })).data), 'roots.remove-empty')
+    coded('伪造 Host', JSON.parse((await rawHttp({ method: 'GET', url: CU + '/api/state', headers: { Host: 'evil.example' } })).data), 'host.forbidden')
+    coded('票参数畸形', await cGet('/api/issue?effort=..%2F..&ticket=abc'), 'issue.bad-params')
+    coded('无此 effort', await cGet('/api/issue?effort=no-such-effort&ticket=01'), 'issue.no-effort')
+    coded('无此票', await cGet('/api/issue?effort=idea-b&ticket=99'), 'issue.no-ticket')
+    coded('技能名不合法', await cGet('/api/skills/bad%zz-name'), 'skills.no-doc')
+    // 文件名合法但篇目不存在：走 sendFile 的纯文本 404，不在 JSON 错误通道里（界面按 HTTP 状态措辞）
+    const missDoc = await fetch(CU + '/api/skills/no-such-skill-doc', { headers: cAuth })
+    assert.equal(missDoc.status, 404)
+    assert.match(missDoc.headers.get('content-type') || '', /text\/plain/, '缺篇目仍是纯文本 404（sendFile 通道）')
+    // 成功应答不带 code（code 是错误通道的字段，不污染正常载荷）
+    assert.equal((await cGet('/api/state')).code, undefined, '成功响应不带 code')
+    // 未知路径走纯文本通道，不参与 code 契约（界面不消费，见 server.mjs 分发层）
+    const plain404 = await fetch(CU + '/api/nope-unknown', { headers: cAuth })
+    assert.match(plain404.headers.get('content-type') || '', /text\/plain/, '未知路径仍是纯文本')
+    // 坏 JSON 与超大体：防护层先应答，两道都有自己的 code
+    const noHeader = await fetch(CU + '/api/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlowDeck-Token': 'tok-code' }, body: '{}',
+    })
+    coded('缺防跨站写头', await noHeader.json(), 'write.header')
+    const badJson = await fetch(CU + '/api/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'X-FlowDeck-Token': 'tok-code' }, body: '{',
+    })
+    coded('坏 JSON', await badJson.json(), 'write.bad-json')
+    const tooBig = await fetch(CU + '/api/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'X-FlowDeck-Token': 'tok-code' }, body: 'x'.repeat(30721),
+    })
+    coded('超大请求体', await tooBig.json(), 'write.too-large')
+  } finally {
+    await new Promise((r) => codeServer.server.close(r))
+  }
+  ok('错误码：/api/* 的 JSON 错误应答一律带稳定 code（写头/超大/坏 JSON/伪造 Host/令牌/配置逐字段/票与技能 404），error 原文照旧供日志，成功应答不带 code')
 
 
   // ── 收录边界：上限淘汰最久未用；CLI --root 启动是临时覆盖，不收录 ──
@@ -2800,6 +2920,270 @@ async function runScenarios(tmp) {
     keepEn.d.window.close()
     keepZh.d.window.close()
     ok('语言持久化（jsdom）：语言偏好存浏览器侧、优先于浏览器语言，重开页面保持所选')
+
+    // ── 英文态整页无残留（english-ui 票 02）：真跑界面，逐视图扫中文残留 ──
+    /** 界面夹具用的英文用户数据：票标题、地图小节、规格正文全 ASCII——判据字段名（Status /
+        Blocked by / Destination）本就是英文，剩余中文只可能来自界面文案或服务端指引词。 */
+    const shTk = (key, over) => Object.assign({
+      key, fileName: key + '-item.md', title: 'Ticket ' + key, state: 'open', status: 'ready-for-agent',
+      claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z',
+    }, over)
+    const shEffort = (slug, o) => {
+      const tickets = o.tickets || []
+      const map = {
+        exists: !o.noMap, title: '', destination: 'Ship the deck',
+        fog: ['Rollback policy'], decisions: [{ title: 'Markdown only', gist: 'one file per ticket' }],
+        outOfScope: ['No accounts'], fogCount: o.fog || 0, progress: 40, formatWarnings: [],
+      }
+      const spec = { exists: !o.noSpec, title: 'Deck spec', contentLength: 128, content: '# Deck spec\n\nTrack what the agents write into .scratch.\n', formatWarnings: [] }
+      return {
+        slug, title: 'Deck ' + slug, map, spec, tickets, git: o.git || null, latestAt: '2026-09-18T00:00:00Z',
+        chain: deriveChain({ slug, map: { exists: map.exists, destination: map.destination, fogCount: map.fogCount }, spec: { exists: spec.exists, contentLength: spec.contentLength }, tickets }),
+      }
+    }
+    const shellPayloadOf = (efforts, over) => Object.assign({
+      root: '/tmp/fd-shell-en', rootName: 'fd-shell-en', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config-shell.json',
+      recentRoots: [{ path: '/tmp/fd-shell-en', exists: true }, { path: '/tmp/fd-gone-en', exists: false }],
+      efforts,
+    }, over || {})
+    const shellRoots = {
+      roots: [
+        { path: '/tmp/fd-shell-en', name: 'fd-shell-en', status: 'ok', stage: 'implement', closed: 1, tickets: 3, fog: 1, current: true },
+        { path: '/tmp/fd-shell-en', name: 'fd-shell-en', status: 'no-scratch', current: false },
+        { path: '/tmp/fd-gone-en', name: 'fd-gone-en', status: 'unreadable', current: false },
+      ],
+    }
+    const shellSkills = {
+      skills: [
+        { name: 'overview', category: 'overview', order: 1, title: 'The skill map', summary: 'How the stages chain up', inProgress: false },
+        { name: 'grilling', category: 'engineering', order: 2, title: 'Grilling', summary: 'Stress-test the plan', inProgress: false },
+        { name: 'wizard', category: 'in-progress', order: 3, title: 'Wizard', summary: 'Still cooking', inProgress: true },
+      ],
+    }
+    /** 整页扫残留中文：文本节点 + title / aria-label / placeholder 三类属性 + 文档标题。
+        三处剪枝：#skillsDoc 是服务端 Markdown 正文（票 03 的范围）；script/style 的文本不是界面文案；
+        #langBtn 按「用目标语言写自己的目标语言名」自指（英文态就是「中文」二字，票 01 钉死的设计）。 */
+    function cjkResidue(doc) {
+      const hits = []
+      const check = (where, v) => {
+        const s = String(v === null || v === undefined ? '' : v)
+        if (CJK_RE.test(s)) hits.push(where + ' = ' + s.slice(0, 70))
+      }
+      const tw = doc.createTreeWalker(doc.body, 4, {
+        acceptNode(n) {
+          const p = n.parentNode
+          if (!p || !p.closest) return 1
+          return p.closest('#skillsDoc, script, style, noscript, #langBtn') ? 2 : 1 // 2 = FILTER_REJECT：整棵子树不进扫描面
+        },
+      })
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) check('#text', n.nodeValue)
+      for (const node of Array.from(doc.querySelectorAll('*'))) {
+        check(node.tagName + '[title]', node.getAttribute('title'))
+        check(node.tagName + '[aria-label]', node.getAttribute('aria-label'))
+        check(node.tagName + '[placeholder]', node.getAttribute('placeholder'))
+      }
+      check('title', doc.title)
+      return hits
+    }
+    const jsErrorsShell = []
+    const vcShell = new VirtualConsole()
+    vcShell.on('jsdomError', (e) => jsErrorsShell.push(String((e && e.message) || e)))
+    let shellPayload = shellPayloadOf([
+      shEffort('alpha', { fog: 2, tickets: [shTk('01'), shTk('02', { blockedBy: ['01'] }), shTk('03', { state: 'closed', status: 'resolved' })] }),
+      shEffort('beta', { noMap: true }),
+      shEffort('gamma', { tickets: [shTk('01', { state: 'closed', status: 'resolved' })], git: { hash: 'abc1234', date: '2026-09-17T00:00:00Z', subject: 'docs: close out the deck' } }),
+    ])
+    const shellCalls = []
+    const shellDom = uiDom({
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39341/',
+      pretendToBeVisual: true,
+      virtualConsole: vcShell,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'languages', { value: ['en-US', 'en'], configurable: true })
+        window.fetch = (u) => {
+          const url = String(u)
+          shellCalls.push(url)
+          if (url.indexOf('/api/state') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellPayload)) })
+          if (url.indexOf('/api/roots-overview') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellRoots)) })
+          if (url.indexOf('/api/skills/') === 0) return Promise.resolve({ ok: true, text: async () => '# Grilling\n\nStress-test the plan until nothing is left vague.\n' })
+          if (url.indexOf('/api/skills') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellSkills)) })
+          if (url.indexOf('/api/issue') === 0) return Promise.resolve({ ok: true, text: async () => '# Ticket 01\n\nStatus: ready-for-agent\n\nDo the indexing core.\n' })
+          return Promise.reject(new Error('英文界面用例不该请求别的接口：' + u))
+        }
+      },
+    })
+    await settle()
+    const shDoc = shellDom.window.document
+    const shWin = shellDom.window
+    const shClick = (node) => node.dispatchEvent(new shWin.Event('click', { bubbles: true }))
+    const shTab = (label) => Array.from(shDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf(label) === 0)
+    const shOpen = (id) => shDoc.getElementById(id).dispatchEvent(new shWin.Event('click', { bubbles: true }))
+    const shEsc = () => shDoc.dispatchEvent(new shWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(shDoc.documentElement.getAttribute('lang'), 'en', '英文态 <html lang> 跟着翻（读屏与断字规则要选对语言）')
+    assert.equal(shDoc.title, 'AI Coding Workflow Deck', '文档标题随语言')
+    assert.deepEqual(cjkResidue(shDoc), [], '英文态首屏整页零中文残留（文本 + title + aria-label + placeholder + 标题）')
+    shClick(shTab('All'))
+    assert.deepEqual(cjkResidue(shDoc), [], '「全部」视图零残留（表头、折叠行、行 aria-label）')
+    shClick(shTab('gamma'))
+    assert.match(shDoc.querySelector('.next .label').textContent, /all done|complete/i, '完工卡的标签也随语言')
+    assert.deepEqual(cjkResidue(shDoc), [], '完工 effort（四格全绿）零残留')
+    shClick(shTab('beta'))
+    assert.ok(shDoc.querySelector('.chip.infer'), '无 map 的 effort 亮推定标注')
+    assert.deepEqual(cjkResidue(shDoc), [], '推定标注零残留')
+    shClick(shTab('alpha'))
+    // 前沿徽标面板
+    shOpen('frontierBadge')
+    assert.deepEqual(cjkResidue(shDoc), [], '前沿面板零残留（分组名、票行 title 与 aria-label）')
+    shEsc()
+    // 常用目录下拉（含失效条目与删除按钮 tooltip）
+    shDoc.getElementById('rootInput').focus()
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '常用目录下拉零残留（「当前」「目录不存在」徽标与删除提示）')
+    shDoc.dispatchEvent(new shWin.Event('click', { bubbles: true }))
+    // 设置弹窗（表单各项、说明行、轮询模式三个选项）
+    shOpen('settingsBtn')
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '设置弹窗零残留（label、hint、select 选项、按钮）')
+    shEsc()
+    // 项目总览弹窗（表头、链阶段、状态徽标、行 tooltip）
+    shOpen('rootsBtn')
+    await tick()
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '项目总览弹窗零残留（含 no-scratch / unreadable 两类降级行）')
+    shEsc()
+    // 票正文弹窗（标题、来源行、加载中）
+    shDoc.querySelector('tr.ticket button').dispatchEvent(new shWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '票正文弹窗零残留（含「更新于」来源行）')
+    shEsc()
+    // 技能包弹窗（分类名、计数行、开发中徽标；正文 Markdown 属票 03）
+    shOpen('skillsBtn')
+    await tick()
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '技能包弹窗外壳零残留（分类、计数、侧栏徽标；正文留给票 03）')
+    assert.ok(shDoc.getElementById('skillsNav').textContent.indexOf('Engineering') >= 0, '分类名出英文')
+    shEsc()
+    // 空态页（工作约定 + 建骨架指令两段可复制文本）
+    shellPayload = shellPayloadOf([], { scratchExists: false })
+    shOpen('refreshBtn')
+    await tick()
+    await tick()
+    assert.equal(shDoc.querySelectorAll('pre.agreement').length, 2, '空态页两段指令在位')
+    assert.deepEqual(cjkResidue(shDoc), [], '空态页零残留（约定与骨架指令都出英文）')
+    assert.deepEqual(jsErrorsShell, [])
+    shellDom.window.close()
+    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/常用目录/设置/项目总览/票正文/技能外壳/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
+
+    // ── 英文态内容随语言（票 02）：一键复制、桌面通知、报错措辞三处人话都翻；未知 code 回落原文 ──
+    const jsErrorsLang = []
+    const vcLang = new VirtualConsole()
+    vcLang.on('jsdomError', (e) => jsErrorsLang.push(String((e && e.message) || e)))
+    const langCopies = []
+    const langNotes = []
+    let langCfgReply = null // 换目录应答：null = 成功，否则 { error, code }
+    let langState401 = false
+    const langPayload2 = shellPayloadOf([
+      shEffort('alpha', { tickets: [shTk('01')] }),
+      shEffort('beta', { tickets: [], fog: 1 }),
+    ], { pollMs: 1000, pollMode: 'observe' })
+    function LangNotification(title, opts) {
+      const inst = { title, body: opts && opts.body }
+      langNotes.push(inst)
+      return inst
+    }
+    LangNotification.permission = 'granted'
+    LangNotification.requestPermission = () => Promise.resolve('granted')
+    const langDom2 = uiDom({
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39342/',
+      pretendToBeVisual: true,
+      virtualConsole: vcLang,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'languages', { value: ['en-US', 'en'], configurable: true })
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (s) => { langCopies.push(s); return Promise.resolve() } } })
+        window.Notification = LangNotification
+        window.localStorage.setItem('flowdeck-notify', '1')
+        // 页面上先有令牌再遇 401：横幅「不回显令牌值」这条只有在真带着令牌时才是断言，否则永真
+        window.localStorage.setItem('flowdeck-token', 'tok-secret-9f3')
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') === 0) {
+            if (langState401) return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: '需要有效的访问令牌', code: 'auth.token-required' }) })
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload2)) })
+          }
+          if (url.indexOf('/api/config') === 0 && opts && opts.method === 'POST') {
+            if (langCfgReply) return Promise.resolve({ ok: false, status: 400, json: async () => langCfgReply })
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: '/tmp/fd-shell-en', applied: { root: 'immediate' } }) })
+          }
+          return Promise.reject(new Error('语言内容用例不该请求别的接口：' + u))
+        }
+      },
+    })
+    await settle()
+    const lgDoc = langDom2.window.document
+    const lgWin = langDom2.window
+    const lgClick = (node) => node.dispatchEvent(new lgWin.Event('click', { bubbles: true }))
+    // 一键复制随语言：票行 = 实现指引词，链格 = 阶段指引词（与服务端英文列同源），下一步卡 = 当前步指引词
+    lgClick(lgDoc.querySelector('tr.ticket'))
+    await tick()
+    assert.equal(langCopies.length, 1)
+    assert.ok(!CJK_RE.test(langCopies[0]), '票行复制的指引词零中文：' + langCopies[0])
+    assert.match(langCopies[0], /#01/, '英文实现指引带票号')
+    assert.match(langCopies[0], /\.scratch\/alpha\/issues\/01-item\.md/, '英文实现指引给出票文件路径')
+    assert.match(langCopies[0], /Status.{0,40}resolved/s, '英文实现指引仍要求改 Status 行')
+    const alphaChain = langPayload2.efforts[0].chain
+    const curStage = alphaChain.stages.filter((s) => s.status === 'current')[0]
+    lgClick(lgDoc.querySelectorAll('.stage')[alphaChain.stages.indexOf(curStage)])
+    await tick()
+    assert.equal(langCopies[1], curStage.en.copyText, '链格复制的是服务端英文列的指引词（单一派生表，界面不再另写一套）')
+    lgClick(lgDoc.querySelector('.next button'))
+    await tick()
+    assert.equal(langCopies[2], curStage.en.copyText, '下一步卡的「复制指引词」同走英文列')
+    // 桌面通知随语言：定时拍（非主动、非积压）逐条出事件文案
+    langPayload2.efforts[0].tickets[0].state = 'closed'
+    langPayload2.efforts[0].tickets[0].status = 'resolved'
+    langPayload2.efforts[0].chain = deriveChain({ slug: 'alpha', map: { exists: true, destination: 'Ship the deck', fogCount: 0 }, spec: { exists: true, contentLength: 128 }, tickets: langPayload2.efforts[0].tickets })
+    await new Promise((r) => setTimeout(r, 1400))
+    const closedNote = langNotes.find((n) => /ticket #01/i.test(String(n.body)))
+    assert.ok(closedNote, '关票出一条英文桌面通知：' + JSON.stringify(langNotes.map((n) => n.body)))
+    assert.ok(!CJK_RE.test(closedNote.body), '通知正文零中文：' + closedNote.body)
+    assert.ok(!CJK_RE.test(closedNote.title), '通知标题零中文：' + closedNote.title)
+    // 阶段推进的通知文案用阶段名的英文列（词表与通知同一来源，不再各自抄一份）
+    const stageNote = langNotes.find((n) => /stage/i.test(String(n.body)))
+    assert.ok(stageNote, '关票后四阶段完成 → 阶段推进也有通知：' + JSON.stringify(langNotes.map((n) => n.body)))
+    assert.ok(!/Grill 拷问|To-Spec 规格|四阶段完成/.test(stageNote.body), '通知里的阶段名与「完成」用英文说法：' + stageNote.body)
+    // 服务端报错按 code 措辞
+    const rootInput = lgDoc.getElementById('rootInput')
+    langCfgReply = { error: '这个目录不存在或不是目录：/tmp/xyz', code: 'config.root-missing' }
+    rootInput.value = '/tmp/xyz'
+    lgClick(lgDoc.getElementById('switchBtn'))
+    await tick()
+    await tick()
+    const banner = lgDoc.getElementById('err')
+    assert.equal(banner.className.indexOf('err') >= 0, true, '换目录失败要亮错误横幅')
+    assert.ok(!CJK_RE.test(banner.textContent), '报错横幅零中文：' + banner.textContent)
+    assert.match(banner.textContent, /does not exist|not a directory/i, '按 code 出英文措辞')
+    // 未知 code 回退原文：界面不猜，宁可把服务端原话说出来
+    langCfgReply = { error: '一种界面还没学过的错法。', code: 'mystery.unknown-case' }
+    lgClick(lgDoc.getElementById('switchBtn'))
+    await tick()
+    await tick()
+    assert.ok(lgDoc.getElementById('err').textContent.indexOf('一种界面还没学过的错法。') >= 0, '未知 code 回退服务端原文：' + lgDoc.getElementById('err').textContent)
+    // 401 的定向补救指引也随语言（令牌只进请求头，文案不带令牌值）
+    langCfgReply = null
+    langState401 = true
+    lgClick(lgDoc.getElementById('refreshBtn'))
+    await tick()
+    await tick()
+    assert.ok(!CJK_RE.test(lgDoc.getElementById('err').textContent), '401 横幅零中文：' + lgDoc.getElementById('err').textContent)
+    assert.match(lgDoc.getElementById('err').textContent, /\?token=/, '英文措辞仍给出 ?token= 的补救写法')
+    assert.ok(!String(lgDoc.getElementById('err').textContent).includes('tok-secret-9f3'), '横幅不回显令牌值')
+    assert.deepEqual(jsErrorsLang, [])
+    langDom2.window.close()
+    ok('英文态内容随语言（jsdom）：票行/链格/下一步卡三处一键复制出英文（链格直取服务端英文列）、桌面通知随语言且阶段名同词表、报错按 code 措辞而未知 code 回退原文、401 补救指引也翻')
 
     ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')
   }

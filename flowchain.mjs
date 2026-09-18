@@ -31,6 +31,12 @@ function effortLabel(slug) {
   return slug === '__root' ? '.scratch/ 根目录' : `.scratch/${slug}/`
 }
 
+/** 双语叶子（english-ui 票 02）：指引词的两个语言列在同一个分支里成对产出。
+ *  判据分支只走一遍——两条 if 链各写一份迟早会漂移，同支取词才是「单一派生表加一列」。 */
+function bi(zh, en) {
+  return { zh, en }
+}
+
 /** 已关闭票号集合（前沿判定的输入）。 */
 export function closedKeySet(tickets) {
   return new Set((Array.isArray(tickets) ? tickets : []).filter((t) => t.state === 'closed').map((t) => t.key))
@@ -60,9 +66,12 @@ export function isFrontierTicket(ticket, closedSet) {
  *   counts.blocked 是前沿口径：open 且所列依赖中仍有未关闭者（依赖全结不再计阻塞）。
  *   stages 每项：{ id, title, subtitle, status: 'done'|'current'|'pending', evidence, hint, copyText,
  *                  inferred（完成是否来自后向推定）, inferLabel（推定标注文案，实证完成为空串）,
- *                  skills（本阶段的对应技能名，技能联动用） }。
+ *                  skills（本阶段的对应技能名，技能联动用）,
+ *                  en: { evidence, hint, copyText, inferLabel }（同一分支的英文列，界面按语言取用） }。
  *   evidence 是「为什么判成这个状态」的人读证据；hint 是走到这步时下一步该干什么；
  *   copyText 是可直接粘给任意 Agent 的完整指示词。
+ *   两列同支（bi 叶子）：判据分支只走一遍，中文列逐字节冻结、英文列随行加出——
+ *   路径与判据字段名（map.md / Destination / Status / Blocked by / Not yet specified）两列都保持原文。
  */
 export function deriveChain(input = {}) {
   const slug = input.slug || ''
@@ -94,75 +103,117 @@ export function deriveChain(input = {}) {
   const grillDone = grillBaseDone || specDone
 
   const where = effortLabel(slug)
+  // 英文列的两个称呼位：dirPath 是文件路径前缀（判据字段名与路径都不随语言变），
+  // whereEn 是句子里的人话称呼——中文列继续用上面那个逐字节冻结的 where。
+  const dirPath = slug === '__root' ? '.scratch/' : `.scratch/${slug}/`
+  const whereEn = slug === '__root' ? 'the .scratch/ root' : dirPath
 
-  // ── 各阶段的证据与指引 ──
+  // ── 各阶段的证据与指引（每格 bi(中文, 英文)，同支成对）──
   const grillFog = map.fogCount || 0
+  const grillInfer = bi(
+    grillDone && !grillBaseDone ? (!map.exists ? '推定 · 无 map' : '推定') : '',
+    grillDone && !grillBaseDone ? (!map.exists ? 'inferred · no map' : 'inferred') : ''
+  )
+  const grillEv = !map.exists
+    ? (grillDone
+      ? bi('没有 map.md —— 后续阶段已有产物，推定拷问已完成', 'No map.md —— later stages already have artifacts, so grilling is inferred as done')
+      : bi('还没有 map.md', 'No map.md yet'))
+    : grillBaseDone
+      ? bi('map.md 就绪 · Destination 已写明 · 迷雾已清空', 'map.md ready · Destination written · fog cleared')
+      : grillDone
+        ? bi(
+          `map.md 未走完（${grillFog > 0 ? `迷雾还有 ${grillFog} 条` : 'Destination 未写'}），但后续阶段已有产物，推定已完成`,
+          `map.md is not finished (${grillFog > 0 ? `${grillFog} items left in the fog` : 'Destination missing'}), but later stages already have artifacts, so it is inferred as done`
+        )
+        : grillFog > 0
+          ? bi(`map.md 已有，但迷雾还有 ${grillFog} 条（Not yet specified）`, `map.md exists, but ${grillFog} items are still in the fog (Not yet specified)`)
+          : bi('map.md 已有，但 Destination 还是空的', 'map.md exists, but Destination is still empty')
+  const grillHint = grillDone
+    ? (grillBaseDone
+      ? bi('拷问阶段完成：地图就绪、迷雾清空。', 'Grilling done: the map is ready and the fog is cleared.')
+      : bi('后续阶段已有产物，推定拷问已完成；本 effort 未留 map.md（共识可能在对话 / CONTEXT.md / ADR）。',
+        'Later stages already have artifacts, so grilling is inferred as done; this effort has no finished map.md — the consensus may live in the conversation / CONTEXT.md / ADR instead.'))
+    : !map.exists
+      ? bi(`还没有 map.md。请运行 grilling（或 wayfinder）技能，把想法拷问成一张地图，落到 ${where}map.md。`,
+        `There is no map.md yet. Run the grilling (or wayfinder) skill to interrogate the idea into a map and save it to ${dirPath}map.md.`)
+      : grillFog > 0
+        ? bi(`map.md（${where}）还有 ${grillFog} 条未定项。请继续 grilling，把 Not yet specified 逐条拷问清空；迷雾清空后本阶段才算完成。`,
+          `map.md (${dirPath}) still has ${grillFog} undecided items. Keep grilling and interrogate every Not yet specified entry away; this stage only counts as done once the fog is empty.`)
+        : bi(`map.md（${where}）还没写 Destination。请用 grilling 把终点拷问清楚，写进 Destination 一节。`,
+          `map.md (${dirPath}) has no Destination yet. Use grilling to interrogate the endpoint and write it into the Destination section.`)
   const grillStage = {
     id: 'grill',
     status: grillDone ? 'done' : 'pending',
     inferred: grillDone && !grillBaseDone,
-    inferLabel: grillDone && !grillBaseDone ? (!map.exists ? '推定 · 无 map' : '推定') : '',
-    evidence: !map.exists
-      ? (grillDone ? '没有 map.md —— 后续阶段已有产物，推定拷问已完成' : '还没有 map.md')
-      : grillBaseDone
-        ? 'map.md 就绪 · Destination 已写明 · 迷雾已清空'
-        : grillDone
-          ? `map.md 未走完（${grillFog > 0 ? `迷雾还有 ${grillFog} 条` : 'Destination 未写'}），但后续阶段已有产物，推定已完成`
-          : grillFog > 0
-            ? `map.md 已有，但迷雾还有 ${grillFog} 条（Not yet specified）`
-            : 'map.md 已有，但 Destination 还是空的',
-    hint: grillDone
-      ? (grillBaseDone
-        ? '拷问阶段完成：地图就绪、迷雾清空。'
-        : '后续阶段已有产物，推定拷问已完成；本 effort 未留 map.md（共识可能在对话 / CONTEXT.md / ADR）。')
-      : !map.exists
-        ? `还没有 map.md。请运行 grilling（或 wayfinder）技能，把想法拷问成一张地图，落到 ${where}map.md。`
-        : grillFog > 0
-          ? `map.md（${where}）还有 ${grillFog} 条未定项。请继续 grilling，把 Not yet specified 逐条拷问清空；迷雾清空后本阶段才算完成。`
-          : `map.md（${where}）还没写 Destination。请用 grilling 把终点拷问清楚，写进 Destination 一节。`,
+    inferLabel: grillInfer.zh,
+    evidence: grillEv.zh,
+    hint: grillHint.zh,
+    en: { inferLabel: grillInfer.en, evidence: grillEv.en, hint: grillHint.en },
   }
+  const specEv = specBaseDone
+    ? bi(`spec.md 已落盘（${spec.contentLength} 个非空白字符）`, `spec.md is on disk (${spec.contentLength} non-whitespace characters)`)
+    : specDone
+      ? bi('没有 spec.md —— 已有票，推定规格阶段已完成', 'No spec.md —— tickets already exist, so the spec stage is inferred as done')
+      : bi('还没有 spec.md', 'No spec.md yet')
+  const specHint = specBaseDone
+    ? bi('规格已落盘，规格阶段完成。', 'The spec is on disk; spec stage done.')
+    : specDone
+      ? bi('已有票，推定规格阶段已完成；本 effort 未留 spec.md。',
+        'Tickets already exist, so the spec stage is inferred as done; this effort has no spec.md.')
+      : bi(`还没有 spec.md。请运行 to-spec 技能，把当前理解沉淀为规格，写到 ${where}spec.md。`,
+        `There is no spec.md yet. Run the to-spec skill to distill the current understanding into a spec at ${dirPath}spec.md.`)
+  const specInferred = specDone && !specBaseDone
   const specStage = {
     id: 'spec',
     status: specDone ? 'done' : 'pending',
-    inferred: specDone && !specBaseDone,
-    inferLabel: specDone && !specBaseDone ? '推定 · 无 spec' : '',
-    evidence: specBaseDone
-      ? `spec.md 已落盘（${spec.contentLength} 个非空白字符）`
-      : specDone
-        ? '没有 spec.md —— 已有票，推定规格阶段已完成'
-        : '还没有 spec.md',
-    hint: specBaseDone
-      ? '规格已落盘，规格阶段完成。'
-      : specDone
-        ? '已有票，推定规格阶段已完成；本 effort 未留 spec.md。'
-        : `还没有 spec.md。请运行 to-spec 技能，把当前理解沉淀为规格，写到 ${where}spec.md。`,
+    inferred: specInferred,
+    inferLabel: specInferred ? '推定 · 无 spec' : '',
+    evidence: specEv.zh,
+    hint: specHint.zh,
+    en: { inferLabel: specInferred ? 'inferred · no spec' : '', evidence: specEv.en, hint: specHint.en },
   }
+  const ticketsEv = ticketsDone
+    ? bi(`已有 ${tickets.length} 张票（已关 ${closed} 张）`, `${tickets.length} tickets (${closed} closed)`)
+    : bi('issues/ 里还没有票', 'No tickets in issues/ yet')
+  const ticketsHint = ticketsDone
+    ? bi(`已拆出 ${tickets.length} 张票。`, `${tickets.length} tickets broken out.`)
+    : bi(`issues/ 里还没有票。请运行 to-tickets 技能，把 ${where}spec.md 拆成一张张票，写到 ${where}issues/<两位编号>-<短名>.md。`,
+      `No tickets in issues/ yet. Run the to-tickets skill to split ${dirPath}spec.md into tickets, one file each at ${dirPath}issues/<NN>-<short-name>.md.`)
   const ticketsStage = {
     id: 'tickets',
     status: ticketsDone ? 'done' : 'pending',
     inferred: false,
     inferLabel: '',
-    evidence: ticketsDone ? `已有 ${tickets.length} 张票（已关 ${closed} 张）` : 'issues/ 里还没有票',
-    hint: ticketsDone
-      ? `已拆出 ${tickets.length} 张票。`
-      : `issues/ 里还没有票。请运行 to-tickets 技能，把 ${where}spec.md 拆成一张张票，写到 ${where}issues/<两位编号>-<短名>.md。`,
+    evidence: ticketsEv.zh,
+    hint: ticketsHint.zh,
+    en: { inferLabel: '', evidence: ticketsEv.en, hint: ticketsHint.en },
   }
+  // 阻塞尾巴挂在叶子内部：两列各挂各的，条件同样只判一次。
+  const implEv = !ticketsDone
+    ? bi('还没有票可实现', 'No tickets to implement yet')
+    : implementDone
+      ? bi(`${tickets.length} 张票全部关闭`, `All ${tickets.length} tickets closed`)
+      : bi(`已关 ${closed}/${tickets.length} 张，还剩 ${open} 张` + (blocked > 0 ? `（其中 ${blocked} 张被阻塞）` : ''),
+        `${closed}/${tickets.length} closed, ${open} left` + (blocked > 0 ? ` (${blocked} blocked)` : ''))
+  const implHint = !ticketsDone
+    ? bi('还没有票可实现（先把前面的阶段走完）。', 'No tickets to implement yet (finish the earlier stages first).')
+    : implementDone
+      ? bi(`${where}的票已全部关闭，四个阶段完成。可以收尾归档，或开下一个 effort。`,
+        `All tickets under ${whereEn} are closed — the four stages are done. Wrap it up and archive, or open the next effort.`)
+      : bi(
+        `${where} 有 ${tickets.length} 张票、已关 ${closed} 张。请从 Blocked by 为空的票开始逐张实现，每完成一张就把该票文件里的 Status 行改为 resolved。` +
+          (blocked > 0 ? ` 当前有 ${blocked} 张票被依赖阻塞，先做它们所依赖的票。` : ''),
+        `${whereEn} has ${tickets.length} tickets, ${closed} closed. Implement them one at a time starting from the tickets whose Blocked by line is empty, and change that ticket file's Status line to resolved when each one is done.` +
+          (blocked > 0 ? ` ${blocked} tickets are blocked by dependencies right now — do the tickets they depend on first.` : '')
+      )
   const implementStage = {
     id: 'implement',
     status: implementDone ? 'done' : 'pending',
     inferred: false,
     inferLabel: '',
-    evidence: !ticketsDone
-      ? '还没有票可实现'
-      : implementDone
-        ? `${tickets.length} 张票全部关闭`
-        : `已关 ${closed}/${tickets.length} 张，还剩 ${open} 张` + (blocked > 0 ? `（其中 ${blocked} 张被阻塞）` : ''),
-    hint: !ticketsDone
-      ? '还没有票可实现（先把前面的阶段走完）。'
-      : implementDone
-        ? `${where}的票已全部关闭，四个阶段完成。可以收尾归档，或开下一个 effort。`
-        : `${where} 有 ${tickets.length} 张票、已关 ${closed} 张。请从 Blocked by 为空的票开始逐张实现，每完成一张就把该票文件里的 Status 行改为 resolved。` +
-          (blocked > 0 ? ` 当前有 ${blocked} 张票被依赖阻塞，先做它们所依赖的票。` : ''),
+    evidence: implEv.zh,
+    hint: implHint.zh,
+    en: { inferLabel: '', evidence: implEv.en, hint: implHint.en },
   }
 
   // ── 定状态：第一个没完成的阶段是「当前」，其余未完成的是「待命」──
@@ -177,7 +228,9 @@ export function deriveChain(input = {}) {
       subtitle: def.subtitle,
       skills: def.skills,
       // copyText = 指引原文，界面提供「点一下复制」，用户粘给任意 Agent 都能接上。
+      // 英文列同源同构：一键复制按当前语言取哪一列，那一列的 copyText 就是那一列的 hint。
       copyText: s.hint,
+      en: { ...s.en, copyText: s.en.hint },
     }
   })
 

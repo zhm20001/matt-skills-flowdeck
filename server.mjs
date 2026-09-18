@@ -93,7 +93,8 @@ const EFFECT = Object.freeze({ IMMEDIATE: 'immediate', RESTART: 'restart' })
 /**
  * config 同构字段描述表（校验 + 生效语义）：POST /api/config 的「校验 → patch → applied」
  * 由此表驱动，加一个同构字段 = 加一行表项。normalize 合法返回归一值（token 允许空串=清除）、
- * 非法返回 undefined；effect 是 applied 的生效语义；error 是 400 文案。
+ * 非法返回 undefined；effect 是 applied 的生效语义；error 是 400 文案；code 是该文案的稳定错误码
+ * （小写 `域.名字`，字段名按 kebab 写法——pollMs → poll-ms）。
  * root 不在表里——假同构：存在性校验、换目录热切换、收录常用目录是副作用，独立分支处理
  * （见 handleConfigPost），硬塞进表是假统一。
  */
@@ -104,12 +105,14 @@ const CONFIG_FIELDS = {
       return Number.isFinite(n) && n >= 1000 ? Math.round(n) : undefined
     },
     effect: EFFECT.IMMEDIATE, // /api/state 真变化拍现读 config.json，写盘即生效
+    code: 'config.poll-ms',
     error: 'pollMs 需为不小于 1000 的数字（毫秒）。',
   },
   // pollMode 是表驱动化后的第一个新字段（票 06 的实战检验）：一行表项接住三档轮询模式
   pollMode: {
     normalize: (v) => (typeof v === 'string' && POLL_MODES.includes(v) ? v : undefined),
     effect: EFFECT.IMMEDIATE, // 随 /api/state 下发，写盘后下一拍每个浏览器都换档
+    code: 'config.poll-mode',
     error: 'pollMode 需为 observe / display / manual 之一。',
   },
   host: {
@@ -118,6 +121,7 @@ const CONFIG_FIELDS = {
       return h && h.length <= 64 && /^[0-9A-Za-z.:[\]-]+$/.test(h) ? h : undefined
     },
     effect: EFFECT.RESTART, // 监听地址启动时绑定，写盘后重启才接管
+    code: 'config.host',
     error: 'host 需为非空的主机名或 IP（如 127.0.0.1、0.0.0.0、localhost）。',
   },
   port: {
@@ -126,11 +130,13 @@ const CONFIG_FIELDS = {
       return Number.isInteger(p) && p >= 1 && p <= 65535 ? p : undefined
     },
     effect: EFFECT.RESTART,
+    code: 'config.port',
     error: 'port 需为 1–65535 的整数。',
   },
   token: {
     normalize: (v) => (typeof v === 'string' ? v.trim() : undefined),
     effect: EFFECT.IMMEDIATE,
+    code: 'config.token',
     error: 'token 需为字符串；空串表示清除令牌（关闭鉴权）。',
   },
 }
@@ -278,6 +284,14 @@ function sendJson(res, code, data) {
     'Cache-Control': 'no-store',
   })
   res.end(body)
+}
+
+/** JSON 错误应答的统一出口（english-ui 票 02）：两个字段各司其职——
+ *  error 是人话原文（日志读它，界面在 code 不认识时回退读它），code 是稳定契约键
+ *  （小写 `域.名字`，换措辞不换 code，界面按 code + 当前语言自己组句）。
+ *  纯文本通道（sendFile 的 404、未知路径）不在此列：界面不消费其正文。 */
+function sendErr(res, status, code, error) {
+  sendJson(res, status, { error, code })
 }
 
 /** /api/state 专用应答：带 ETag 与 Cache-Control: no-cache；If-None-Match 命中回 304 空身。
@@ -502,8 +516,8 @@ async function stateEntry(ctx) {
   return entry
 }
 
-function sendSaveFailed(res, e) {
-  sendJson(res, 500, { error: '写 config.json 失败：' + String((e && e.message) || e) })
+function sendSaveFailed(res, code, e) {
+  sendErr(res, 500, code, '写 config.json 失败：' + String((e && e.message) || e))
 }
 
 /** POST 体积护栏上限（字节）：30720 = 30KB。原「10240 字符」在全中文（UTF-8 每字 3 字节）
@@ -516,7 +530,7 @@ const POST_BODY_LIMIT = 30720
  *  校验失败时本函数已应答（403/400/413）；合格时把解析出的对象交给 onJson。 */
 function guardPostJson(req, res, onJson) {
   if (req.headers['x-flowdeck'] !== '1' || String(req.headers['content-type'] || '').indexOf('application/json') < 0) {
-    sendJson(res, 403, { error: '请求缺少 X-FlowDeck 头或 Content-Type 不是 JSON，已拒绝。' })
+    sendErr(res, 403, 'write.header', '请求缺少 X-FlowDeck 头或 Content-Type 不是 JSON，已拒绝。')
     return
   }
   const chunks = []
@@ -528,7 +542,7 @@ function guardPostJson(req, res, onJson) {
     if (size > POST_BODY_LIMIT) {
       tooBig = true
       // 先把 413 完整写出、应答落盘后再掐连接：客户端拿到的是明确错误而不是「网络断了」。
-      sendJson(res, 413, { error: '请求体超过 30KB 上限。' })
+      sendErr(res, 413, 'write.too-large', '请求体超过 30KB 上限。')
       res.once('finish', () => req.destroy())
       return
     }
@@ -541,7 +555,7 @@ function guardPostJson(req, res, onJson) {
       // Buffer 收齐再一次性转字符串：按 chunk 逐段 toString 会把跨块的多字节字符拆成替换符。
       input = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     } catch {
-      sendJson(res, 400, { error: '请求体不是合法 JSON。' })
+      sendErr(res, 400, 'write.bad-json', '请求体不是合法 JSON。')
       return
     }
     onJson(input)
@@ -625,7 +639,7 @@ async function skillsList() {
 function handleApiState(ctx, req, res) {
   stateEntry(ctx)
     .then((entry) => sendState(req, res, entry))
-    .catch((e) => sendJson(res, 500, { error: String((e && e.message) || e) }))
+    .catch((e) => sendErr(res, 500, 'state.failed', String((e && e.message) || e)))
 }
 
 /** GET /api/health：探活。 */
@@ -644,7 +658,7 @@ async function handleApiIssue(ctx, reqUrl, res) {
   const effortOk = effort && !effort.startsWith('.') && !effort.includes('/') && !effort.includes('\\')
     && effort !== '__proto__' && effort !== '.'
   if (!effortOk || !/^\d+$/.test(ticket)) {
-    sendJson(res, 404, { error: 'effort 或 ticket 参数不合法（effort 是目录名，ticket 是票号数字）。' })
+    sendErr(res, 404, 'issue.bad-params', 'effort 或 ticket 参数不合法（effort 是目录名，ticket 是票号数字）。')
     return
   }
   const scratchDir = nodePath.join(nodePath.resolve(ctx.currentRoot.path), '.scratch')
@@ -654,7 +668,7 @@ async function handleApiIssue(ctx, reqUrl, res) {
   try {
     names = await readdir(issuesDir)
   } catch {
-    sendJson(res, 404, { error: '没有这个 effort：' + effort })
+    sendErr(res, 404, 'issue.no-effort', '没有这个 effort：' + effort)
     return
   }
   const want = ticket.padStart(2, '0')
@@ -663,13 +677,13 @@ async function handleApiIssue(ctx, reqUrl, res) {
     return m && m[1].padStart(2, '0') === want
   })
   if (!hit) {
-    sendJson(res, 404, { error: '没有这张票：#' + ticket + '（effort ' + effort + '）' })
+    sendErr(res, 404, 'issue.no-ticket', '没有这张票：#' + ticket + '（effort ' + effort + '）')
     return
   }
   const file = await readIfExists(nodePath.join(issuesDir, hit))
   if (file === null) {
     // readdir 与 read 之间的竞态删除：按不存在应答，与盘点侧「打不开→丢弃」同款兜底。
-    sendJson(res, 404, { error: '没有这张票：#' + ticket + '（effort ' + effort + '）' })
+    sendErr(res, 404, 'issue.no-ticket', '没有这张票：#' + ticket + '（effort ' + effort + '）')
     return
   }
   res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -680,7 +694,7 @@ async function handleApiIssue(ctx, reqUrl, res) {
 function handleApiSkills(res) {
   skillsList()
     .then((skills) => sendJson(res, 200, { skills }))
-    .catch((e) => sendJson(res, 500, { error: '盘点技能文档失败：' + String((e && e.message) || e) }))
+    .catch((e) => sendErr(res, 500, 'skills.list-failed', '盘点技能文档失败：' + String((e && e.message) || e)))
 }
 
 /** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skill-intros/，无路径穿越面）。 */
@@ -695,7 +709,7 @@ function handleApiSkillDoc(res, url) {
   // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，只读 docs/skill-intros/。
   const file = nodePath.resolve(SKILLS_DOCS_DIR, name + '.md')
   if (!name || !SKILL_NAME_RE.test(name) || !file.startsWith(SKILLS_DOCS_DIR + nodePath.sep)) {
-    sendJson(res, 404, { error: '没有这个技能文档：' + name })
+    sendErr(res, 404, 'skills.no-doc', '没有这个技能文档：' + name)
     return
   }
   sendFile(res, file, 'text/markdown; charset=utf-8')
@@ -771,12 +785,12 @@ function handleConfigPost(ctx, req, res) {
     if (input.root !== undefined) {
       const raw = String(input.root || '').trim()
       if (!raw) {
-        sendJson(res, 400, { error: 'root 不能为空。填一个含 .scratch/ 的项目目录。' })
+        sendErr(res, 400, 'config.root-empty', 'root 不能为空。填一个含 .scratch/ 的项目目录。')
         return
       }
       const resolved = resolveRoot(raw)
       if (!dirExists(resolved)) {
-        sendJson(res, 400, { error: '这个目录不存在或不是目录：' + resolved })
+        sendErr(res, 400, 'config.root-missing', '这个目录不存在或不是目录：' + resolved)
         return
       }
       patch.root = resolved
@@ -787,14 +801,14 @@ function handleConfigPost(ctx, req, res) {
       if (input[key] === undefined) continue
       const value = CONFIG_FIELDS[key].normalize(input[key])
       if (value === undefined) {
-        sendJson(res, 400, { error: CONFIG_FIELDS[key].error })
+        sendErr(res, 400, CONFIG_FIELDS[key].code, CONFIG_FIELDS[key].error)
         return
       }
       patch[key] = value
       applied[key] = CONFIG_FIELDS[key].effect
     }
     if (!Object.keys(patch).length) {
-      sendJson(res, 400, { error: '没有可保存的字段（支持 root / pollMs / pollMode / host / port / token）。' })
+      sendErr(res, 400, 'config.no-fields', '没有可保存的字段（支持 root / pollMs / pollMode / host / port / token）。')
       return
     }
     try {
@@ -804,7 +818,7 @@ function handleConfigPost(ctx, req, res) {
       }
       saveConfig(patch, ctx.configPath)
     } catch (e) {
-      sendSaveFailed(res, e)
+      sendSaveFailed(res, 'config.save-failed', e)
       return
     }
     if (patch.root !== undefined) ctx.currentRoot.path = patch.root
@@ -820,7 +834,7 @@ function handleRecentRootsPost(ctx, req, res) {
   guardPostJson(req, res, (input) => {
     const raw = String(input.remove || '').trim()
     if (!raw) {
-      sendJson(res, 400, { error: 'remove 不能为空。填要删掉的那条常用目录路径。' })
+      sendErr(res, 400, 'roots.remove-empty', 'remove 不能为空。填要删掉的那条常用目录路径。')
       return
     }
     const target = resolveRoot(raw)
@@ -829,7 +843,7 @@ function handleRecentRootsPost(ctx, req, res) {
       saveConfig({ recentRoots: next }, ctx.configPath)
       sendJson(res, 200, { ok: true, recentRoots: withExists(next) })
     } catch (e) {
-      sendSaveFailed(res, e)
+      sendSaveFailed(res, 'roots.save-failed', e)
     }
   })
 }
@@ -877,14 +891,14 @@ export async function startServer(opts = {}) {
     try {
       reqUrl = new URL(req.url || '/', 'http://localhost')
     } catch {
-      sendJson(res, 400, { error: '请求 URL 无法解析。' })
+      sendErr(res, 400, 'url.unparseable', '请求 URL 无法解析。')
       return
     }
     const url = reqUrl.pathname
 
     // Host 头校验先于一切路由：防 DNS rebinding（重绑定后即同源，X-FlowDeck 头形同虚设）。
     if (!hostAllowed(req.headers.host, host)) {
-      sendJson(res, 403, { error: 'Host 头不是本机地址（' + (req.headers.host || '缺失') + '），已拒绝。' })
+      sendErr(res, 403, 'host.forbidden', 'Host 头不是本机地址（' + (req.headers.host || '缺失') + '），已拒绝。')
       return
     }
 
@@ -896,7 +910,7 @@ export async function startServer(opts = {}) {
         ? String(req.headers['x-flowdeck-token'])
         : reqUrl.searchParams.get('token') || ''
       if (!tokenMatches(runtime.token, provided)) {
-        sendJson(res, 401, { error: '需要有效的访问令牌：URL 加 ?token=… 或请求头 X-FlowDeck-Token。' })
+        sendErr(res, 401, 'auth.token-required', '需要有效的访问令牌：URL 加 ?token=… 或请求头 X-FlowDeck-Token。')
         return
       }
     }
@@ -910,8 +924,8 @@ export async function startServer(opts = {}) {
     }
     if (url === '/api/state') return handleApiState(ctx, req, res)
     if (url === '/api/health') return handleApiHealth(ctx, res)
-    if (url === '/api/roots-overview') return handleApiRootsOverview(ctx, res).catch((e) => sendJson(res, 500, { error: String((e && e.message) || e) }))
-    if (url === '/api/issue') return handleApiIssue(ctx, reqUrl, res).catch((e) => sendJson(res, 500, { error: String((e && e.message) || e) }))
+    if (url === '/api/roots-overview') return handleApiRootsOverview(ctx, res).catch((e) => sendErr(res, 500, 'roots.failed', String((e && e.message) || e)))
+    if (url === '/api/issue') return handleApiIssue(ctx, reqUrl, res).catch((e) => sendErr(res, 500, 'issue.failed', String((e && e.message) || e)))
     if (url === '/api/skills') return handleApiSkills(res)
     if (url.startsWith('/api/skills/')) return handleApiSkillDoc(res, url)
     if (url === '/' || url === '/index.html') return sendFile(res, INDEX_HTML, 'text/html; charset=utf-8')
