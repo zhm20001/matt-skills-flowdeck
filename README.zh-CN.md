@@ -1,10 +1,10 @@
-# flowdeck —— AI 编程流程板：适配任意 Agent 的通用 Web 追踪工具
+# Matt Skills Flowdeck —— mattpocock/skills 的可视化追踪面板
 
 [English](README.md) · 简体中文
 
 ## 这是什么
 
-一个**零依赖**的本地 Node 服务（只用 Node 内置模块）+ 一个浏览器单页界面：追踪任意项目的 `.scratch/` 产物，把「追踪产物 + 流程链可视化」做成不绑定任何编辑器或插件的通用工具。
+**Matt Skills Flowdeck**（简称 **flowdeck**，下文同）是一个**零依赖**的本地 Node 服务（只用 Node 内置模块）+ 一个浏览器单页界面：追踪任意项目的 `.scratch/` 产物，把「追踪产物 + 流程链可视化」做成不绑定任何编辑器或插件的通用工具。
 
 **本仓库是自包含的**：整个目录拷到任何地方（拷进目标项目、拷到别的机器都行）就能跑，不需要其他文件。追踪哪个目录写在 `config.json` 里，也可以在网页右上角随时换。
 
@@ -31,7 +31,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/zhm20001/flowdeck.git flowdeck    # 也可以不走 git：直接把整个目录拷进目标项目
+git clone https://github.com/zhm20001/matt-skills-flowdeck.git flowdeck    # 也可以不走 git：直接把整个目录拷进目标项目
 cd flowdeck
 cp config.example.json config.json # 可选：要预配置就拷一份模板改（不拷也能跑，见下节）
 npm start                          # 或者 node server.mjs

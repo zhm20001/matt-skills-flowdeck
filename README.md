@@ -1,10 +1,10 @@
-# flowdeck — a local web dashboard for AI coding workflows, in any project
+# Matt Skills Flowdeck — a local web dashboard for AI coding workflows, in any project
 
 English · [简体中文](README.zh-CN.md)
 
 ## What is this
 
-flowdeck is a **zero-dependency** local Node service (Node built-ins only) plus a single-page browser UI. It watches the `.scratch/` artifacts of **any** project and visualizes where each piece of work stands in the `grill → to-spec → to-tickets → implement` pipeline — a tracker that binds itself to no editor and no plugin.
+**Matt Skills Flowdeck** (shortened to **flowdeck** below) is a **zero-dependency** local Node service (Node built-ins only) plus a single-page browser UI. It watches the `.scratch/` artifacts of **any** project and visualizes where each piece of work stands in the `grill → to-spec → to-tickets → implement` pipeline — a tracker that binds itself to no editor and no plugin.
 
 - **Self-contained**: copy the whole directory anywhere (into a target project, onto another machine) and it runs — nothing else needed. Which directory to track lives in `config.json` and can be switched from the web UI at any time.
 - **Agent-agnostic**: Claude Code, Cursor, or files you write by hand — flowdeck tracks passively. Any agent that follows the file conventions below and writes into `.scratch/` shows up in the browser:
@@ -30,7 +30,7 @@ Main view (light, paper theme) — the four-stage chain, the next-step prompt ca
 ## Quick start
 
 ```bash
-git clone https://github.com/zhm20001/flowdeck.git flowdeck   # or skip git: copy the directory into your project
+git clone https://github.com/zhm20001/matt-skills-flowdeck.git flowdeck   # or skip git: copy the directory into your project
 cd flowdeck
 cp config.example.json config.json   # optional: pre-configure from the template (runs fine without one, see below)
 npm start                            # or: node server.mjs
