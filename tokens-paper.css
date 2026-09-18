@@ -1,0 +1,74 @@
+/* ── design tokens · 唯一权威 ────────────────────────────────────
+ * 本文件是「纸感信纸风」tokens 在本仓库内的唯一权威。
+ * 要改风格：直接编辑本文件（业务样式只允许消费一层 --fd-* 别名）。
+ * ────────────────────────────────────────────────────────────────── */
+
+/* ============================================================
+ * tokens-paper.css — 「纸感信纸风」Design Tokens · 唯一权威定义
+ * ============================================================
+ * 规则（违反即坏味道）：
+ *   1. 任何十六进制色值 / 字体栈，全 workspace 只允许出现在本文件。
+ *   2. 项目内只做一层前缀别名消费，如 --pb-paper: var(--paper)、
+ *      --panel-bg: var(--paper)，业务样式不得直接写裸值。
+ *   3. 新风格（暗色玻璃、极简黑白等）另建 tokens-<风格名>.css，
+ *      禁止修改本文件；多主题用 data-theme 在消费侧覆写。
+ *
+ * 唯一例外：消费侧的主题覆写块（各项目 dark / glass 块）与打印样式
+ * 允许出现裸值——它们是运行时覆写，不参与光源定义。
+ *
+ * 文件层指针方案（2026-08 迁移定稿）：
+ *   lessons  同仓库 @import / <link> → course.css
+ *   palette  symlink src/client/tokens-paper.css → 本文件，@import 消费
+ *   diary    运行时 readFileSync 本文件内联 <style>（零构建链）
+ *   开发期永远活指针；仅打包发布时才允许脚本固化副本。
+ *
+ * 取值裁决记录（防止反复争论）：
+ *   --paper  选 #fffff8 而非 lessons 旧值 #fdfcf9 —— palette 与 diary
+ *            （最完整的两个实现）均为 #fffff8，按血脉取多数。
+ *   --accent 选 #b0413e 而非 lessons 旧值 #8b2500 —— 同上。
+ *   --ok/--bad 采纳 lessons 旧值 #2e6e3e/#a03030 —— 状态色仅 lessons
+ *            使用过，反向按血脉采纳。
+ *   --desk   采纳 diary 旧值 #f6f4eb —— 纸下"桌面"色，diary 首创。
+ * ============================================================ */
+
+:root {
+  /* 色板：纸与墨 */
+  --paper: #fffff8;            /* 纸底（页面/主面板） */
+  --desk: #f6f4eb;             /* 桌面：纸之下更深的页面底（diary 首创） */
+  --card-bg: #fffdf4;          /* 卡片纸面，比纸底略暖 */
+  --card-hover-bg: #fffef9;    /* 卡片 hover 微亮 */
+  --ink: #1a1a1a;              /* 近黑墨色：标题、强边框 */
+  --ink-body: #3a3a35;         /* 正文 */
+  --ink-muted: #6b6a63;        /* 次要文字、meta */
+
+  /* 色板：朱红强调 */
+  --accent: #b0413e;           /* 朱红：主按钮、强调、聚焦边 */
+  --accent-hover: #963633;     /* 朱红 hover 加深 */
+  --accent-ink: #ffffff;       /* 朱红底上的文字 */
+  --accent-soft: #fdf0ef;      /* 朱红的纸面弱化版 */
+
+  /* 色板：状态（lessons 血统） */
+  --ok: #2e6e3e;               /* 成功绿 */
+  --ok-soft: #eaf3ec;
+  --bad: #a03030;              /* 错误红 */
+  --bad-soft: #f7ecec;
+
+  /* 色板：结构与弱化 */
+  --rule: #d8d4c8;             /* 米色细边框（弱） */
+  --rule-soft: #e7e3d7;        /* 更弱的分隔线 */
+  --chip-bg: #f4f2ea;          /* 标签/kbd/浅色块底 */
+  --chip-hover-bg: #ece9dd;    /* 标签/kbd hover（palette 与 diary 同源） */
+  --code-bg: #f4f2ec;          /* 行内代码底 */
+
+  /* 字体 */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", Georgia, serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* 形状与投影 */
+  --radius-sm: 6px;            /* chip/卡片小圆角 */
+  --radius-btn: 8px;           /* 按钮/输入框圆角 */
+  --radius: 10px;              /* 面板/浮层大圆角 */
+  --shadow-float: 0 24px 60px rgba(26, 26, 26, 0.22), 0 2px 8px rgba(26, 26, 26, 0.08);  /* 浮层 */
+  --shadow-card: 0 10px 28px rgba(26, 26, 26, 0.12);  /* 卡片 hover 上浮 */
+}

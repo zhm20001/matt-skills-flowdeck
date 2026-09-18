@@ -1,0 +1,65 @@
+/* ── tokens-github-dark.css · flowdeck 暗色主题 ──────────────────
+ * 依 tokens-paper.css 头部规则 3 另建的第二个「光源」：GitHub 暗色风
+ * （本仓库旧版界面配色的整体收编，色值沿用旧版 ：root 与零散裸值）。
+ *
+ * 生效方式：消费侧在 <html> 上挂 data-theme="dark"，本文件以
+ * :root[data-theme="dark"] 覆写 tokens-paper.css 的同名 token，
+ * 业务样式（只认 --fd-* 别名）零改动即整体换肤。
+ *
+ * 与纸感主题的分工：
+ *   - 前半部分与 tokens-paper.css 同名同序，保证两套光源语义对齐；
+ *   - 「GitHub 专属槽位」是暗色版多出的语义（主按钮蓝、页签紫、迷雾琥珀），
+ *     亮色主题未定义这些名字，业务侧以 var(name, 纸感回落) 消费。
+ * ────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 色板：纸与墨 → 夜航（canvas 微分层：desk 更深，paper 是面板） */
+  --paper: #0d1117;            /* 主面板（信纸位置），旧版页面底 */
+  --desk: #010409;             /* 页面底，比面板更深一线 */
+  --card-bg: #161b22;          /* 卡片，旧版卡片底 */
+  --card-hover-bg: #1c2129;    /* hover 微亮，旧版表格行 hover 底 */
+  --ink: #f0f6fc;              /* 标题近白 */
+  --ink-body: #e6edf3;         /* 正文，旧版文字色 */
+  --ink-muted: #8b949e;        /* 次要文字，旧版 muted */
+
+  /* 色板：强调 → GitHub 蓝 */
+  --accent: #58a6ff;           /* 链接/当前步/聚焦，旧版 --blue */
+  --accent-hover: #79b8ff;
+  --accent-ink: #ffffff;       /* 彩底上的文字 */
+  --accent-soft: rgba(56, 139, 253, 0.15);
+
+  /* 色板：状态（旧版 --green / --red） */
+  --ok: #3fb950;
+  --ok-soft: rgba(46, 160, 67, 0.15);
+  --bad: #f85149;
+  --bad-soft: rgba(248, 81, 73, 0.1);
+
+  /* 色板：结构与弱化（旧版边框/按钮/行内代码底） */
+  --rule: #30363d;             /* 旧版 --border */
+  --rule-soft: #21262d;        /* 旧版表格行分隔 */
+  --chip-bg: #21262d;          /* 旧版按钮底 */
+  --chip-hover-bg: #1c2129;
+  --code-bg: #0d1117;          /* 旧版 pre.agreement 底 */
+
+  /* 字体：GitHub 风 = 标题正文全无衬线 + 等宽 */
+  --font-serif: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-sans: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 形状与投影：圆角沿用亮色，投影换夜色 */
+  --radius-sm: 6px;
+  --radius-btn: 8px;
+  --radius: 10px;
+  --shadow-float: 0 24px 60px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.45);
+
+  /* GitHub 专属槽位（亮色未定义；业务侧 var(name, 纸感回落) 消费） */
+  --btn-primary: #1f6feb;        /* 主按钮底，旧版 button.primary */
+  --btn-primary-hover: #388bfd;
+  --mark-bg: #9d7cd8;            /* 页签激活/进度条/toast 的紫，旧版 --purple */
+  --mark-ink: #ffffff;           /* 紫底上的文字 */
+  --key-ink: #9d7cd8;            /* 票号紫 */
+  --fog-ink: #d29922;            /* 迷雾琥珀，旧版 --amber */
+}

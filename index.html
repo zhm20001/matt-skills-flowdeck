@@ -1,0 +1,2177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 编程流程板</title>
+<script>
+/* 主题在首帧前定好：默认纸感（tokens-paper.css），记忆过暗色则挂 data-theme 切到 GitHub 暗色。 */
+(function () {
+  try { if (localStorage.getItem('flowdeck-theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark') } catch (e) {}
+})()
+</script>
+<link rel="stylesheet" href="tokens-paper.css">
+<link rel="stylesheet" href="tokens-github-dark.css">
+<style>
+  /* ── 消费层：tokens 只经这一层 --fd-* 别名进入业务样式（tokens 规则 2）──
+     业务样式零裸值；暗色专属槽位用 var(名字, 纸感回落) 消费。 */
+  :root {
+    color-scheme: light;
+    --fd-desk: var(--desk);
+    --fd-paper: var(--paper);
+    --fd-card: var(--card-bg);
+    --fd-ink: var(--ink);
+    --fd-ink-body: var(--ink-body);
+    --fd-ink-muted: var(--ink-muted);
+    --fd-accent: var(--accent);
+    --fd-accent-ink: var(--accent-ink);
+    --fd-btn-bg: var(--btn-primary, var(--accent));
+    --fd-btn-bg-hover: var(--btn-primary-hover, var(--accent-hover));
+    --fd-ok: var(--ok);
+    --fd-bad: var(--bad);
+    --fd-bad-soft: var(--bad-soft);
+    --fd-rule: var(--rule);
+    --fd-rule-soft: var(--rule-soft);
+    --fd-chip: var(--chip-bg);
+    --fd-chip-hover: var(--chip-hover-bg);
+    --fd-code-bg: var(--code-bg);
+    --fd-font-serif: var(--font-serif);
+    --fd-font-sans: var(--font-sans);
+    --fd-font-mono: var(--font-mono);
+    --fd-radius-btn: var(--radius-btn);
+    --fd-radius: var(--radius);
+    --fd-shadow-card: var(--shadow-card);
+    --fd-shadow-float: var(--shadow-float);
+    /* 暗色专属槽位（tokens-github-dark.css 定义），亮色回落到纸感 token */
+    --fd-tab-on-bg: var(--mark-bg, var(--ink));
+    --fd-tab-on-ink: var(--mark-ink, var(--paper));
+    --fd-progress: var(--mark-bg, var(--accent));
+    --fd-toast-bg: var(--mark-bg, var(--accent));
+    --fd-toast-ink: var(--mark-ink, var(--accent-ink));
+    --fd-key-ink: var(--key-ink, var(--accent));
+    --fd-fog-ink: var(--fog-ink, var(--accent));
+  }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fd-desk); color: var(--fd-ink-body); font: 14px/1.6 var(--fd-font-sans); }
+  /* 信纸：整块纸面放在深一号的桌面上 */
+  .wrap { max-width: 1080px; margin: 24px auto 48px; padding: 24px 28px 40px; background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); box-shadow: var(--fd-shadow-card); }
+  @media (max-width: 800px) { .wrap { margin: 0; border-left: 0; border-right: 0; border-radius: 0; } }
+  a { color: var(--fd-accent); }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--fd-rule); background: var(--fd-chip); color: var(--fd-ink-body); border-radius: var(--fd-radius-btn); padding: 4px 12px; }
+  button:hover { border-color: var(--fd-ink-muted); background: var(--fd-chip-hover); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.primary { background: var(--fd-btn-bg); border-color: var(--fd-btn-bg); color: var(--fd-accent-ink); }
+  button.primary:hover { background: var(--fd-btn-bg-hover); border-color: var(--fd-btn-bg-hover); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 1px; }
+  input, select { font: inherit; color: var(--fd-ink-body); background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 4px 8px; }
+
+  /* ── 地址栏组合框：常用目录下拉（右缘 ▾ + 浮层菜单） ── */
+  .rootbox { position: relative; }
+  .rootbox #rootInput { width: 250px; padding-right: 26px; }
+  #rootMenuBtn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: var(--fd-ink-muted); padding: 2px 5px; }
+  #rootMenuBtn:hover { background: transparent; color: var(--fd-accent); }
+  .menu { position: absolute; top: calc(100% + 4px); right: 0; width: 400px; max-width: 92vw; max-height: 330px; overflow: auto; background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); box-shadow: var(--fd-shadow-float); z-index: 40; }
+  .menu-empty { padding: 18px 14px; text-align: center; color: var(--fd-ink-muted); font-size: 12px; }
+  .opt { position: relative; padding: 7px 34px 7px 12px; border-bottom: 1px solid var(--fd-rule-soft); cursor: pointer; }
+  .opt:last-child { border-bottom: none; }
+  .opt:hover, .opt.hl { background: var(--fd-chip-hover); }
+  .opt .main { color: var(--fd-ink); font-weight: 500; }
+  .opt .sub { color: var(--fd-ink-muted); font-size: 12px; font-family: var(--fd-font-mono); overflow-wrap: anywhere; }
+  .opt .chip { margin-left: 6px; }
+  .opt .chip.cur { color: var(--fd-accent); border-color: var(--fd-accent); }
+  .opt.missing { cursor: default; }
+  .opt.missing:hover { background: transparent; }
+  .opt.missing.hl { background: var(--fd-chip); }
+  .opt.missing .main, .opt.missing .sub { color: var(--fd-ink-muted); }
+  .opt.missing .chip { color: var(--fd-bad); border-color: color-mix(in srgb, var(--fd-bad) 45%, transparent); }
+  .opt .del { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: var(--fd-ink-muted); padding: 2px 5px; }
+  .opt .del:hover { background: var(--fd-bad-soft); border-color: transparent; color: var(--fd-bad); }
+  h1 { font: 600 22px/1.3 var(--fd-font-serif); color: var(--fd-ink); margin: 0 0 2px; }
+  .sub { color: var(--fd-ink-muted); font-size: 12px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+  header .spacer { flex: 1; }
+
+  .banner { border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 10px 14px; margin-bottom: 14px; display: none; }
+  .banner.err { display: block; border-color: var(--fd-bad); background: var(--fd-bad-soft); color: var(--fd-bad); }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tabs button { border-radius: 999px; }
+  .tabs button.on { background: var(--fd-tab-on-bg); border-color: var(--fd-tab-on-bg); color: var(--fd-tab-on-ink); }
+
+  .card { background: var(--fd-card); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 13px; margin: 0 0 12px; color: var(--fd-ink-muted); font-weight: 600; letter-spacing: 0.02em; }
+  /* 卡片头：标题 + 右侧动作（如「展开阅读」）共处一行 */
+  .cardhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .cardhead h2 { flex: 1; margin: 0; }
+  .cardhead button { flex: none; font-size: 12px; padding: 2px 10px; }
+
+  /* 流程链：横向四步 */
+  .chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .stage { flex: 1 1 200px; min-width: 170px; padding: 12px; border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); background: var(--fd-paper); position: relative; }
+  .stage + .arrow { align-self: center; color: var(--fd-ink-muted); padding: 0 6px; font-size: 18px; }
+  .stage .head { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--fd-ink-muted); display: flex; align-items: center; justify-content: center; font-size: 13px; flex: none; color: transparent; }
+  .stage.done .dot { background: var(--fd-ok); border-color: var(--fd-ok); color: var(--fd-paper); }
+  .stage.current .dot { border-color: var(--fd-accent); color: var(--fd-accent); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-accent) 45%, transparent); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+  }
+  .stage .name { font-family: var(--fd-font-serif); font-weight: 600; color: var(--fd-ink); }
+  .stage .tiny { color: var(--fd-ink-muted); font-size: 12px; }
+  .chip { font-size: 11px; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--fd-rule); color: var(--fd-ink-muted); }
+  .stage.done .chip { color: var(--fd-ok); border-color: color-mix(in srgb, var(--fd-ok) 55%, transparent); }
+  .stage.current .chip { color: var(--fd-accent); border-color: var(--fd-accent); }
+  /* 推定标注：放在完成卡头部下方，保持中性灰、不被完成态配色染色（写在上面两条之后以压过同特异性的染色） */
+  .stage .chip.infer { display: inline-block; margin-top: 6px; color: var(--fd-ink-muted); border-color: var(--fd-rule); }
+  .stage.current { border-color: var(--fd-accent); }
+  .stage.done { border-color: color-mix(in srgb, var(--fd-ok) 45%, transparent); }
+  .stage .evidence { margin-top: 8px; font-size: 12px; color: var(--fd-ink-muted); }
+  /* 技能联动（票 05）：链格内的技能介绍入口（阶段定义旁硬编码的技能名，一技能一钮） */
+  .stage .skillrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .stage .skillrow button { font-size: 11px; padding: 1px 9px; }
+
+  .next { display: flex; align-items: center; gap: 12px; border-left: 3px solid var(--fd-accent); }
+  .next.done-all { border-left-color: var(--fd-ok); }
+  .next .label { color: var(--fd-accent); font-weight: 700; flex: none; }
+  .next.done-all .label { color: var(--fd-ok); }
+  .next .txt { flex: 1; }
+  .bar { height: 6px; background: var(--fd-chip); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar i { display: block; height: 100%; background: var(--fd-progress); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--fd-ink-muted); font-weight: 500; border-bottom: 1px solid var(--fd-rule); padding: 6px 8px; }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--fd-rule-soft); vertical-align: top; }
+  tr.ticket { cursor: pointer; }
+  tr.ticket:hover { background: var(--fd-chip-hover); }
+  tr.closed { color: var(--fd-ink-muted); }
+  tr.closed td.title { text-decoration: line-through; }
+  .state-open { color: var(--fd-ok); }
+  .state-closed { color: var(--fd-ink-muted); }
+  .warn { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 6px; border-radius: 50%; background: #d97706; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; vertical-align: 1px; cursor: help; flex: none; }
+  .key { font-family: var(--fd-font-mono); color: var(--fd-key-ink); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+  .kv { margin: 6px 0; }
+  .kv b { color: var(--fd-ink-muted); font-weight: 500; margin-right: 6px; }
+  ul.plain { margin: 4px 0; padding-left: 18px; }
+  .fog li { color: var(--fd-fog-ink); }
+
+  /* ── triage 档位过滤（票 01）：chip 底色走各档标签色（内联，色值与 lib/parse.mjs 的 PALETTE 同源互指）── */
+  .tiers { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+  .tierchip { font-size: 11px; border-radius: 999px; padding: 1px 10px; border: 1px solid var(--fd-rule); }
+  .tierchip.on { outline: 2px solid var(--fd-accent); outline-offset: 1px; font-weight: 600; }
+  .tierchip .cnt { opacity: 0.75; margin-left: 3px; }
+  /* git 旁证行（票 01）：与卡片底部进度行同款次级文本 */
+  .gitline { margin-top: 8px; font-family: var(--fd-font-mono); overflow-wrap: anywhere; }
+
+  /* ── 前沿徽标 + 面板（票 02）：顶栏常驻「迷雾总数 + 前沿票数」，点开列各 effort 可干票 ── */
+  .frontierbox { position: relative; }
+  #frontierBadge { font-family: var(--fd-font-mono); font-size: 12px; }
+  .frontierbox .menu { width: 420px; }
+  .frontierbox .fgroup { color: var(--fd-ink-muted); font-size: 11px; letter-spacing: 0.04em; margin: 10px 12px 4px; }
+  .frontierbox .fticket { padding: 6px 12px; border-bottom: 1px solid var(--fd-rule-soft); cursor: pointer; }
+  .frontierbox .fticket:hover { background: var(--fd-chip-hover); }
+  .frontierbox .fticket .key { font-family: var(--fd-font-mono); color: var(--fd-key-ink); margin-right: 6px; }
+  .frontierbox .fempty { padding: 16px 14px; text-align: center; color: var(--fd-ink-muted); font-size: 12px; }
+
+  /* ── 全部视图（票 02）：跨 effort 汇总行 + 四格缩影 + 完工折叠行 ── */
+  tr.effortrow { cursor: pointer; }
+  tr.effortrow:hover { background: var(--fd-chip-hover); }
+  tr.donegroup { cursor: pointer; }
+  tr.donegroup:hover { background: var(--fd-chip-hover); }
+  tr.effortrow .name { color: var(--fd-ink); font-weight: 500; }
+  .stagelets { display: inline-flex; gap: 3px; vertical-align: middle; }
+  .stagelet { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--fd-rule); background: var(--fd-chip); }
+  .stagelet.done { background: var(--fd-ok); border-color: var(--fd-ok); }
+  .stagelet.current { background: var(--fd-accent); border-color: var(--fd-accent); }
+
+  /* ── 项目总览弹窗（票 03）：跨常用目录只读盘点，行点击 = 既有换目录 ── */
+  .modal .box.roots-box { width: 760px; }
+  tr.rootrow { cursor: pointer; }
+  tr.rootrow:hover { background: var(--fd-chip-hover); }
+  tr.rootrow .name { color: var(--fd-ink); font-weight: 500; }
+  tr.rootrow.bad { cursor: default; }
+  tr.rootrow.bad:hover { background: transparent; }
+  tr.rootrow.bad .name, tr.rootrow.bad .sub { color: var(--fd-ink-muted); }
+
+  .empty { text-align: center; padding: 40px 20px; }
+  pre.agreement { text-align: left; background: var(--fd-code-bg); border: 1px dashed var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 14px; white-space: pre-wrap; font-size: 12.5px; font-family: var(--fd-font-mono); color: var(--fd-ink-body); }
+
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--fd-toast-bg); color: var(--fd-toast-ink); padding: 6px 16px; border-radius: 999px; display: none; box-shadow: var(--fd-shadow-float); }
+
+  /* ── 技能包弹窗：docs/skills/ 全景介绍的入口 ── */
+  .modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal[hidden] { display: none; }
+  .modal .mask { position: absolute; inset: 0; background: color-mix(in srgb, var(--fd-ink) 32%, transparent); }
+  .modal .box { position: relative; display: flex; flex-direction: column; width: 960px; max-width: 100%; height: min(86vh, 720px); background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); box-shadow: var(--fd-shadow-float); overflow: hidden; }
+  .modal .head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--fd-rule); }
+  .modal .head .title { font: 600 16px/1.3 var(--fd-font-serif); color: var(--fd-ink); }
+  .modal .body { flex: 1; display: flex; min-height: 0; }
+  .modal nav { width: 252px; flex: none; overflow: auto; border-right: 1px solid var(--fd-rule-soft); padding: 8px 8px 16px; }
+  .modal nav .cat { color: var(--fd-ink-muted); font-size: 11px; letter-spacing: 0.04em; margin: 12px 8px 4px; }
+  .modal nav .item { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 5px 8px; border-radius: var(--fd-radius-btn); color: var(--fd-ink-body); }
+  .modal nav .item:hover { background: var(--fd-chip-hover); border-color: transparent; }
+  .modal nav .item.on { background: var(--fd-tab-on-bg); color: var(--fd-tab-on-ink); }
+  .modal nav .item .nm { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .modal nav .item .en { display: block; font-family: var(--fd-font-mono); font-size: 11px; color: var(--fd-ink-muted); overflow-wrap: anywhere; }
+  .modal nav .item.on .en, .modal nav .item.on .chip { color: inherit; opacity: 0.8; border-color: transparent; }
+  .modal article { flex: 1; overflow: auto; padding: 18px 22px 28px; }
+
+  /* Markdown 渲染层（.md）：只覆盖 docs/skills/ 文档用到的语法 */
+  .md h1 { font: 600 20px/1.35 var(--fd-font-serif); color: var(--fd-ink); margin: 0 0 10px; }  .md h2 { font: 600 15px/1.4 var(--fd-font-serif); color: var(--fd-ink); margin: 18px 0 6px; }
+  .md h3 { font: 600 13.5px/1.4 var(--fd-font-serif); color: var(--fd-ink); margin: 14px 0 5px; }
+  .md p { margin: 8px 0; }
+  .md ul, .md ol { margin: 8px 0; padding-left: 20px; }
+  .md li { margin: 3px 0; }
+  .md blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--fd-accent); background: var(--fd-chip); border-radius: 0 var(--fd-radius-btn) var(--fd-radius-btn) 0; }
+  .md blockquote p { margin: 0; }
+  .md code { font-family: var(--fd-font-mono); font-size: 12.5px; background: var(--fd-code-bg); border-radius: 4px; padding: 1px 5px; }
+  .md pre { margin: 10px 0; padding: 10px 12px; background: var(--fd-code-bg); border: 1px solid var(--fd-rule-soft); border-radius: var(--fd-radius-btn); overflow-x: auto; font: 12.5px/1.5 var(--fd-font-mono); }
+  .md pre code { background: transparent; border-radius: 0; padding: 0; font-size: inherit; }
+  .md .tblwrap { overflow-x: auto; margin: 10px 0; }
+  .md table { border-collapse: collapse; font-size: 12.5px; }
+  .md th, .md td { border: 1px solid var(--fd-rule); padding: 5px 9px; text-align: left; vertical-align: top; }
+  .md th { color: var(--fd-ink-muted); font-weight: 600; background: var(--fd-chip); }
+  .md hr { border: none; border-top: 1px solid var(--fd-rule-soft); margin: 14px 0; }
+  .md .loading { color: var(--fd-ink-muted); font-size: 12px; }
+  @media (max-width: 720px) {
+    .modal { padding: 0; }
+    .modal .box { width: 100%; height: 100vh; border-radius: 0; border-left: 0; border-right: 0; }
+    .modal .body { flex-direction: column; }
+    .modal nav { width: auto; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--fd-rule-soft); }
+  }
+
+  /* ── 设置弹窗：窄盒表单（label 列 + 控件列，说明占控件列第二行） ── */
+  .modal .box.settings-box { width: 560px; height: auto; }
+  .frow { display: grid; grid-template-columns: 140px 1fr; gap: 3px 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--fd-rule-soft); }
+  .frow label { color: var(--fd-ink-muted); font-size: 12.5px; text-align: right; }
+  .frow input { width: 100%; }
+  .frow input[type="checkbox"] { width: auto; justify-self: start; }
+  .frow .hint { grid-column: 2; color: var(--fd-ink-muted); font-size: 12px; }
+  .factions { display: flex; align-items: center; gap: 12px; padding: 14px 0 0; }
+  .factions .hint { color: var(--fd-bad); font-size: 12px; }
+
+  footer { margin-top: 24px; color: var(--fd-ink-muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>AI 编程流程板</h1>
+      <div class="sub">追踪 .scratch/ 产物 · grill → to-spec → to-tickets → implement · 适配任意 Agent</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="frontierbox">
+      <button id="frontierBadge" class="chip" hidden title="全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单"></button>
+      <div id="frontierPanel" class="menu" hidden></div>
+    </div>
+    <span id="manualBadge" class="chip" hidden title="惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新"></span>
+    <div class="sub" id="meta"></div>
+    <div class="rootbox">
+      <input id="rootInput" title="要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json" placeholder="粘贴要追踪的项目目录路径">
+      <button id="rootMenuBtn" title="浏览常用目录：网页上切换过的目录自动收录，点一条立即切回" aria-label="展开常用目录下拉">▾</button>
+      <div id="rootMenu" class="menu" hidden></div>
+    </div>
+    <button id="rootsBtn" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
+    <button id="themeBtn" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
+    <button id="switchBtn" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
+    <button id="refreshBtn">立即刷新</button>
+    <button id="snapshotBtn" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
+    <button id="settingsBtn" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
+    <button id="skillsBtn" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skills/）">技能包</button>
+  </header>
+
+  <div class="banner" id="err" role="alert"></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="main"></div>
+  <footer id="foot"></footer>
+</div>
+<div id="skillsModal" class="modal" hidden>
+  <div class="mask" id="skillsMask"></div>
+  <div class="box" role="dialog" aria-modal="true" aria-label="Matt 技能包全景介绍">
+    <div class="head">
+      <div class="title">Matt 技能包 · 全景介绍</div>
+      <div class="sub" id="skillsCount"></div>
+      <div style="flex:1"></div>
+      <button id="skillsClose" title="关闭（Esc）">关闭</button>
+    </div>
+    <div class="body">
+      <nav id="skillsNav" aria-label="技能列表"></nav>
+      <article id="skillsDoc" class="md"></article>
+    </div>
+  </div>
+</div>
+<div id="toast" aria-live="polite">已复制，去粘贴给任意 Agent 即可</div>
+
+<!-- 设置弹窗：集中修改 config.json 可改字段（pollMs 即时生效；host/port 重启生效；令牌只写不读） -->
+<div id="settingsModal" class="modal" hidden>
+  <div class="mask" id="settingsMask"></div>
+  <div class="box settings-box" role="dialog" aria-modal="true" aria-label="设置">
+    <div class="head">
+      <div class="title">设置</div>
+      <div class="sub">保存即写进 config.json</div>
+      <div style="flex:1"></div>
+      <button id="settingsClose" title="关闭（Esc）">关闭</button>
+    </div>
+    <div class="body">
+      <article id="settingsBody">
+        <div class="frow">
+          <label for="setPollMs">轮询间隔 pollMs</label>
+          <input id="setPollMs" type="number" min="1000" step="100">
+          <div class="hint">毫秒。网页每隔多久重读一次 .scratch；保存即生效，下限 1000。</div>
+        </div>
+        <div class="frow">
+          <label for="setPollMode">轮询模式 pollMode</label>
+          <select id="setPollMode">
+            <option value="observe">观测（可见才轮询）</option>
+            <option value="display">展示（常规定时轮询）</option>
+            <option value="manual">惰性（只手动刷新）</option>
+          </select>
+          <div class="hint">观测：页面可见才定时轮询、不可见停表、回前台立即一拍（默认）；展示：大屏常亮场景的定时轮询；惰性：零自动请求，用「立即刷新」。存 config.json，跨浏览器一致。</div>
+        </div>
+        <div class="frow">
+          <label for="setNotify">桌面通知</label>
+          <input id="setNotify" type="checkbox">
+          <div class="hint">票关闭、迷雾增减、阶段推进时弹桌面通知（默认关，开启即向浏览器申请权限；回前台时积压变化聚合成一条）。偏好只存本浏览器，不进 config.json；惰性轮询下零自动拍零通知。</div>
+        </div>
+        <div class="frow">
+          <label for="setHost">监听地址 host</label>
+          <input id="setHost" type="text" placeholder="127.0.0.1">
+          <div class="hint">重启服务后生效。默认 127.0.0.1 仅本机；0.0.0.0 局域网可开（建议配合访问令牌）。</div>
+        </div>
+        <div class="frow">
+          <label for="setPort">端口 port</label>
+          <input id="setPort" type="number" min="1" max="65535" placeholder="3210">
+          <div class="hint">重启服务后生效；被占用时服务会自动向后试 10 个。</div>
+        </div>
+        <div class="frow">
+          <label for="setToken">访问令牌 token</label>
+          <input id="setToken" type="password" autocomplete="off">
+          <div class="hint" id="setTokenHint"></div>
+        </div>
+        <div class="frow" id="setTokenClearRow" hidden>
+          <label></label>
+          <button id="setTokenClear">清除令牌…</button>
+          <div class="hint">清除 = 关闭鉴权：/api/* 不再要求令牌（局域网暴露时同网段任何设备都可访问）。</div>
+        </div>
+        <div class="frow">
+          <label>配置文件</label>
+          <div class="hint" id="setConfigPath"></div>
+        </div>
+        <div class="factions">
+          <button id="settingsSave" class="primary">保存</button>
+          <span class="hint" id="setSaveHint"></span>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<!-- 项目总览弹窗（票 03）：常用目录跨项目只读盘点；数据打开才取（按需单拍），行点击 = 既有换目录操作 -->
+<div id="rootsModal" class="modal" hidden>
+  <div class="mask" id="rootsMask"></div>
+  <div class="box roots-box" role="dialog" aria-modal="true" aria-label="项目总览">
+    <div class="head">
+      <div class="title">项目总览</div>
+      <div class="sub" id="rootsMeta"></div>
+      <div style="flex:1"></div>
+      <button id="rootsRefresh" title="重新盘点全部常用目录">重新盘点</button>
+      <button id="rootsClose" title="关闭（Esc）">关闭</button>
+    </div>
+    <div class="body">
+      <article id="rootsBody"></article>
+    </div>
+  </div>
+</div>
+
+<!-- 规格阅读弹窗：全宽精读当前 effort 的 spec（内容取打开时刻的快照，轮询不打扰） -->
+<div id="readModal" class="modal" hidden>
+  <div class="mask" id="readMask"></div>
+  <div class="box" role="dialog" aria-modal="true" aria-label="规格阅读">
+    <div class="head">
+      <div class="title" id="readTitle"></div>
+      <div class="sub" id="readMeta"></div>
+      <div style="flex:1"></div>
+      <button id="readClose" title="关闭（Esc）">关闭</button>
+    </div>
+    <div class="body">
+      <article id="readDoc" class="md"></article>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict'
+var state = null        // 最近一次 /api/state 的完整数据
+var selected = null     // 当前选中的 effort slug（ALL_VIEW = 「全部」汇总视图）
+var lastOk = null       // 最近一次成功刷新的本地时间
+var pollMs = 5000       // 轮询间隔，以服务端配置（config.json 的 pollMs）为准
+var pollMode = 'observe' // 轮询模式，以服务端配置（config.json 的 pollMode）为准、随 /api/state 下发：
+                         // observe=页面可见才定时轮询（默认） display=常规定时轮询 manual=零自动请求只手动
+var pollTimer = null
+var lastEtag = ''       // 最近一次 /api/state 200 响应的 ETag：下一拍带 If-None-Match 复验，命中拿 304 空身（省传输与前端解析）
+var renderSig = ''      // 最近一次主区渲染的数据签名：轮询数据没变就不重画（不打扰阅读与滚动）
+var lastSnapshot = ''   // 最近一次 /api/state 200 响应的原始响应体：导出快照的源（原样落盘，不重新序列化）
+var THEME_KEY = 'flowdeck-theme'
+var TOKEN_KEY = 'flowdeck-token'
+var apiToken = ''
+
+/* ── 全部视图 + 完工折叠（票 02）：界面偏好只存本浏览器（沿主题键命名法）──
+   不进 config.json：那是跨浏览器一致的服务状态，折叠偏好入内即第二真相。 */
+var ALL_VIEW = '__all__'
+var ALL_SHOW_DONE_KEY = 'flowdeck-all-show-done'
+var ALL_DONE_COLLAPSED_KEY = 'flowdeck-all-done-collapsed'
+function lsFlag(key, dflt) {
+  try { var v = localStorage.getItem(key); return v === null ? dflt : v === '1' } catch (e) { return dflt }
+}
+function setLsFlag(key, on) {
+  try { localStorage.setItem(key, on ? '1' : '0') } catch (e) {}
+}
+
+/* 访问令牌（服务端 config.json 的 token 非空时启用）：
+   地址带 ?token=… 打开 → 收下、记忆到 localStorage、把地址栏抹干净（刷新/分享不带令牌）；
+   之后所有 /api/* 请求自动带 X-FlowDeck-Token 头。令牌只进请求头，不进任何 DOM。 */
+;(function () {
+  try { apiToken = localStorage.getItem(TOKEN_KEY) || '' } catch (e) {}
+  try {
+    var t = new URLSearchParams(location.search).get('token')
+    if (t) {
+      apiToken = t
+      try { localStorage.setItem(TOKEN_KEY, t) } catch (e) {}
+      history.replaceState(null, '', location.pathname)
+    }
+  } catch (e) {}
+})()
+
+/** 给 API 请求补令牌头：无令牌时不带，保持请求头原样。 */
+function apiHeaders(extra) {
+  var h = extra || {}
+  if (apiToken) h['X-FlowDeck-Token'] = apiToken
+  return h
+}
+
+/* ── 请求封装（eng-optimizations 票 05）：全部 /api 请求统一走这里 ──
+   注入令牌头；有 body 自动加 POST 三件套（method + Content-Type + X-FlowDeck 防跨站写头）；
+   401 统一定向文案（含 ?token= 补救指引——写操作遇 401 也知道怎么补救，是有意改良：
+   此前 GET 三处有定向文案、POST 三处落服务端泛文案）；错误文案单源：服务端 .error 优先，
+   无则 HTTP 状态码。显示通道（banner/toast/行内）与按钮禁用归各调用点。
+   返回 { ok, status, data, errorText, etag }；opts.text = true 按纯文本读响应（技能单篇）；
+   opts.rawBody = true 时 ok 应答额外带 raw（响应体原文字符串，快照导出用——不重新序列化，
+   与在线数据同源；旧测试桩没有 r.text 时回落 r.json，raw 缺席）。 */
+var TOKEN_HINT = '需要访问令牌：在地址后加 ?token=你的令牌 再打开本页'
+
+function apiFetch(path, opts) {
+  var o = opts || {}
+  var headers = {}
+  if (o.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    headers['X-FlowDeck'] = '1'
+  }
+  if (o.etag) headers['If-None-Match'] = o.etag
+  var init = { headers: apiHeaders(headers) }
+  if (o.body !== undefined) { init.method = 'POST'; init.body = o.body }
+  return fetch(path, init).then(function (r) {
+    var etag = r.headers && r.headers.get ? r.headers.get('ETag') : ''
+    if (r.status === 401) return { ok: false, status: 401, data: null, errorText: TOKEN_HINT, etag: etag }
+    if (r.status === 304) return { ok: false, status: 304, data: null, errorText: '', etag: etag }
+    // rawBody 通道：自己读原文再 JSON.parse，保证 data 与 raw 出自同一份响应体
+    if (o.rawBody && typeof r.text === 'function') {
+      return r.text().then(function (t) {
+        if (!r.ok) {
+          var err = null
+          try { err = JSON.parse(t) } catch (e) {}
+          return { ok: false, status: r.status, data: err, errorText: (err && err.error) ? err.error : ('HTTP ' + r.status), etag: etag }
+        }
+        var parsed = null
+        try { parsed = JSON.parse(t) } catch (e) {} // 空体/坏体与 r.json() 失败同款兜底：data=null，调用方跳过
+        return { ok: true, status: r.status, data: parsed, errorText: '', etag: etag, raw: t }
+      })
+    }
+    var read = o.text ? r.text() : r.json()
+    return read.then(function (data) {
+      if (!r.ok) return { ok: false, status: r.status, data: data, errorText: (data && data.error) ? data.error : ('HTTP ' + r.status), etag: etag }
+      return { ok: true, status: r.status, data: data, errorText: '', etag: etag }
+    }, function () {
+      return { ok: r.ok, status: r.status, data: null, errorText: r.ok ? '' : ('HTTP ' + r.status), etag: etag }
+    })
+  })
+}
+
+function el(tag, cls, text) {
+  var n = document.createElement(tag)
+  if (cls) n.className = cls
+  if (text !== undefined) n.textContent = text
+  return n
+}
+
+/* ── 键盘层（eng-optimizations 票 07）：可点元素的非鼠标等价物 ──
+   Tab 停留（tabindex=0）+ 语义（role=button）+ Enter/Space 触发与 click 同一处理
+   （Space 顺手吃掉默认滚动）。调用方保留自己的 title（鼠标福利）与 aria-label（兜底层）。
+   事件目标是内嵌控件（如格内的按钮）时放行——焦点已在嵌套控件上，它的键盘语义优先，
+   外层不吃掉（否则 Enter 会被外层截胡成复制，按钮点不动）。 */
+function clickable(node, fn) {
+  node.tabIndex = 0
+  node.setAttribute('role', 'button')
+  node.addEventListener('click', fn)
+  node.addEventListener('keydown', function (ev) {
+    if (ev.target !== node) return
+    if (ev.key !== 'Enter' && ev.key !== ' ') return
+    ev.preventDefault()
+    fn(ev)
+  })
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast')
+  t.textContent = msg
+  t.style.display = 'block'
+  clearTimeout(t._h)
+  t._h = setTimeout(function () { t.style.display = 'none' }, 1600)
+}
+
+function copyText(text) {
+  function fallback() {
+    var ta = el('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy') } catch (e) {}
+    document.body.removeChild(ta)
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { toast('已复制，去粘贴给任意 Agent 即可') }, fallback)
+  } else fallback()
+}
+
+function currentEffort() {
+  if (!state || !state.efforts.length) return null
+  for (var i = 0; i < state.efforts.length; i++) if (state.efforts[i].slug === selected) return state.efforts[i]
+  return state.efforts[0]
+}
+
+function effortTabLabel(e) {
+  return e.slug === '__root' ? '根 .scratch/' : e.slug
+}
+
+/* 前沿票判定（票 02）：open、未被认领、Blocked by 所列票全部已关闭——「当前该干什么」。
+   这是 flowchain.mjs isFrontierTicket 的 ES5 镜像（零构建单文件没法共享该模块，两处
+   靠注释互指钉住，同 EFFECT/APPLY_RESTART 先例）；与链格阻塞计数同口径——依赖未全结才算阻塞。 */
+function frontierOf(eff) {
+  if (!eff || !eff.tickets) return []
+  var closedSet = {}
+  eff.tickets.forEach(function (t) { if (t.state === 'closed') closedSet[t.key] = true })
+  return eff.tickets.filter(function (t) {
+    if (t.state === 'closed') return false
+    if (t.claimedBy || t.status === 'claimed') return false
+    var deps = t.blockedBy || []
+    for (var i = 0; i < deps.length; i++) if (!closedSet[deps[i]]) return false
+    return true
+  })
+}
+
+/* 全局迷雾总数 + 前沿票总数（跨 effort 聚合，徽标数字的两半）。 */
+function frontierTotals() {
+  var fog = 0
+  var frontier = 0
+  ;((state && state.efforts) || []).forEach(function (e) {
+    fog += (e.map && e.map.fogCount) || 0
+    frontier += frontierOf(e).length
+  })
+  return { fog: fog, frontier: frontier }
+}
+
+/** 推定含义的说明文字（链格 title 与 aria-label 同载一份，兜底层不藏进悬停）。 */
+var INFER_NOTE = '此格不是由本阶段产物证成，而是由更晚阶段的产物推定完成'
+
+function ticketCopy(eff, t) {
+  return '请实现票 ' + t.key + '（' + state.root + '/.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + t.fileName + '）：' + t.title +
+    '。完成后把该票文件里的 Status 行改为 resolved。'
+}
+
+/* ── triage 档位过滤（票 01）：六档单选 chip，点亮=只看该档、再点回全量 ──
+   档位 = 五个 triage 角色（Status 行的值域）+ claimed；已关闭票不参与过滤。
+   色板沿用 lib/parse.mjs 的 PALETTE 同款色值，claimed 补一中性色；
+   零构建单文件没法共享服务端代码，色值在此硬编码、靠注释与 PALETTE 互指钉住。 */
+var TRIAGE_TIERS = [
+  { id: 'needs-triage', color: '#fbca04', ink: '#1b1f24' },
+  { id: 'needs-info', color: '#5319e7', ink: '#ffffff' },
+  { id: 'ready-for-agent', color: '#0e8a16', ink: '#ffffff' },
+  { id: 'ready-for-human', color: '#b60205', ink: '#ffffff' },
+  { id: 'wontfix', color: '#ffffff', ink: '#1b1f24' },
+  { id: 'claimed', color: '#6e7781', ink: '#ffffff' },
+]
+var ticketFilter = null // 当前档位（null = 全量）；进主区渲染签名，轮询重画不丢
+
+/** ISO 时间 → 相对时间（git 旁证行用）；超过 30 天回落本地日期展示。 */
+function fmtRelative(iso) {
+  var d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  var s = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (s < 0) s = 0 // 时钟略超前的提交按「刚刚」展示，不出负数
+  if (s < 60) return '刚刚'
+  var m = Math.floor(s / 60)
+  if (m < 60) return m + ' 分钟前'
+  var h = Math.floor(m / 60)
+  if (h < 24) return h + ' 小时前'
+  var day = Math.floor(h / 24)
+  if (day < 30) return day + ' 天前'
+  return fmtUpdatedAt(iso)
+}
+
+function renderTabs() {
+  var box = document.getElementById('tabs')
+  box.textContent = ''
+  if (!state || !state.efforts.length) return
+  if (!selected && state.efforts.length) selected = state.efforts[0].slug
+  state.efforts.forEach(function (e) {
+    var b = el('button', null, effortTabLabel(e) + (e.chain.complete ? ' ✓' : ''))
+    if (e.slug === selected) b.className = 'on'
+    b.addEventListener('click', function () { selected = e.slug; render() })
+    box.appendChild(b)
+  })
+  // 「全部」伪条目（票 02）：主区换跨 effort 汇总视图；effort 切换条本票不动（超 12 个的复议线在 map）
+  var all = el('button', null, '全部')
+  if (selected === ALL_VIEW) all.className = 'on'
+  all.title = '一屏纵览所有 effort 的链状态、迷雾与最近活跃；进行中在前、完工默认折叠'
+  all.addEventListener('click', function () { selected = ALL_VIEW; render() })
+  box.appendChild(all)
+}
+
+function renderChain(eff) {
+  var card = el('div', 'card')
+  card.appendChild(el('h2', null, '流程链 · ' + eff.title))
+  var chain = el('div', 'chain')
+  eff.chain.stages.forEach(function (s, i) {
+    if (i > 0) chain.appendChild(el('div', 'arrow', '→'))
+    var st = el('div', 'stage ' + s.status)
+    var head = el('div', 'head')
+    var dot = el('div', 'dot', '✓')
+    dot.setAttribute('aria-hidden', 'true') // 指引点是装饰（状态色已进链格 aria-label），不给读屏添噪音
+    head.appendChild(dot)
+    var names = el('div')
+    names.appendChild(el('div', 'name', s.title))
+    names.appendChild(el('div', 'tiny', s.subtitle))
+    head.appendChild(names)
+    var statusLabel = s.status === 'done' ? '完成' : s.status === 'current' ? '当前' : '待命'
+    head.appendChild(el('span', 'chip', statusLabel))
+    st.appendChild(head)
+    if (s.inferLabel) {
+      var infer = el('span', 'chip infer', s.inferLabel)
+      infer.title = INFER_NOTE
+      infer.setAttribute('aria-label', s.inferLabel + '：' + INFER_NOTE)
+      st.appendChild(infer)
+    }
+    st.appendChild(el('div', 'evidence', s.evidence))
+    // 技能联动（票 05）：阶段定义旁硬编码的技能名（flowchain.mjs 的 FLOW_STAGES.skills，与指引词
+    // 同源同漂移）——点开技能包弹窗并定位到该篇介绍（复用单篇懒加载端点，零新增机制）
+    if (s.skills && s.skills.length) {
+      var srow = el('div', 'skillrow')
+      s.skills.forEach(function (name) {
+        var sb = el('button', null, name + ' 介绍')
+        sb.title = '打开技能包弹窗，定位到「' + name + '」的介绍'
+        sb.addEventListener('click', function (ev) {
+          ev.stopPropagation() // 链格本身可点（复制指引词）：按钮点击别冒泡上去
+          openSkillsModal(name)
+        })
+        srow.appendChild(sb)
+      })
+      st.appendChild(srow)
+    }
+    // 键盘层 + 兜底层：链格可 Tab 停留、Enter/Space 与点按同路复制本格指引词；
+    // title 是鼠标福利，aria-label 同载状态、推定含义与指引全文（不再只藏在悬停里）。
+    st.title = '点一下复制这段阶段指引词\n' + s.hint
+    st.setAttribute('aria-label', s.title + '·' + statusLabel + (s.inferLabel ? '·' + s.inferLabel + '：' + INFER_NOTE : '') + '。' + s.hint)
+    clickable(st, function () { copyText(s.copyText) })
+    chain.appendChild(st)
+  })
+  card.appendChild(chain)
+
+  var cur = eff.chain.stages.filter(function (s) { return s.status === 'current' })[0]
+  var next = el('div', 'card next' + (eff.chain.complete ? ' done-all' : ''))
+  next.appendChild(el('span', 'label', eff.chain.complete ? '全部完成' : '下一步'))
+  next.appendChild(el('div', 'txt', eff.chain.complete ? '四个阶段全部完成：地图、规格、票、实现都齐了。' : (cur ? cur.hint : '')))
+  var btn = el('button', 'primary', '复制指引词')
+  btn.addEventListener('click', function () { copyText(eff.chain.complete ? '「' + eff.title + '」的四个流程阶段已全部完成，请帮我收尾归档。' : cur.copyText) })
+  next.appendChild(btn)
+  card.appendChild(next)
+
+  var c = eff.chain.counts
+  var line = el('div', 'sub', '阶段进度 ' + eff.chain.progress + '% · 票 ' + c.closed + '/' + c.tickets + ' 已关闭' + (c.blocked ? ' · ' + c.blocked + ' 张被阻塞' : ''))
+  var bar = el('div', 'bar')
+  var fill = el('i')
+  fill.style.width = eff.chain.progress + '%'
+  bar.appendChild(fill)
+  card.appendChild(line)
+  card.appendChild(bar)
+  // git 旁证（票 01）：最近一次提交一行；null 时整块不渲染（零降级噪音），绝不参与完成判据
+  if (eff.git) {
+    var g = el('div', 'sub gitline')
+    g.textContent = '旁证 · 最近提交 ' + eff.git.hash + ' · ' + fmtRelative(eff.git.date) + ' · ' + eff.git.subject
+    g.title = 'git 只读信息仅作展示旁证，不参与完成判据（判据只认票 Status 行）。提交时间：' + fmtUpdatedAt(eff.git.date)
+    card.appendChild(g)
+  }
+  return card
+}
+
+/** 票的更新时间 → 本地时区「YYYY-MM-DD HH:mm」。服务端给的是 UTC ISO 串，直接切片显示会差出一个时区。 */
+function fmtUpdatedAt(iso) {
+  var d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  var p = function (n) { return String(n).padStart(2, '0') }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
+}
+
+function renderTickets(eff) {
+  var card = el('div', 'card')
+  card.appendChild(el('h2', null, '票（issues/）· 点一行可复制实现指引'))
+  if (!eff.tickets.length) {
+    card.appendChild(el('div', 'sub', '这个 effort 还没有票。'))
+    return card
+  }
+  // 六档 chip：点亮=只看该档（已关闭票不参与），再点回全量；过滤态经渲染签名保持
+  var tiers = el('div', 'tiers')
+  tiers.setAttribute('role', 'group')
+  tiers.setAttribute('aria-label', '按 triage 档位过滤票表')
+  TRIAGE_TIERS.forEach(function (tier) {
+    var count = eff.tickets.filter(function (t) { return t.state !== 'closed' && t.status === tier.id }).length
+    var chip = el('button', 'tierchip' + (ticketFilter === tier.id ? ' on' : ''))
+    chip.style.background = tier.color
+    chip.style.color = tier.ink
+    chip.appendChild(document.createTextNode(tier.id))
+    var cnt = el('span', 'cnt', String(count))
+    chip.appendChild(cnt)
+    chip.title = '只看 ' + tier.id + ' 档的进行中票（再点一下回全量）'
+    chip.setAttribute('aria-pressed', ticketFilter === tier.id ? 'true' : 'false')
+    chip.addEventListener('click', function () {
+      ticketFilter = ticketFilter === tier.id ? null : tier.id
+      render()
+    })
+    tiers.appendChild(chip)
+  })
+  card.appendChild(tiers)
+  var visible = ticketFilter
+    ? eff.tickets.filter(function (t) { return t.state !== 'closed' && t.status === ticketFilter })
+    : eff.tickets
+  if (!visible.length) {
+    card.appendChild(el('div', 'sub', '「' + ticketFilter + '」档现在没有进行中的票。'))
+    return card
+  }
+  var table = el('table')
+  var thead = el('thead')
+  var hr = el('tr')
+  var headers = ['编号', '标题', '状态', '类型', '阻塞于', '进度', '更新于', '操作']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  thead.appendChild(hr)
+  table.appendChild(thead)
+  var tbody = el('tbody')
+  visible.forEach(function (t) {
+    var tr = el('tr', 'ticket' + (t.state === 'closed' ? ' closed' : ''))
+    tr.appendChild(el('td', 'key', t.key))
+    var tdTitle = el('td', 'title', t.title + (t.claimedBy ? '（' + t.claimedBy + ' 认领中）' : ''))
+    var warnInline = warnMessages(t.formatWarnings).join('；')
+    if (t.formatWarnings && t.formatWarnings.length) {
+      var warn = el('span', 'warn', '!')
+      warn.title = '字段行写法漂移（票仍有效）\n' + warnMessages(t.formatWarnings).join('\n')
+      // 兜底层：警告原文进 aria-label（role=img 给徽标一个可读名），title 仍是鼠标福利
+      warn.setAttribute('role', 'img')
+      warn.setAttribute('aria-label', '警告：' + warnInline)
+      tdTitle.appendChild(warn)
+    }
+    tr.appendChild(tdTitle)
+    tr.appendChild(el('td', t.state === 'closed' ? 'state-closed' : 'state-open', t.state === 'closed' ? '已关闭' : '进行中'))
+    tr.appendChild(el('td', null, t.type || '—'))
+    tr.appendChild(el('td', null, t.blockedBy && t.blockedBy.length ? '#' + t.blockedBy.join('、#') : '—'))
+    tr.appendChild(el('td', null, t.progress === null || t.progress === undefined ? '—' : t.progress + '%'))
+    tr.appendChild(el('td', null, fmtUpdatedAt(t.updatedAt)))
+    var tdAct = el('td')
+    var viewBtn = el('button', null, '查看')
+    viewBtn.title = '弹窗读这张票的全文（含 Comments；打开期间轮询刷新不打扰）'
+    viewBtn.setAttribute('aria-label', '查看票 ' + t.key + ' 的全文')
+    // 按钮在可点行内：拦住冒泡，别把行点击（复制指引）也触发上
+    viewBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openIssueModal(eff, t) })
+    tdAct.appendChild(viewBtn)
+    tr.appendChild(tdAct)
+    if (t.state !== 'closed') {
+      // 键盘层：票行可 Tab 停留、Enter/Space 与点按同路复制；兜底层：aria-label 同载警告原文
+      tr.title = '点一下复制这张票的实现指引词'
+      tr.setAttribute('aria-label', '票 ' + t.key + ' ' + t.title + '，进行中。按 Enter 复制实现指引' + (warnInline ? '。警告：' + warnInline : ''))
+      clickable(tr, function () { copyText(ticketCopy(eff, t)) })
+    } else {
+      tr.title = '已关闭'
+    }
+    tbody.appendChild(tr)
+  })
+  table.appendChild(tbody)
+  card.appendChild(table)
+  return card
+}
+
+/** "!" 警告原文的统一投影（票行徽标与卡头徽标共用）：title 里换行分多行（悬停好读），aria-label 里分号连单行（朗读顺）。 */
+function warnMessages(warnings) {
+  return (warnings || []).map(function (w) { return w.message })
+}
+
+/** "!" 警告徽标（卡片头用）：文件级格式警告（文件过大截断）的统一展示位；title 给鼠标悬停原文，aria-label 同载（兜底层）。 */
+function warnBadge(warnings) {
+  var warn = el('span', 'warn', '!')
+  warn.title = warnMessages(warnings).join('\n')
+  warn.setAttribute('role', 'img')
+  warn.setAttribute('aria-label', '警告：' + warnMessages(warnings).join('；'))
+  return warn
+}
+
+function renderMapSpec(eff) {
+  var cols = el('div', 'cols')
+  var mapCard = el('div', 'card')
+  var mapHead = el('h2', null, '地图（map.md）')
+  if (eff.map.formatWarnings && eff.map.formatWarnings.length) mapHead.appendChild(warnBadge(eff.map.formatWarnings))
+  mapCard.appendChild(mapHead)
+  if (!eff.map.exists) {
+    mapCard.appendChild(el('div', 'sub', '还没有 map.md。'))
+  } else {
+    var dest = el('div', 'kv')
+    dest.appendChild(el('b', null, '终点'))
+    dest.appendChild(document.createTextNode(eff.map.destination || '（Destination 还空着）'))
+    mapCard.appendChild(dest)
+    if (eff.map.decisions.length) {
+      var d = el('div', 'kv')
+      d.appendChild(el('b', null, '决策 ' + eff.map.decisions.length + ' 条'))
+      var ul = el('ul', 'plain')
+      eff.map.decisions.forEach(function (x) { ul.appendChild(el('li', null, x.title + (x.gist ? ' — ' + x.gist : ''))) })
+      d.appendChild(ul)
+      mapCard.appendChild(d)
+    }
+    if (eff.map.fog.length) {
+      var f = el('div', 'kv')
+      f.appendChild(el('b', null, '迷雾 ' + eff.map.fog.length + ' 条（Not yet specified）'))
+      var ful = el('ul', 'plain fog')
+      eff.map.fog.forEach(function (x) { ful.appendChild(el('li', null, x)) })
+      f.appendChild(ful)
+      mapCard.appendChild(f)
+    }
+    if (eff.map.outOfScope.length) {
+      var o = el('div', 'kv')
+      o.appendChild(el('b', null, '不做（Out of scope）'))
+      var oul = el('ul', 'plain')
+      eff.map.outOfScope.forEach(function (x) { oul.appendChild(el('li', null, x)) })
+      o.appendChild(oul)
+      mapCard.appendChild(o)
+    }
+    if (eff.map.progress !== null && eff.map.progress !== undefined) {
+      var p = el('div', 'kv')
+      p.appendChild(el('b', null, '地图进度'))
+      p.appendChild(document.createTextNode(eff.map.progress + '%'))
+      mapCard.appendChild(p)
+    }
+  }
+
+  var specCard = el('div', 'card')
+  var specHead = el('div', 'cardhead')
+  var specTitle = el('h2', null, '规格（spec.md）')
+  if (eff.spec.formatWarnings && eff.spec.formatWarnings.length) specTitle.appendChild(warnBadge(eff.spec.formatWarnings))
+  specHead.appendChild(specTitle)
+  if (eff.spec.exists) {
+    var readBtn = el('button', null, '展开阅读')
+    readBtn.title = '全宽弹窗阅读这篇规格（Markdown 渲染；打开期间的轮询刷新不会打扰）'
+    readBtn.addEventListener('click', function () { openReadingModal(eff) })
+    specHead.appendChild(readBtn)
+  }
+  specCard.appendChild(specHead)
+  if (!eff.spec.exists) {
+    specCard.appendChild(el('div', 'sub', '还没有 spec.md。'))
+  } else {
+    var s1 = el('div', 'kv')
+    s1.appendChild(el('b', null, '标题'))
+    s1.appendChild(document.createTextNode(eff.spec.title || '（无标题）'))
+    specCard.appendChild(s1)
+    var s2 = el('div', 'kv')
+    s2.appendChild(el('b', null, '篇幅'))
+    s2.appendChild(document.createTextNode(eff.spec.contentLength + ' 个非空白字符'))
+    specCard.appendChild(s2)
+    var viewer = el('div', 'md spec-preview')
+    renderMarkdown(eff.spec.content, viewer)
+    viewer.style.maxHeight = '260px'
+    viewer.style.overflow = 'auto'
+    specCard.appendChild(viewer)
+  }
+  cols.appendChild(mapCard)
+  cols.appendChild(specCard)
+  return cols
+}
+
+var AGREEMENT = [
+  '本项目的 AI 编程流程遵循 .scratch 产物约定，请严格照做：',
+  '1. 拷问（grilling）：结论写入 .scratch/<特性名>/map.md，必须含「## Destination」一节；还没定的事写进「## Not yet specified」。',
+  '2. 规格（to-spec）：把讨论沉淀为 .scratch/<特性名>/spec.md。',
+  '3. 拆票（to-tickets）：每张票一个文件，路径 .scratch/<特性名>/issues/<两位编号>-<短名>.md，',
+  '   正文含行内字段「Status:」（ready-for-agent / claimed / resolved）、「Type:」（research/prototype/grilling/task）、「Blocked by: #编号」。',
+  '4. 实现（implement）：逐票实现；每完成一张票，就把该票文件里的 Status 行改为 resolved。',
+].join('\n')
+
+/* 建 effort 骨架指令（票 05）：空态页「工作约定」旁的第二段一键复制——粘给任意 Agent 即可起步
+   新 effort。单段纯文本、路径相对追踪目录、一句动作一句预期盘点变化，与票行实现指引同风格
+  （不另起模板体系）。 */
+var SCAFFOLD_HINT = '请新建一个 effort 骨架：在当前追踪目录下创建 .scratch/<特性名>/map.md（特性名自定，建议小写短横线英文），文件里写「## Destination」一节（说清这个 effort 的终点是什么）和「## Not yet specified」一节（还没定的事逐条列在这里）。完成后流程板下一拍盘点就会出现这个新 effort（Grill 阶段进行中）。'
+
+function renderEmpty() {
+  var card = el('div', 'card empty')
+  card.appendChild(el('h2', null, '这里还没有任何 .scratch 产物'))
+  var p = el('div', 'sub', '流程板是被动追踪：任何 Agent 只要按下面的约定把产物写进 ' + (state ? state.root : '') + '/.scratch/，这里就会自动出现进度。把下面的「工作约定」整段复制给你的 Agent（贴进系统提示或对话开头都行）：')
+  card.appendChild(p)
+  var pre = el('pre', 'agreement', AGREEMENT)
+  card.appendChild(pre)
+  var btn = el('button', 'primary', '复制工作约定')
+  btn.addEventListener('click', function () { copyText(AGREEMENT) })
+  card.appendChild(btn)
+  // 第二段（票 05）：不想从整段约定开始，就先建一个 effort 骨架起步
+  card.appendChild(el('h2', null, '起步一个 effort'))
+  card.appendChild(el('div', 'sub', '或者先从一个小 effort 开始——把下面这段复制给你的 Agent，它就知道第一批产物怎么落：'))
+  card.appendChild(el('pre', 'agreement', SCAFFOLD_HINT))
+  var scaffoldBtn = el('button', 'primary', '复制建骨架指令')
+  scaffoldBtn.addEventListener('click', function () { copyText(SCAFFOLD_HINT) })
+  card.appendChild(scaffoldBtn)
+  return card
+}
+
+function render() {
+  renderTabs()
+  updateFrontierBadge()
+  var main = document.getElementById('main')
+  main.textContent = ''
+  if (!state) { renderSig = mainRenderSignature(); return }
+  if (!state.scratchExists || !state.efforts.length) {
+    main.appendChild(renderEmpty())
+    renderSig = mainRenderSignature()
+    return
+  }
+  if (selected === ALL_VIEW) {
+    main.appendChild(renderAllView())
+    renderSig = mainRenderSignature()
+    return
+  }
+  var eff = currentEffort()
+  main.appendChild(renderChain(eff))
+  main.appendChild(renderTickets(eff))
+  main.appendChild(renderMapSpec(eff))
+  renderSig = mainRenderSignature()
+}
+
+/* ── 全部视图（票 02）：每 effort 一行的跨 effort 汇总 ──
+   两组制：进行中在前、按最新产物时间（latestAt，盘点载荷带出）倒序——先看到热的事；
+   完工在后、默认折叠成一行计数。行点击 = 既有 effort 切换（只改选中项，零写）。 */
+function renderAllView() {
+  var card = el('div', 'card')
+  var head = el('div', 'cardhead')
+  head.appendChild(el('h2', null, '全部 effort · 一屏纵览（' + state.efforts.length + ' 个）'))
+  var showDone = lsFlag(ALL_SHOW_DONE_KEY, true)
+  var toggle = el('button', null, showDone ? '隐藏完工' : '显示完工')
+  toggle.title = '完工 effort（四格全绿）是否占版面；折叠与开关偏好只记本浏览器'
+  toggle.setAttribute('aria-pressed', showDone ? 'true' : 'false')
+  toggle.addEventListener('click', function () {
+    setLsFlag(ALL_SHOW_DONE_KEY, !showDone)
+    render()
+  })
+  head.appendChild(toggle)
+  card.appendChild(head)
+
+  var byLatestDesc = function (a, b) {
+    var x = a.latestAt || ''
+    var y = b.latestAt || ''
+    return x < y ? 1 : x > y ? -1 : 0
+  }
+  var active = state.efforts.filter(function (e) { return !e.chain.complete }).sort(byLatestDesc)
+  var done = state.efforts.filter(function (e) { return e.chain.complete }).sort(byLatestDesc)
+
+  var table = el('table')
+  var thead = el('thead')
+  var hr = el('tr')
+  var headers = ['Effort', '链（四格缩影）', '进度', '票', '迷雾', '最近活跃']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  thead.appendChild(hr)
+  table.appendChild(thead)
+  var tbody = el('tbody')
+  active.forEach(function (e) { tbody.appendChild(effortRow(e)) })
+  if (showDone) {
+    var collapsed = lsFlag(ALL_DONE_COLLAPSED_KEY, true)
+    tbody.appendChild(doneGroupRow(done.length, collapsed))
+    if (!collapsed) done.forEach(function (e) { tbody.appendChild(effortRow(e)) })
+  }
+  table.appendChild(tbody)
+  card.appendChild(table)
+  return card
+}
+
+/** 全部视图的一行：四格缩影（完成/当前/待命三色小格）+ 进度 + 票计数 + 迷雾 + 最近活跃。 */
+function effortRow(e) {
+  var tr = el('tr', 'effortrow')
+  var tdName = el('td')
+  tdName.appendChild(el('div', 'name', effortTabLabel(e)))
+  tdName.appendChild(el('div', 'sub', e.title))
+  tr.appendChild(tdName)
+  var tdChain = el('td')
+  var lets = el('span', 'stagelets')
+  var statusZh = { done: '完成', current: '当前', pending: '待命' }
+  e.chain.stages.forEach(function (s) {
+    var d = el('span', 'stagelet ' + s.status)
+    d.title = s.title + ' · ' + statusZh[s.status]
+    d.setAttribute('aria-hidden', 'true') // 缩影格是装饰，状态色之外的信息进整行 aria-label
+    lets.appendChild(d)
+  })
+  tdChain.appendChild(lets)
+  tr.appendChild(tdChain)
+  tr.appendChild(el('td', null, e.chain.progress + '%'))
+  tr.appendChild(el('td', null, e.chain.counts.closed + '/' + e.chain.counts.tickets))
+  tr.appendChild(el('td', null, String((e.map && e.map.fogCount) || 0)))
+  tr.appendChild(el('td', null, e.latestAt ? fmtRelative(e.latestAt) : '—'))
+  var aria = effortTabLabel(e) + '：进度 ' + e.chain.progress + '%，票 ' + e.chain.counts.closed + '/' + e.chain.counts.tickets +
+    ' 已关闭，迷雾 ' + ((e.map && e.map.fogCount) || 0) + ' 条。按 Enter 切换到这个 effort'
+  tr.title = '点一下切换到这个 effort'
+  tr.setAttribute('aria-label', aria)
+  clickable(tr, function () { selected = e.slug; render() })
+  return tr
+}
+
+/** 完工组的折叠/展开行（一行计数；点它切折叠态，偏好记本浏览器）。 */
+function doneGroupRow(count, collapsed) {
+  var tr = el('tr', 'donegroup')
+  var td = el('td', null, collapsed ? '✓ 完工 effort：' + count + ' 个 · 已折叠（点开展开）' : '✓ 完工 effort（' + count + ' 个）· 点收起')
+  td.colSpan = 6
+  tr.appendChild(td)
+  tr.title = collapsed ? '展开完工 effort 明细行' : '折叠完工 effort 明细行'
+  tr.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
+  clickable(tr, function () {
+    setLsFlag(ALL_DONE_COLLAPSED_KEY, !collapsed)
+    render()
+  })
+  return tr
+}
+
+/* 主区渲染的数据签名：render() 消耗的全部输入（含档位过滤与全部视图的两个偏好——
+   都是渲染输入，变了就得重画）。签名没变就跳过重画——轮询热路径上最常见的情形是
+   「什么都没变」，此时一根手指都不碰 DOM（与下拉的签名模式同款）。 */
+function mainRenderSignature() {
+  return JSON.stringify([
+    selected,
+    state ? state.scratchExists : null,
+    state ? state.efforts : null,
+    ticketFilter,
+    lsFlag(ALL_SHOW_DONE_KEY, true),
+    lsFlag(ALL_DONE_COLLAPSED_KEY, true),
+  ])
+}
+
+/* 重画 #main 前的滚动快照：窗口位置 + 子树内所有滚着的容器。
+   render() 是确定性构建（同数据同结构），按子树索引路径定位即可在重画后找回对应节点。
+   数据变了高度可能变，恢复是尽力的——仍远好于每拍拍回顶部。 */
+function snapshotScrolls(rootEl) {
+  var inner = []
+  function walk(node, path) {
+    for (var i = 0; i < node.children.length; i++) {
+      var c = node.children[i]
+      var p = path.concat(i)
+      if (c.scrollTop > 0) inner.push({ path: p, top: c.scrollTop })
+      walk(c, p)
+    }
+  }
+  walk(rootEl, [])
+  return { y: window.scrollY || window.pageYOffset || 0, inner: inner }
+}
+
+function restoreScrolls(rootEl, snap) {
+  snap.inner.forEach(function (s) {
+    var node = rootEl
+    for (var j = 0; j < s.path.length && node; j++) node = node.children[s.path[j]]
+    if (node) node.scrollTop = s.top
+  })
+  // 窗口没滚过就不动它：恢复到 0 本就是无操作，也免去无谓的滚动副作用
+  if (snap.y) window.scrollTo(0, snap.y)
+}
+
+function renderMeta(ok) {
+  var m = document.getElementById('meta')
+  m.textContent = '追踪：' + (state ? state.root : '—') + (ok && lastOk ? ' · 已刷新 ' + lastOk : '')
+  if (state && state.configPath) m.title = '配置文件：' + state.configPath + '（追踪目录、端口、轮询间隔都在里面改）'
+}
+
+/* 按模式排表（票 06 三档）：
+   惰性——不排表（零自动请求，只靠「立即刷新」按钮与操作后自动一拍）；
+   观测——页面不可见时熄火（回前台由 visibilitychange 立即补一拍，再由此续表）；
+   展示——保持原定时行为（不可见时 refresh 跳过请求，但表照排）。 */
+function schedulePoll() {
+  clearTimeout(pollTimer)
+  if (pollMode === 'manual') return
+  if (pollMode === 'observe' && document.hidden) return
+  pollTimer = setTimeout(function () { refresh(false) }, pollMs)
+}
+
+/* 惰性档常驻徽标：把「这是静态页、数据停在盘点时刻」写进界面，不误当实时数据。 */
+function applyPollModeUI() {
+  var b = document.getElementById('manualBadge')
+  if (pollMode === 'manual') {
+    b.textContent = '手动模式' + (lastOk ? ' · ' + lastOk + ' 盘点' : '')
+    b.hidden = false
+  } else {
+    b.hidden = true
+  }
+}
+
+/* ── 桌面通知（票 04）：轮询新旧两拍的结构化 diff → 桌面通知 ──
+   偏好默认关、只存本浏览器（沿主题键命名法，不进 config.json）；开关在设置弹窗，
+   开启即申请权限、被拒回落并提示补救路径。免打扰与轮询模式天然联动：惰性档零自动拍
+   （全部拍都是用户主动触发，一律不通知）；观测/展示档回前台补拍的那一拍按「积压」
+   聚合为一条「期间 N 项变化」，不逐条轰炸。 */
+var NOTIFY_KEY = 'flowdeck-notify'
+var notifyBacklog = false // 回前台补拍标记：下一拍成功响按积压聚合（304 拍没消费就顺延到下一拍）
+
+function notifyOn() {
+  try { return localStorage.getItem(NOTIFY_KEY) === '1' } catch (e) { return false }
+}
+
+/* 盘点事件推导（票 04）：这是 notify.mjs deriveEvents 的 ES5 镜像（零构建单文件没法共享该模块，
+   两处靠注释互指钉住，同 frontierOf / isFrontierTicket 先例）——改那边必须同步这里。
+   事件只从「下一拍还在的 effort」推导：effort 消失零事件零误报；仅 mtime 变化（updatedAt /
+   latestAt / git 旁证 / generatedAt）不进比较面；换目录两拍不可比，root 不同零事件。 */
+var NOTIFY_STAGE_LABELS = { grill: 'Grill 拷问', spec: 'To-Spec 规格', tickets: 'To-Tickets 拆票', implement: 'Implement 实现' }
+var NOTIFY_STAGE_RANK = { grill: 0, spec: 1, tickets: 2, implement: 3 }
+
+function notifyEffortName(slug) { return slug === '__root' ? '.scratch 根目录' : slug }
+function notifyStageLabel(id) { return id ? (NOTIFY_STAGE_LABELS[id] || id) : '四阶段完成' }
+function notifyStageRank(id) {
+  if (!id) return 4
+  return Object.prototype.hasOwnProperty.call(NOTIFY_STAGE_RANK, id) ? NOTIFY_STAGE_RANK[id] : -1
+}
+
+function deriveNotifyEvents(prev, next) {
+  if (!prev || !next || !prev.efforts || !next.efforts) return []
+  if (String(prev.root || '') !== String(next.root || '')) return []
+  var prevBySlug = {}
+  prev.efforts.forEach(function (e) { prevBySlug[e.slug] = e })
+  var events = []
+  next.efforts.forEach(function (ne) {
+    var name = notifyEffortName(ne.slug)
+    var pe = prevBySlug[ne.slug]
+    if (!pe) {
+      events.push({ kind: 'effort-new', effort: ne.slug, text: '新 effort：' + name })
+      return
+    }
+    var prevTickets = {}
+    ;(pe.tickets || []).forEach(function (t) { prevTickets[t.key] = t })
+    ;(ne.tickets || []).forEach(function (t) {
+      var pt = prevTickets[t.key]
+      if (!pt) return
+      if (pt.state !== 'closed' && t.state === 'closed') events.push({ kind: 'ticket-closed', effort: ne.slug, key: t.key, text: name + '：票 #' + t.key + ' 已关闭' })
+      else if (pt.state === 'closed' && t.state !== 'closed') events.push({ kind: 'ticket-reopened', effort: ne.slug, key: t.key, text: name + '：票 #' + t.key + ' 重新打开' })
+    })
+    var fogPrev = (pe.map && pe.map.fogCount) || 0
+    var fogNext = (ne.map && ne.map.fogCount) || 0
+    if (fogPrev !== fogNext) events.push({ kind: 'fog', effort: ne.slug, from: fogPrev, to: fogNext, text: name + '：迷雾 ' + fogPrev + '→' + fogNext })
+    var prevStep = pe.chain && pe.chain.currentId ? pe.chain.currentId : null
+    var nextStep = ne.chain && ne.chain.currentId ? ne.chain.currentId : null
+    if (prevStep !== nextStep) {
+      events.push({ kind: 'stage', effort: ne.slug, from: prevStep, to: nextStep,
+        text: name + '：阶段' + (notifyStageRank(nextStep) > notifyStageRank(prevStep) ? '推进' : '回落') + ' ' + notifyStageLabel(prevStep) + ' → ' + notifyStageLabel(nextStep) })
+    }
+  })
+  return events
+}
+
+/* 单条通知：点击 = 聚焦窗口并切到事件涉及的 effort（只改选中项，零写）。 */
+function fireNotification(body, effortSlug) {
+  try {
+    var n = new Notification('流程板' + (state && state.rootName ? ' · ' + state.rootName : ''), { body: body })
+    n.addEventListener('click', function () {
+      window.focus()
+      if (effortSlug && state && state.efforts.some(function (e) { return e.slug === effortSlug })) {
+        selected = effortSlug
+        render()
+      }
+    })
+  } catch (e) { /* 通知构造失败（极端环境）静默：界面主路径不受影响 */ }
+}
+
+/* diff 结果的消费策略：用户主动触发的拍（force 且非补拍）不通知——人在看；
+   补拍（回前台）聚合成一条；其余（可见期间的定时拍）逐条出。 */
+function dispatchNotifications(prev, next, opts) {
+  if (!notifyOn() || !prev) return
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  if (opts.forced) return
+  var evts = deriveNotifyEvents(prev, next)
+  if (!evts.length) return
+  if (opts.backlog) {
+    fireNotification('离开期间有 ' + evts.length + ' 项变化', null)
+    return
+  }
+  evts.forEach(function (e) { fireNotification(e.text, e.effort) })
+}
+
+function refresh(force) {
+  if (document.hidden && !force) { schedulePoll(); return }
+  apiFetch('/api/state', { etag: lastEtag || undefined, rawBody: true }).then(function (res) {
+    if (res.status === 304) return null // 内容编号没变（服务端指纹短路的那拍）：本地 state 就是最新，不重解析
+    if (!res.ok) throw new Error(res.errorText) // 401 走统一定向文案，其余服务端 .error 优先
+    if (res.etag) lastEtag = res.etag
+    if (res.raw) { lastSnapshot = res.raw; updateSnapshotBtn() } // 原始响应体顺路存下：快照的「最近一拍」
+    return res.data
+  }).then(function (data) {
+    var d = new Date()
+    lastOk = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0')
+    document.getElementById('err').className = 'banner'
+    if (data !== null) {
+      var prev = state
+      var backlog = notifyBacklog
+      notifyBacklog = false
+      state = data
+      if (data.pollMs && data.pollMs !== pollMs) pollMs = data.pollMs
+      if (data.pollMode) pollMode = data.pollMode // 模式跟服务端配置走（跨浏览器一致；不存 localStorage）
+      if (selected && selected !== ALL_VIEW && !state.efforts.some(function (e) { return e.slug === selected })) selected = null
+      // 数据签名没变就不重画主区（不打扰阅读与滚动）；变了才重建，且先存后恢复滚动位置。
+      if (mainRenderSignature() !== renderSig) {
+        var mainEl = document.getElementById('main')
+        var snap = snapshotScrolls(mainEl)
+        render()
+        restoreScrolls(mainEl, snap)
+      }
+      // 桌面通知（票 04）：新旧两拍的 diff 在渲染之后消费——通知点击切 effort 时面对的是新数据
+      dispatchNotifications(prev, data, { backlog: backlog, forced: force && !backlog })
+    }
+    applyPollModeUI()
+    renderMeta(true)
+    // 下拉开着时：数据没变就不动 DOM（不打扰浏览）；变了就原位重画，保持展开、不抢焦点。
+    if (rootMenuState.open && rootMenuSignature() !== rootMenuSig) renderRootMenu()
+  }).catch(function (e) {
+    showErr('刷新失败：' + (e && e.message ? e.message : e) + '（服务还在跑吗？）')
+  }).finally(function () {
+    schedulePoll()
+  })
+}
+
+function switchRoot() {
+  var input = document.getElementById('rootInput')
+  var raw = (input.value || '').trim()
+  if (!raw) { input.focus(); return }
+  var btn = document.getElementById('switchBtn')
+  btn.disabled = true
+  apiFetch('/api/config', { body: JSON.stringify({ root: raw }) }).then(function (res) {
+    btn.disabled = false
+    if (!res.ok) {
+      showErr('换目录失败：' + res.errorText)
+      return
+    }
+    selected = null
+    toast('已切换到 ' + res.data.root + '，并写进了 config.json')
+    refresh(true)
+  }).catch(function (e) {
+    btn.disabled = false
+    showErr('换目录失败：' + (e && e.message ? e.message : e))
+  })
+}
+
+/* ── 常用目录下拉：地址栏的组合框 ──
+   数据来自盘点载荷的 recentRoots（[{path, exists}]，最近使用在前）。
+   当前追踪目录永远置顶展示（带「当前」标示，未入存储列表时也展示）——纯界面行为，不写回。 */
+var rootMenuState = { open: false, hl: 0, typed: false }
+var rootMenuSig = ''   // 最近一次渲染的数据签名：轮询刷新时数据没变就不重画（不动 DOM 也就不动焦点）
+var ROOT_MENU_EMPTY_HINT = '切换过的目录会出现在这里'
+
+function showErr(msg) {
+  var b = document.getElementById('err')
+  b.className = 'banner err'
+  b.textContent = msg
+}
+
+function rootMenuStoredEmpty() {
+  return !(state && state.recentRoots && state.recentRoots.length)
+}
+
+function rootMenuSignature() {
+  return JSON.stringify([rootMenuFiltered(), rootMenuStoredEmpty()])
+}
+
+function rootMenuList() {
+  var list = []
+  var seen = {}
+  if (state && state.root) { list.push({ path: state.root, exists: true, current: true }); seen[state.root] = true }
+  ;((state && state.recentRoots) || []).forEach(function (r) {
+    if (!r || !r.path || seen[r.path]) return
+    seen[r.path] = true
+    list.push({ path: r.path, exists: !!r.exists, current: false })
+  })
+  return list
+}
+
+/* 过滤只对「本次展开后打过的字」生效：刚展开时展示全量（不打字也能浏览全部常用目录），
+   上一次切换留在输入框里的路径不算过滤词。 */
+function rootMenuFiltered() {
+  if (!rootMenuState.typed) return rootMenuList()
+  var q = (document.getElementById('rootInput').value || '').trim().toLowerCase()
+  var all = rootMenuList()
+  if (!q) return all
+  return all.filter(function (e) { return e.path.toLowerCase().indexOf(q) >= 0 })
+}
+
+function baseName(p) {
+  var s = String(p)
+  var cut = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+  return s.slice(cut + 1) || s
+}
+
+function renderRootMenu() {
+  var box = document.getElementById('rootMenu')
+  if (!rootMenuState.open) { box.hidden = true; box.textContent = ''; rootMenuSig = ''; return }
+  var entries = rootMenuFiltered()
+  if (rootMenuState.hl >= entries.length) rootMenuState.hl = Math.max(0, entries.length - 1)
+  box.textContent = ''
+  box.hidden = false
+  var storedEmpty = rootMenuStoredEmpty()
+  if (!entries.length) {
+    box.appendChild(el('div', 'menu-empty', storedEmpty ? ROOT_MENU_EMPTY_HINT : '没有匹配的常用目录'))
+  } else {
+    entries.forEach(function (e, i) {
+      var opt = el('div', 'opt' + (e.exists ? '' : ' missing') + (i === rootMenuState.hl ? ' hl' : ''))
+      var main = el('div', 'main', baseName(e.path))
+      if (e.current) main.appendChild(el('span', 'chip cur', '当前'))
+      if (!e.exists) main.appendChild(el('span', 'chip', '目录不存在'))
+      opt.appendChild(main)
+      opt.appendChild(el('div', 'sub', e.path))
+      var del = el('button', 'del', '✕')
+      del.title = '从常用目录里删掉这一条（立即写回 config.json，删错了重新切一次就会收回来）'
+      del.addEventListener('click', function (ev) { ev.stopPropagation(); removeRecentRoot(e.path) })
+      opt.appendChild(del)
+      if (e.exists) {
+        opt.title = '点一下切换到这个目录'
+        // 键盘层：下拉项可 Tab 停留、Enter/Space 与点按同路切换（失效条目不可点，也不进 Tab 序）
+        clickable(opt, function () { pickRecentRoot(e.path) })
+      } else {
+        opt.title = '这个目录在本机上不存在：不能切换，但可以删除'
+      }
+      box.appendChild(opt)
+    })
+    if (storedEmpty) box.appendChild(el('div', 'menu-empty', ROOT_MENU_EMPTY_HINT))
+  }
+  rootMenuSig = rootMenuSignature()
+}
+
+function openRootMenu() {
+  if (!rootMenuState.open) { rootMenuState.open = true; rootMenuState.hl = 0; rootMenuState.typed = false; renderRootMenu() }
+}
+
+function closeRootMenu() {
+  if (rootMenuState.open) { rootMenuState.open = false; renderRootMenu() }
+}
+
+function pickRecentRoot(path) {
+  var input = document.getElementById('rootInput')
+  input.value = path
+  closeRootMenu()
+  switchRoot()
+}
+
+function removeRecentRoot(path) {
+  apiFetch('/api/recent-roots', { body: JSON.stringify({ remove: path }) }).then(function (res) {
+    if (!res.ok) {
+      showErr('删除常用目录失败：' + res.errorText)
+      return
+    }
+    if (state) state.recentRoots = res.data.recentRoots || []
+    renderRootMenu()
+  }).catch(function (e) {
+    showErr('删除常用目录失败：' + (e && e.message ? e.message : e))
+  })
+}
+
+/* ── 前沿徽标 + 面板（票 02）：顶栏常驻，点开看「现在就能干什么」──
+   面板打开时按当拍 state 现画；票行点击 = 既有 effort 切换（只改 selected，零新机制零写）。 */
+var frontierState = { open: false }
+
+function updateFrontierBadge() {
+  var b = document.getElementById('frontierBadge')
+  if (!state || !state.efforts || !state.efforts.length) {
+    b.hidden = true
+    closeFrontierPanel()
+    return
+  }
+  var t = frontierTotals()
+  b.hidden = false
+  b.textContent = '迷雾 ' + t.fog + ' · 前沿 ' + t.frontier
+}
+
+function closeFrontierPanel() {
+  if (frontierState.open) { frontierState.open = false; renderFrontierPanel() }
+}
+
+function renderFrontierPanel() {
+  var box = document.getElementById('frontierPanel')
+  if (!frontierState.open) { box.hidden = true; box.textContent = ''; return }
+  box.textContent = ''
+  box.hidden = false
+  var groups = ((state && state.efforts) || [])
+    .map(function (e) { return { eff: e, list: frontierOf(e) } })
+    .filter(function (g) { return g.list.length })
+  if (!groups.length) {
+    box.appendChild(el('div', 'fempty', '现在没有前沿票：剩下的票要么被认领、要么还被依赖阻塞。'))
+    return
+  }
+  groups.forEach(function (g) {
+    box.appendChild(el('div', 'fgroup', effortTabLabel(g.eff)))
+    g.list.forEach(function (t) {
+      var row = el('div', 'fticket')
+      row.appendChild(el('span', 'key', '#' + t.key))
+      row.appendChild(document.createTextNode(t.title))
+      row.title = '点一下切到 effort ' + effortTabLabel(g.eff)
+      row.setAttribute('aria-label', '前沿票 ' + t.key + ' ' + t.title + '。按 Enter 切换到所属 effort ' + effortTabLabel(g.eff))
+      clickable(row, function () {
+        selected = g.eff.slug
+        closeFrontierPanel()
+        render()
+      })
+      box.appendChild(row)
+    })
+  })
+}
+
+document.getElementById('frontierBadge').addEventListener('click', function (ev) {
+  ev.stopPropagation()
+  frontierState.open = !frontierState.open
+  renderFrontierPanel()
+})
+// 点外面收起（与常用目录下拉同款）；Esc 也收
+document.addEventListener('click', function (ev) {
+  if (!frontierState.open) return
+  var t = ev.target
+  var wrap = document.querySelector('.frontierbox')
+  while (t) { if (t === wrap) return; t = t.parentNode }
+  closeFrontierPanel()
+})
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape' && frontierState.open) closeFrontierPanel()
+})
+
+/* 主题：纸感亮色 ⇄ GitHub 暗色，选择记忆在 localStorage */
+function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark' }
+function applyThemeButton() {
+  document.getElementById('themeBtn').textContent = isDark() ? '☀️ 纸面' : '🌙 暗色'
+}
+document.getElementById('themeBtn').addEventListener('click', function () {
+  var next = isDark() ? 'light' : 'dark'
+  if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+  else document.documentElement.removeAttribute('data-theme')
+  try { localStorage.setItem(THEME_KEY, next) } catch (e) {}
+  applyThemeButton()
+})
+applyThemeButton()
+
+document.getElementById('refreshBtn').addEventListener('click', function () { refresh(true) })
+document.getElementById('switchBtn').addEventListener('click', switchRoot)
+
+/* 组合框接线：聚焦/输入/▾ 展开，↑↓/Enter/Esc 键盘操作，点外面收起 */
+;(function () {
+  var input = document.getElementById('rootInput')
+  input.addEventListener('focus', openRootMenu)
+  input.addEventListener('click', openRootMenu)
+  input.addEventListener('input', function () {
+    rootMenuState.open = true
+    rootMenuState.hl = 0
+    rootMenuState.typed = true
+    renderRootMenu()
+  })
+  document.getElementById('rootMenuBtn').addEventListener('click', function (ev) {
+    ev.stopPropagation()
+    if (rootMenuState.open) closeRootMenu()
+    else { openRootMenu(); input.focus() }
+  })
+  input.addEventListener('keydown', function (ev) {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault()
+      if (!rootMenuState.open) { openRootMenu(); return }
+      var n = rootMenuFiltered().length
+      if (!n) return
+      rootMenuState.hl = ev.key === 'ArrowDown' ? Math.min(rootMenuState.hl + 1, n - 1) : Math.max(rootMenuState.hl - 1, 0)
+      renderRootMenu()
+      return
+    }
+    if (ev.key === 'Escape' && rootMenuState.open) {
+      ev.preventDefault()
+      closeRootMenu()
+      return
+    }
+    if (ev.key === 'Enter') {
+      if (rootMenuState.open) {
+        var pick = rootMenuFiltered()[rootMenuState.hl]
+        if (pick && pick.exists) {
+          ev.preventDefault()
+          pickRecentRoot(pick.path)
+          return
+        }
+      }
+      // 没开下拉、高亮落在失效条目上、或没有匹配条目：回落到「按输入框内容换目录」的老行为
+      switchRoot()
+    }
+  })
+  document.addEventListener('click', function (ev) {
+    if (!rootMenuState.open) return
+    var t = ev.target
+    var wrap = document.querySelector('.rootbox')
+    while (t) { if (t === wrap) return; t = t.parentNode }
+    closeRootMenu()
+  })
+})()
+
+/* ── 弹窗工厂（eng-optimizations 票 05）：三个弹窗共用的「六件套」——
+   显隐、焦点存取（开时聚焦首个可焦点元素、关时归还触发元素）、Esc 关闭、遮罩点击关闭、
+   背景滚动锁（三窗统一：背景滚动是干扰）、焦点圈禁（Tab 在弹窗内循环不外逃）。
+   各窗的内容逻辑（技能包懒加载 / 阅读快照渲染 / 设置表单预填）留在各自的打开函数。 */
+function makeModal(el) {
+  var st = { open: false, lastFocus: null }
+  function focusables() {
+    return Array.prototype.filter.call(
+      el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      function (n) { return !n.disabled && !(n.closest && n.closest('[hidden]')) }
+    )
+  }
+  function open() {
+    if (st.open) return
+    st.open = true
+    st.lastFocus = document.activeElement
+    el.hidden = false
+    document.body.style.overflow = 'hidden'
+    var first = focusables()[0]
+    if (first && first.focus) first.focus()
+  }
+  function close() {
+    if (!st.open) return
+    st.open = false
+    el.hidden = true
+    document.body.style.overflow = ''
+    if (st.lastFocus && st.lastFocus.focus) st.lastFocus.focus()
+  }
+  el.querySelector('.mask').addEventListener('click', close)
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && st.open) close()
+  })
+  el.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Tab' || !st.open) return
+    var list = focusables()
+    if (!list.length) { ev.preventDefault(); return }
+    var idx = list.indexOf(document.activeElement)
+    if (ev.shiftKey) {
+      if (idx <= 0) { ev.preventDefault(); list[list.length - 1].focus() }
+    } else if (idx === list.length - 1 || idx < 0) {
+      ev.preventDefault()
+      list[0].focus()
+    }
+  })
+  return { open: open, close: close, isOpen: function () { return st.open } }
+}
+
+/* ── 技能包弹窗：docs/skills/ 全景介绍的静态展示 ──
+   文档是仓库里手写的 Markdown（每篇 frontmatter 供服务端 /api/skills 出清单），
+   界面只负责取来渲染。渲染器只覆盖文档用到的语法（标题/列表/引用/粗体/行内码/链接），
+   行内容全部经 textContent 组装进安全 DOM，不走 innerHTML。 */
+var skillsState = { list: null, current: null, cache: {} }
+var skillsModalCtl = makeModal(document.getElementById('skillsModal'))
+var SKILL_CATEGORY_LABELS = { overview: '总览', engineering: '工程流程', productivity: '效率与协作', misc: '专项工具', 'in-progress': '开发中' }
+
+/** 行内语法：**粗体**、`代码`、*斜体*、词边界 _斜体_、[文字](链接)。链接指向同目录 .md 的在弹窗内跳转，其余新开标签页。 */
+function mdInline(line) {
+  var frag = document.createDocumentFragment()
+  // 斜体排粗体之后：同一位置 ** 先被粗体分支吃掉，剩下的单个 * 才轮到斜体；
+  // _ 斜体要求两侧不是 ASCII 字词字符（snake_case 不误伤；中文标点/汉字紧贴下划线算边界）。
+  var re = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\s](?:[^*]*[^\s*])?)\*|(?<=[^A-Za-z0-9_]|^)_([^_\s](?:[^_]*[^\s_])?)_(?![A-Za-z0-9_])|\[([^\]]+)\]\(([^()\s]+)\)/g
+  var last = 0
+  var mm
+  function plain(t) { frag.appendChild(document.createTextNode(t)) }
+  while ((mm = re.exec(line))) {
+    if (mm.index > last) plain(line.slice(last, mm.index))
+    if (mm[1] !== undefined) {
+      var b = document.createElement('b')
+      b.textContent = mm[1]
+      frag.appendChild(b)
+    } else if (mm[2] !== undefined) {
+      var c = document.createElement('code')
+      c.textContent = mm[2]
+      frag.appendChild(c)
+    } else if (mm[3] !== undefined || mm[4] !== undefined) {
+      var it = document.createElement('i')
+      it.textContent = mm[3] !== undefined ? mm[3] : mm[4]
+      frag.appendChild(it)
+    } else {
+      var a = document.createElement('a')
+      a.textContent = mm[5]
+      var href = mm[6]
+      if (/^(\.\/)?[A-Za-z0-9-]+\.md$/.test(href)) {
+        var name = href.replace(/^\.\/|\.md$/g, '')
+        a.href = '#'
+        a.title = '在弹窗里打开这篇介绍'
+        a.addEventListener('click', function (ev) { ev.preventDefault(); openSkillDoc(name) })
+      } else {
+        a.href = href
+        a.target = '_blank'
+        a.rel = 'noopener'
+      }
+      frag.appendChild(a)
+    }
+    last = re.lastIndex
+  }
+  if (last < line.length) plain(line.slice(last))
+  return frag
+}
+
+function isMdListLine(s) { return /^\s*[-*]\s+/.test(s) }
+function isMdOlLine(s) { return /^\s*\d+[.]\s+/.test(s) }
+function isMdTableDivider(s) { return /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(s || '') }
+function isMdStructLine(s) {
+  return /^(#{1,4}\s|>|```|~~~)/.test(s) || /^\s*\|/.test(s) || isMdListLine(s) || isMdOlLine(s) || /^(-{3,}|\*{3,})\s*$/.test(s)
+}
+
+/** 一行表格 → <tr>：剥首尾竖线后按 | 切格，单元格内容走行内语法。 */
+function mdRow(line, cellTag) {
+  var tr = document.createElement('tr')
+  var cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
+  cells.forEach(function (c) {
+    var cell = document.createElement(cellTag)
+    cell.appendChild(mdInline(c.trim()))
+    tr.appendChild(cell)
+  })
+  return tr
+}
+
+function renderMarkdown(text, box) {
+  box.textContent = ''
+  var fm = /^---\n[\s\S]*?\n---\n*/.exec(text)
+  if (fm) text = text.slice(fm[0].length)
+  // 文档头部的机器字段行（Status:/Type:/Labels:/Blocked by:）是给扫描器看的，不进阅读视图
+  text = text.replace(/^((?:Status|Type|Labels|Blocked by)\s*:[^\n]*\n+)+/i, '')
+  var lines = text.replace(/\r\n/g, '\n').split('\n')
+  var i = 0
+  while (i < lines.length) {
+    var line = lines[i]
+    if (!line.trim()) { i++; continue }
+    var fence = /^\s*(```|~~~)/.exec(line)
+    if (fence) {
+      // 围栏代码块：开合标记之间的内容原样进 <pre><code>（textContent 直塞，不走行内语法）
+      var codeText = []
+      i++
+      while (i < lines.length && lines[i].trim().indexOf(fence[1]) !== 0) { codeText.push(lines[i]); i++ }
+      if (i < lines.length) i++
+      var pre = document.createElement('pre')
+      var codeEl = document.createElement('code')
+      codeEl.textContent = codeText.join('\n')
+      pre.appendChild(codeEl)
+      box.appendChild(pre)
+      continue
+    }
+    var h = /^(#{1,4})\s+(.*)$/.exec(line)
+    if (h) {
+      var hn = document.createElement('h' + Math.min(h[1].length, 3))
+      hn.appendChild(mdInline(h[2]))
+      box.appendChild(hn)
+      i++
+      continue
+    }
+    if (/^(-{3,}|\*{3,})\s*$/.test(line)) { box.appendChild(document.createElement('hr')); i++; continue }
+    // 表格：首行 | 开头、次行是 |---|---| 风格的分隔行；往后连续的 | 行都算表体
+    if (line.trim().charAt(0) === '|' && isMdTableDivider(lines[i + 1])) {
+      var tblWrap = document.createElement('div')
+      tblWrap.className = 'tblwrap'
+      var tbl = document.createElement('table')
+      var thead = document.createElement('thead')
+      thead.appendChild(mdRow(line, 'th'))
+      tbl.appendChild(thead)
+      var tbody = document.createElement('tbody')
+      i += 2
+      while (i < lines.length && lines[i].trim() && lines[i].trim().charAt(0) === '|') {
+        tbody.appendChild(mdRow(lines[i], 'td'))
+        i++
+      }
+      tbl.appendChild(tbody)
+      tblWrap.appendChild(tbl)
+      box.appendChild(tblWrap)
+      continue
+    }
+    if (/^>/.test(line)) {
+      var q = document.createElement('blockquote')
+      var qtext = ''
+      while (i < lines.length && /^>/.test(lines[i])) {
+        qtext += (qtext ? '\n' : '') + lines[i].replace(/^>\s?/, '')
+        i++
+      }
+      var qp = document.createElement('p')
+      qp.appendChild(mdInline(qtext))
+      q.appendChild(qp)
+      box.appendChild(q)
+      continue
+    }
+    if (isMdListLine(line) || isMdOlLine(line)) {
+      var ol = isMdOlLine(line)
+      var container = document.createElement(ol ? 'ol' : 'ul')
+      var itemRe = ol ? /^\s*\d+[.]\s+/ : /^\s*[-*]\s+/
+      while (i < lines.length && itemRe.test(lines[i])) {
+        var li = document.createElement('li')
+        li.appendChild(mdInline(lines[i].replace(itemRe, '')))
+        container.appendChild(li)
+        i++
+        // 空行后的同形列表项算同一张松散列表（生成文档里条目之间隔空行）
+        if (i < lines.length && !lines[i].trim()) {
+          var j = i
+          while (j < lines.length && !lines[j].trim()) j++
+          if (j < lines.length && itemRe.test(lines[j])) i = j
+        }
+      }
+      box.appendChild(container)
+      continue
+    }
+    var p = document.createElement('p')
+    var ptext = ''
+    while (i < lines.length && lines[i].trim() && !isMdStructLine(lines[i])) {
+      ptext += (ptext ? '\n' : '') + lines[i]
+      i++
+    }
+    p.appendChild(mdInline(ptext))
+    box.appendChild(p)
+  }
+}
+
+function renderSkillsNav() {
+  var nav = document.getElementById('skillsNav')
+  var count = document.getElementById('skillsCount')
+  nav.textContent = ''
+  var list = skillsState.list || []
+  count.textContent = list.length ? list.length + ' 篇介绍 · 来源 docs/skills/' : ''
+  if (!list.length) {
+    nav.appendChild(el('div', 'cat', '技能文档缺失（docs/skills/ 没有内容）'))
+    return
+  }
+  var cats = []
+  var byCat = {}
+  list.forEach(function (s) {
+    if (!byCat[s.category]) { byCat[s.category] = []; cats.push(s.category) }
+    byCat[s.category].push(s)
+  })
+  cats.forEach(function (cat) {
+    nav.appendChild(el('div', 'cat', SKILL_CATEGORY_LABELS[cat] || cat))
+    byCat[cat].forEach(function (s) {
+      var b = el('button', 'item' + (s.name === skillsState.current ? ' on' : ''))
+      var nm = el('span', 'nm')
+      nm.appendChild(document.createTextNode(s.title))
+      if (s.inProgress) nm.appendChild(el('span', 'chip', '开发中'))
+      b.appendChild(nm)
+      b.appendChild(el('span', 'en', s.name))
+      b.title = s.summary
+      b.addEventListener('click', function () { openSkillDoc(s.name) })
+      nav.appendChild(b)
+    })
+  })
+}
+
+function loadSkillDoc(name) {
+  var box = document.getElementById('skillsDoc')
+  var cached = skillsState.cache[name]
+  if (cached !== undefined) {
+    renderMarkdown(cached, box)
+    box.scrollTop = 0
+    return
+  }
+  box.textContent = ''
+  box.appendChild(el('div', 'loading', '加载中…'))
+  apiFetch('/api/skills/' + encodeURIComponent(name), { text: true }).then(function (res) {
+    if (!res.ok) throw new Error(res.errorText)
+    return res.data // text 模式：data 即文档原文
+  }).then(function (text) {
+    skillsState.cache[name] = text
+    if (!skillsModalCtl.isOpen()) return
+    renderMarkdown(text, box)
+    box.scrollTop = 0
+  }).catch(function (e) {
+    if (!skillsModalCtl.isOpen()) return
+    box.textContent = ''
+    box.appendChild(el('div', 'loading', '这篇介绍加载失败：' + (e && e.message ? e.message : e)))
+  })
+}
+
+function openSkillDoc(name) {
+  skillsState.current = name
+  renderSkillsNav()
+  loadSkillDoc(name)
+}
+
+function openSkillsModal(focusName) {
+  if (skillsModalCtl.isOpen()) {
+    // 已开窗：直接定位到要看的篇（技能联动入口的形态；普通入口不带名字则不动）
+    if (focusName) openSkillDoc(focusName)
+    return
+  }
+  skillsModalCtl.open() // 六件套（显隐/焦点/Esc/遮罩/滚动锁/圈禁）归工厂
+  if (skillsState.list === null) {
+    // 内容逻辑留在这里：清单懒加载，只在第一次打开时拉一次；回来后优先定位 focusName（技能联动），否则默认总览
+    document.getElementById('skillsDoc').appendChild(el('div', 'loading', '加载清单中…'))
+    apiFetch('/api/skills').then(function (res) {
+      if (!res.ok) throw new Error(res.errorText)
+      skillsState.list = (res.data && res.data.skills) || []
+      renderSkillsNav()
+      openSkillDoc(focusName || (skillsState.list.length ? skillsState.list[0].name : ''))
+    }).catch(function (e) {
+      showErr('技能清单加载失败：' + (e && e.message ? e.message : e))
+      skillsModalCtl.close()
+    })
+  } else if (focusName) {
+    openSkillDoc(focusName)
+  }
+}
+
+document.getElementById('skillsBtn').addEventListener('click', function () { openSkillsModal() })
+document.getElementById('skillsClose').addEventListener('click', function () { skillsModalCtl.close() })
+/* ── 规格阅读弹窗：全宽精读当前 effort 的 spec ──
+   内容取打开时刻的盘点快照（eff 对象是当次 render 持有的引用，轮询换数据会另造新对象），
+   所以打开期间后台刷新不会重画弹窗——不打扰阅读；显隐/焦点/Esc/遮罩/滚动锁/圈禁归 makeModal。 */
+var readModalCtl = makeModal(document.getElementById('readModal'))
+
+function openReadingModal(eff) {
+  if (readModalCtl.isOpen() || !eff.spec.exists) return
+  // 内容逻辑留在这里：快照渲染（标题、路径、正文）先行，再交工厂开窗聚焦
+  document.getElementById('readTitle').textContent = '规格 · ' + eff.title
+  document.getElementById('readMeta').textContent = '.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'spec.md'
+  var doc = document.getElementById('readDoc')
+  renderMarkdown(eff.spec.content, doc)
+  doc.scrollTop = 0
+  readModalCtl.open()
+}
+
+document.getElementById('readClose').addEventListener('click', function () { readModalCtl.close() })
+
+/* ── 票正文弹窗（票 01）：复用规格阅读弹窗的同一实例换内容，弹窗工厂六件套零改动 ──
+   正文点开才取（懒加载端点 /api/issue），不进轮询载荷；取的是打开时刻的原文快照，
+   打开期间的轮询刷新不碰弹窗。元信息（标题、路径、更新时间）用票行手里的盘点数据，请求回来即换正文。 */
+var issueModalSeq = 0 // 打开序号：关掉再开另一张时，前一张的迟到应答不得落进后一张的弹窗
+
+function issueFilePath(eff, t) {
+  return '.scratch/' + (eff.slug === '__root' ? '' : eff.slug + '/') + 'issues/' + t.fileName
+}
+
+/* 票正文的机器字段行剥除：与 renderMarkdown 头部剥除同一判准的行级版——票的字段行在标题行
+   之后（不在文档头），裸写与加粗两形态都剥；围栏代码块内不剥（示例字段行是内容不是机器字段）。 */
+var TICKET_FIELD_LINE = /^[ \t]*\*{0,2}[ \t]*(Status|Type|Labels?|Blocked[ \t]+by)[ \t]*\*{0,2}[ \t]*[:\uFF1A]/i
+
+function stripTicketFieldLines(text) {
+  var lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
+  var out = []
+  var fence = null
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i]
+    var m = /^\s*(```|~~~)/.exec(l)
+    if (m) {
+      if (!fence) fence = m[1]
+      else if (l.trim().indexOf(fence) === 0) fence = null
+      out.push(l)
+      continue
+    }
+    if (!fence && TICKET_FIELD_LINE.test(l)) continue
+    out.push(l)
+  }
+  return out.join('\n')
+}
+
+function openIssueModal(eff, t) {
+  if (readModalCtl.isOpen()) return
+  var seq = ++issueModalSeq
+  document.getElementById('readTitle').textContent = t.title
+  document.getElementById('readMeta').textContent = issueFilePath(eff, t) + ' · 更新于 ' + fmtUpdatedAt(t.updatedAt)
+  var doc = document.getElementById('readDoc')
+  doc.textContent = ''
+  doc.appendChild(el('div', 'loading', '取票原文中…'))
+  doc.scrollTop = 0
+  readModalCtl.open()
+  apiFetch('/api/issue?effort=' + encodeURIComponent(eff.slug) + '&ticket=' + encodeURIComponent(t.key), { text: true }).then(function (res) {
+    if (!res.ok) throw new Error(res.errorText)
+    return res.data // text 模式：data 即票文件原文
+  }).then(function (text) {
+    if (!readModalCtl.isOpen() || seq !== issueModalSeq) return
+    renderMarkdown(stripTicketFieldLines(text), doc)
+    doc.scrollTop = 0
+  }).catch(function (e) {
+    if (!readModalCtl.isOpen() || seq !== issueModalSeq) return
+    doc.textContent = ''
+    doc.appendChild(el('div', 'loading', '票原文加载失败：' + (e && e.message ? e.message : e)))
+  })
+}
+
+/* ── 项目总览弹窗（票 03）：跨常用目录只读盘点 ──
+   按需单拍：打开（或点「重新盘点」）才请求 /api/roots-overview，不进轮询载荷；
+   GET 不触碰常用目录排序。行点击 = 既有换目录操作（填输入框 + switchRoot），
+   换完弹窗关闭、主区切到新 root。当前追踪目录置顶标「当前」（服务端排序）。 */
+var rootsModalCtl = makeModal(document.getElementById('rootsModal'))
+var OVERVIEW_STAGE_LABELS = { grill: 'Grill 拷问', spec: 'To-Spec 规格', tickets: 'To-Tickets 拆票', implement: 'Implement 实现', done: '全部完成' }
+
+function renderRootsRows(roots) {
+  var body = document.getElementById('rootsBody')
+  body.textContent = ''
+  document.getElementById('rootsMeta').textContent = roots.length ? roots.length + ' 个目录 · 打开时盘点' : ''
+  if (!roots.length) {
+    body.appendChild(el('div', 'sub', '还没有常用目录：在网页上切换过的目录会自动收录到这里。'))
+    return
+  }
+  var table = el('table')
+  var thead = el('thead')
+  var hr = el('tr')
+  var headers = ['项目', '链阶段', '票', '迷雾', '备注']
+  headers.forEach(function (h) { hr.appendChild(el('th', null, h)) })
+  thead.appendChild(hr)
+  table.appendChild(thead)
+  var tbody = el('tbody')
+  roots.forEach(function (r) {
+    var bad = r.status !== 'ok'
+    var tr = el('tr', 'rootrow' + (bad ? ' bad' : ''))
+    var tdName = el('td')
+    tdName.appendChild(el('div', 'name', r.name))
+    tdName.appendChild(el('div', 'sub', r.path))
+    tr.appendChild(tdName)
+    tr.appendChild(el('td', null, bad ? '—' : (OVERVIEW_STAGE_LABELS[r.stage] || '无产物目录')))
+    tr.appendChild(el('td', null, bad ? '—' : r.closed + '/' + r.tickets))
+    tr.appendChild(el('td', null, bad ? '—' : String(r.fog)))
+    var tdNote = el('td')
+    if (r.current) tdNote.appendChild(el('span', 'chip cur', '当前'))
+    if (r.status === 'no-scratch') tdNote.appendChild(el('span', 'chip', '无产物'))
+    if (r.status === 'unreadable') tdNote.appendChild(el('span', 'chip', '不可读'))
+    tr.appendChild(tdNote)
+    if (!bad) {
+      // 可切目录：行点击 = 既有换目录流（零新机制）；不可读行置灰不可点
+      tr.title = '点一下切换到这个项目（既有换目录操作，写进 config.json）'
+      tr.setAttribute('aria-label', r.name + '：' + (OVERVIEW_STAGE_LABELS[r.stage] || '链阶段未知') + '，票 ' + r.closed + '/' + r.tickets + '，迷雾 ' + r.fog + '。按 Enter 切换到这个项目')
+      clickable(tr, function () {
+        rootsModalCtl.close()
+        var input = document.getElementById('rootInput')
+        input.value = r.path
+        switchRoot()
+      })
+    } else {
+      tr.title = r.status === 'no-scratch' ? '目录存在但没有 .scratch/（无产物）' : '目录读不了：可能不存在或无权限'
+    }
+    tbody.appendChild(tr)
+  })
+  table.appendChild(tbody)
+  body.appendChild(table)
+}
+
+function loadRootsOverview() {
+  var body = document.getElementById('rootsBody')
+  body.textContent = ''
+  body.appendChild(el('div', 'loading', '盘点常用目录中…'))
+  apiFetch('/api/roots-overview').then(function (res) {
+    if (!res.ok) throw new Error(res.errorText)
+    return res.data
+  }).then(function (data) {
+    if (!rootsModalCtl.isOpen()) return
+    renderRootsRows((data && data.roots) || [])
+  }).catch(function (e) {
+    if (!rootsModalCtl.isOpen()) return
+    body.textContent = ''
+    body.appendChild(el('div', 'loading', '项目总览加载失败：' + (e && e.message ? e.message : e)))
+  })
+}
+
+function openRootsModal() {
+  if (rootsModalCtl.isOpen()) return
+  rootsModalCtl.open() // 六件套归工厂；内容逻辑在这里：打开才单拍盘点
+  loadRootsOverview()
+}
+
+document.getElementById('rootsBtn').addEventListener('click', openRootsModal)
+document.getElementById('rootsClose').addEventListener('click', function () { rootsModalCtl.close() })
+document.getElementById('rootsRefresh').addEventListener('click', loadRootsOverview)
+
+/* ── 导出快照（票 05）：最近一拍 /api/state 的原始响应体原样落下载文件 ──
+   不重新序列化（与在线数据同源、无第二真相）；文件名带项目名与本地时间（无冒号，跨文件系统安全）。
+   不含票正文：票正文点开才取（懒加载），快照定位是盘点存档、不是全文备档。 */
+function snapshotFileName(rootName) {
+  var d = new Date()
+  var p = function (n) { return String(n).padStart(2, '0') }
+  return 'flowdeck-snapshot-' + (rootName || 'workspace') + '-' +
+    d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.json'
+}
+
+function updateSnapshotBtn() {
+  document.getElementById('snapshotBtn').disabled = !lastSnapshot
+}
+
+function exportSnapshot() {
+  if (!lastSnapshot) { toast('还没有可导出的盘点'); return }
+  try {
+    var blob = new Blob([lastSnapshot], { type: 'application/json' })
+    var url = URL.createObjectURL(blob)
+    var a = el('a')
+    a.href = url
+    a.download = snapshotFileName(state && state.rootName)
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(function () { URL.revokeObjectURL(url) }, 0)
+    toast('已导出快照')
+  } catch (e) {
+    toast('导出快照失败：' + (e && e.message ? e.message : e))
+  }
+}
+document.getElementById('snapshotBtn').addEventListener('click', exportSnapshot)
+
+/* ── 设置弹窗：集中修改 config.json 可改字段 ──
+   pollMs 保存即生效（服务端 /api/state 真变化拍现读 config.json）；host/port 写盘后重启生效；
+   访问令牌只写不读——不回显当前值（令牌只进请求头，不进任何 DOM），清除走显式按钮 + 二次确认。
+   显隐/焦点/Esc/遮罩/滚动锁/圈禁归 makeModal；表单预填与差异收集留在这里。 */
+var settingsState = { initial: null, clearToken: false }
+var settingsModalCtl = makeModal(document.getElementById('settingsModal'))
+
+function settingsSnapshotInitial() {
+  return {
+    pollMs: state && state.pollMs !== undefined ? state.pollMs : '',
+    pollMode: state && state.pollMode ? state.pollMode : 'observe',
+    host: state && state.host ? state.host : '',
+    port: state && state.port !== undefined ? state.port : '',
+  }
+}
+
+function openSettings() {
+  if (settingsModalCtl.isOpen()) return
+  settingsState.clearToken = false
+  settingsState.initial = settingsSnapshotInitial()
+  document.getElementById('setPollMs').value = settingsState.initial.pollMs
+  document.getElementById('setPollMode').value = settingsState.initial.pollMode
+  document.getElementById('setHost').value = settingsState.initial.host
+  document.getElementById('setPort').value = settingsState.initial.port
+  // 桌面通知（票 04）：浏览器本地偏好，即时生效——不进下面的保存补丁（不写 config.json）
+  document.getElementById('setNotify').checked = notifyOn()
+  var tok = document.getElementById('setToken')
+  tok.value = ''
+  var enabled = !!(state && state.tokenEnabled)
+  tok.placeholder = enabled ? '已启用——输入新值可替换' : '留空 = 不启用'
+  document.getElementById('setTokenHint').textContent = enabled
+    ? '非空时 /api/* 的每个请求都要携带令牌（X-FlowDeck-Token 头或 ?token=）。输入新值保存即替换。'
+    : '设一个共享口令：0.0.0.0 局域网暴露时挡住同网段未授权访问；本机 127.0.0.1 用法可留空。'
+  document.getElementById('setTokenClearRow').hidden = !enabled
+  document.getElementById('setConfigPath').textContent = state && state.configPath ? state.configPath + '（也可手改，下一拍生效）' : '（未知）'
+  document.getElementById('setSaveHint').textContent = ''
+  settingsModalCtl.open()
+}
+
+/** 只收集变更字段：与打开时的初值比对，没动的不发；令牌输入框非空 = 要换，「清除」标记 = 要清空。 */
+function settingsChanges() {
+  var patch = {}
+  var pm = document.getElementById('setPollMs').value.trim()
+  if (pm !== '' && Number(pm) !== settingsState.initial.pollMs) patch.pollMs = Number(pm)
+  var mode = document.getElementById('setPollMode').value
+  if (mode !== settingsState.initial.pollMode) patch.pollMode = mode
+  var host = document.getElementById('setHost').value.trim()
+  if (host !== settingsState.initial.host) patch.host = host
+  var port = document.getElementById('setPort').value.trim()
+  if (port !== '' && Number(port) !== settingsState.initial.port) patch.port = Number(port)
+  var tok = document.getElementById('setToken').value
+  if (tok !== '') patch.token = tok
+  if (settingsState.clearToken) patch.token = ''
+  return patch
+}
+
+var SETTINGS_FIELD_LABELS = { pollMs: '轮询间隔', pollMode: '轮询模式', host: '监听地址', port: '端口', token: '访问令牌', root: '追踪目录' }
+
+/* 生效语义契约（HTTP 契约，与 server.mjs 的 EFFECT 常量互指）：服务端两词 immediate / restart。
+   零依赖无构建，两端代码共享不了，靠这对常量与注释钉住。前端只特判 restart、
+   其余一律按立即生效——跨端契约面从两词缩到一词，对未来的未知值也稳健。 */
+var APPLY_RESTART = 'restart'
+
+function saveSettings() {
+  var patch = settingsChanges()
+  var keys = Object.keys(patch)
+  if (!keys.length) { settingsModalCtl.close(); return }
+  var btn = document.getElementById('settingsSave')
+  btn.disabled = true
+  apiFetch('/api/config', { body: JSON.stringify(patch) }).then(function (res) {
+    btn.disabled = false
+    if (!res.ok) {
+      document.getElementById('setSaveHint').textContent = '保存失败：' + res.errorText
+      return
+    }
+    // 令牌变更同步本地记忆与后续请求头（清除则抹去）；令牌值不进任何 DOM 文本
+    if (patch.token !== undefined) {
+      apiToken = patch.token
+      try {
+        if (patch.token) localStorage.setItem(TOKEN_KEY, patch.token)
+        else localStorage.removeItem(TOKEN_KEY)
+      } catch (e) {}
+    }
+    // 只特判 restart，其余（含未知值）一律按立即生效
+    var immediate = [], restart = []
+    keys.forEach(function (k) {
+      var label = SETTINGS_FIELD_LABELS[k] || k
+      ;(res.data.applied && res.data.applied[k] === APPLY_RESTART ? restart : immediate).push(label)
+    })
+    var parts = []
+    if (immediate.length) parts.push('已生效：' + immediate.join('、'))
+    if (restart.length) parts.push('重启后生效：' + restart.join('、'))
+    toast(parts.join('；') || '已保存')
+    refresh(true)
+    settingsModalCtl.close()
+  }).catch(function (e) {
+    btn.disabled = false
+    document.getElementById('setSaveHint').textContent = '保存失败：' + (e && e.message ? e.message : e)
+  })
+}
+
+document.getElementById('settingsBtn').addEventListener('click', openSettings)
+document.getElementById('settingsClose').addEventListener('click', function () { settingsModalCtl.close() })
+document.getElementById('settingsSave').addEventListener('click', saveSettings)
+document.getElementById('setTokenClear').addEventListener('click', function () {
+  if (!window.confirm('确定清除访问令牌？清除后 /api/* 不再要求令牌——局域网暴露场景等于无鉴权。')) return
+  settingsState.clearToken = true
+  document.getElementById('setToken').value = ''
+  document.getElementById('setTokenClearRow').hidden = true
+  document.getElementById('setTokenHint').textContent = '已标记清除：保存后令牌置空（关闭鉴权）。'
+})
+// 桌面通知开关（票 04）：开启即申请权限（权限时机由用户掌控，默认关）；被拒回落并提示
+// 补救路径（浏览器站点设置）；关闭即抹去本地偏好。全部走 localStorage，与保存按钮无关。
+document.getElementById('setNotify').addEventListener('change', function () {
+  var box = this
+  if (!box.checked) {
+    try { localStorage.removeItem(NOTIFY_KEY) } catch (e) {}
+    return
+  }
+  if (typeof Notification === 'undefined') {
+    box.checked = false
+    toast('这个浏览器不支持桌面通知，开不了')
+    return
+  }
+  if (Notification.permission === 'granted') {
+    try { localStorage.setItem(NOTIFY_KEY, '1') } catch (e) {}
+    toast('桌面通知已开启')
+    return
+  }
+  if (Notification.permission === 'denied') {
+    box.checked = false
+    toast('浏览器已拒绝本页面的通知权限：在站点设置里允许后回来再开')
+    return
+  }
+  Notification.requestPermission().then(function (result) {
+    if (result === 'granted') {
+      try { localStorage.setItem(NOTIFY_KEY, '1') } catch (e) {}
+      toast('桌面通知已开启')
+    } else {
+      box.checked = false
+      toast(result === 'denied' ? '通知权限被拒绝：在浏览器站点设置里允许后回来再开' : '没拿到通知权限（没有选「允许」），未开启')
+    }
+  })
+})
+// Esc 关闭已由 makeModal 的各实例统一接管（三窗各挂一份，只关自己开着的那个）
+
+/* 可见性与轮询模式联动（票 06）：不可见时按模式收表——观测档在此熄火（展示档定时照排、惰性本无表）；
+   回前台立即补一拍（观测/展示保持即刷行为；惰性档不自动请求，只认「立即刷新」）。
+   补拍带积压标记（票 04）：离开期间攒下的变化聚合为一条通知，不逐条轰炸；惰性档不补拍也就零通知。 */
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) { schedulePoll(); return }
+  if (pollMode !== 'manual') { notifyBacklog = true; refresh(true) }
+})
+schedulePoll()
+refresh(true)
+document.getElementById('foot').textContent = '数据来源：追踪目录里的 .scratch/ · 轮询模式与间隔由 config.json 决定（pollMode / pollMs，可在「设置」里改）'
+</script>
+</body>
+</html>

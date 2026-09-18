@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+config.json
+
+# 工单与流程产物只留在本地，不上传（flowdeck 自己吃自己的狗粮，但票据不进公开仓库）
+.scratch/

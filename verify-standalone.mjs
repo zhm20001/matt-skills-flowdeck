@@ -1,0 +1,2723 @@
+#!/usr/bin/env node
+/**
+ * flowdeck/verify-standalone.mjs — 流程板独立验证（不依赖 npm 包；
+ * jsdom 是可选的：仓库里装了就真跑界面，拷出去没装就自动跳过那一组）。
+ *
+ * 覆盖场景：
+ *   1. 只有地图且带迷雾        → grill 是当前步，其余待命；
+ *   2. 地图+规格+两张票（一开一关）→ implement 是当前步，进度 75%；
+ *   3. 票全部关闭              → 四阶段完成，进度 100%；
+ *   4. 只有 spec.md            → effort 仍被识别，当前步回落到 grill；
+ *   5. .scratch 根目录的 map.md → 识别为 '__root' effort 且排第一；
+ *   6. 无产物的目录/普通文件     → 不算 effort；
+ *   7. 票字段解析               → Status / Type / Blocked by / 进度 全部读对；
+ *   8. 流程链是纯函数           → 同一输入两次推导结果一致；
+ *   9. HTTP 基础               → /api/state、/、404、端口被占自动 +1；
+ *  10. 配置                    → 缺文件用默认；config.json 的 root/pollMs 生效；
+ *  11. 换目录 API              → POST /api/config 热切换并写盘；非法输入被拒且不碰配置；
+ *  12. resolveRoot             → 空=当前目录、~=主目录、相对=按本目录解析；
+ *  13. 界面运行时              → jsdom 真跑 index.html 无报错，链渲染/换页签/票表都对；
+ *  14. 常用目录（服务端）       → MRU 纯函数幂等；state 附带列表与存在性；收录/移顶/上限淘汰；
+ *                                --root 启动不收录；删除端点防护同款、写回、幂等；
+ *  15. 常用目录（界面）         → 聚焦展开、当前置顶、过滤、键盘导航、点选切换、✕ 删除、
+ *                                失效置灰、空态文案、轮询刷新不关闭下拉不抢焦点。
+ *  16. 防护强化（HTTP 黑盒）    → 伪造 Host 的读写请求 403、本机写法放行；非回环绑定放宽校验；
+ *                                >10KB POST 拿 413 应答；客户端半途中断不崩进程。
+ *  17. 坏配置告警               → 非法 JSON 首读告警一次（含路径原因），回退默认、不随轮询刷屏。
+ *  18. CLI 参数                 → 缺值/吞值报错退出 1；正常传参可启动（--config 支持相对路径）。
+ *  19. 工单 key 排序             → 三位数编号按数字序（98 < 99 < 100 < 101），两位编号顺序不变。
+ *  20. 标题规则单一真相           → map/spec 标题与票同走自带解析器的取标题规则。
+ *  21. 访问令牌（token）         → 配置 token 后 /api/* 无/错令牌 401，头或查询串携带皆可；
+ *                                界面静态资源不设防；界面从 URL 收令牌、记忆并随请求携带。
+ *  22. 字段行格式               → 加粗与裸写等价合法（双声部判准）；"!" 只标读不懂的疑似
+ *                                字段行与多行 Status（以第一行为准）；界面亮徽标带原文。
+ *  23. 技能介绍文档             → /api/skills 清单（frontmatter、分类排序、开发中标）与
+ *                                /api/skills/<名字> 单篇原文；未知/穿越/畸形转义 404、令牌闸门覆盖；
+ *                                界面「技能包」弹窗：打开、分组清单、内链切换、Markdown 渲染、Esc 关闭。
+ *  24. a11y 三层（票 07）        → 键盘层：票行/链格/下拉项 focus 后 Enter/Space 与 click 同一处理
+ *                                （复制实现指引 / 复制阶段指引词 / 切换目录）；兜底层：aria-label 同载
+ *                                推定含义、"!" 警告原文、指引全文；播报层：toast aria-live=polite、
+ *                                错误横幅 role=alert；焦点圈禁：弹窗内 Tab 循环不外逃。
+ *  25. 测试补盲（票 08）          → Comments 夹具本地断言常驻；
+ *                                幽灵夹具直测（目录伪装票文件走「打不开→丢弃」兜底、map.md 目录不算 effort）。
+ *
+ * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
+ */
+
+import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import http from 'node:http'
+import { spawn } from 'node:child_process'
+import os from 'node:os'
+import nodePath from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { scanWorkspace } from './scan.mjs'
+import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT } from './server.mjs'
+
+const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
+
+let passed = 0
+function ok(name) {
+  passed++
+  console.log('  ✓ ' + name)
+}
+
+async function writeFile(full, text) {
+  await fs.mkdir(nodePath.dirname(full), { recursive: true })
+  await fs.writeFile(full, text, 'utf8')
+}
+
+/** 带防跨站写防护头发 POST（成功路径用；拒绝路径要手工构造坏头，见各分组）。 */
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+    body: JSON.stringify(body),
+  })
+  return { status: res.status, data: await res.json() }
+}
+
+/** 用 node:http 直发请求、允许伪造任意头（fetch 不让改 Host，而 Host 校验用例恰恰要伪造它）。 */
+function rawHttp({ method, url, headers = {}, body = '' }) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = http.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, method, headers }, (res) => {
+      let data = ''
+      res.on('data', (c) => { data += c })
+      res.on('end', () => resolve({ status: res.statusCode, data }))
+    })
+    req.on('error', reject)
+    if (body) req.write(body)
+    req.end()
+  })
+}
+
+/** 起一个真实 CLI 子进程（server.mjs 的命令行入口只有直接运行时才走，进程内测不到）。 */
+function runCli(args) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [nodePath.join(HERE, 'server.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    p.stdout.on('data', (d) => { out += d })
+    p.stderr.on('data', (d) => { err += d })
+    p.on('error', reject)
+    p.on('close', (code) => resolve({ code, out, err }))
+  })
+}
+
+async function runScenarios(tmp) {
+  // ── 搭一个临时工作区（idea-a 只带迷雾地图；idea-b 全链走一半；idea-c 全完成）──
+  await writeFile(nodePath.join(tmp, '.scratch/idea-a/map.md'), [
+    '# 想法 A', '',
+    '## Destination', '让部署一键完成', '',
+    '## Not yet specified', '- 回滚策略未定', '- 通知渠道未定', '',
+  ].join('\n'))
+
+  const MAP_B = ['# 想法 B', '', '## Destination', '全站搜索', '', '## Notes', '- 无', ''].join('\n')
+  const SPEC_B = ['# 想法 B 规格', '', '目标：全站搜索，先做索引核心，再做分词器。', ''].join('\n')
+  const T1_B = ['# 索引核心', 'Status: ready-for-agent', 'Type: task', 'Blocked by: #02', '', '## 进度：50%', ''].join('\n')
+  const T2_B = ['# 分词器', 'Status: resolved', 'Type: task', ''].join('\n')
+  await writeFile(nodePath.join(tmp, '.scratch/idea-b/map.md'), MAP_B)
+  await writeFile(nodePath.join(tmp, '.scratch/idea-b/spec.md'), SPEC_B)
+  await writeFile(nodePath.join(tmp, '.scratch/idea-b/issues/01-index-core.md'), T1_B)
+  await writeFile(nodePath.join(tmp, '.scratch/idea-b/issues/02-tokenizer.md'), T2_B)
+
+  await writeFile(nodePath.join(tmp, '.scratch/idea-c/map.md'), '# 想法 C\n\n## Destination\n导出 PDF\n')
+  await writeFile(nodePath.join(tmp, '.scratch/idea-c/spec.md'), '# 想法 C 规格\n\n导出 PDF。')
+  await writeFile(nodePath.join(tmp, '.scratch/idea-c/issues/01-export.md'), '# 导出\nStatus: done\n')
+
+  await writeFile(nodePath.join(tmp, '.scratch/only-spec/spec.md'), '# 只有规格\n\n先写了规格再说。')
+  await writeFile(nodePath.join(tmp, '.scratch/map.md'), '# 根地图\n\n## Destination\n仓库级路线\n')
+  await writeFile(nodePath.join(tmp, '.scratch/junk-note.md'), '不是 effort 的普通文件')
+  await fs.mkdir(nodePath.join(tmp, '.scratch/empty-dir'), { recursive: true })
+
+  // ── 扫描与流程链 ──
+  const ws = await scanWorkspace(tmp)
+  assert.equal(ws.scratchExists, true)
+  const slugs = ws.efforts.map((e) => e.slug)
+  assert.deepEqual(slugs, ['__root', 'idea-a', 'idea-b', 'idea-c', 'only-spec'])
+  ok('effort 识别：5 个 effort，根 .scratch 排第一，空目录与普通文件被忽略')
+
+  const a = ws.efforts.find((e) => e.slug === 'idea-a')
+  assert.equal(a.chain.currentId, 'grill')
+  assert.equal(a.chain.progress, 0)
+  assert.equal(a.chain.stages[0].status, 'current')
+  assert.equal(a.map.fogCount, 2)
+  assert.match(a.chain.stages[0].evidence, /迷雾还有 2 条/)
+  ok('场景 1：只有带迷雾的地图 → grill 是当前步，证据里点明迷雾条数')
+
+  const b = ws.efforts.find((e) => e.slug === 'idea-b')
+  assert.deepEqual(b.chain.stages.map((s) => s.status), ['done', 'done', 'done', 'current'])
+  assert.equal(b.chain.currentId, 'implement')
+  assert.equal(b.chain.progress, 75)
+  assert.equal(b.chain.counts.closed, 1)
+  assert.equal(b.chain.counts.open, 1)
+  // 前沿口径（票 02 有意变更）：01 阻塞于 02，02 已关 → 依赖全结，不再计阻塞
+  assert.equal(b.chain.counts.blocked, 0)
+  ok('场景 2：地图+规格+一开一关两张票 → implement 是当前步，进度 75%，阻塞计数 0（依赖已全结，前沿口径）')
+
+  const t1 = b.tickets.find((t) => t.key === '01')
+  assert.equal(t1.state, 'open')
+  assert.equal(t1.type, 'task')
+  assert.deepEqual(t1.blockedBy, ['02'])
+  assert.equal(t1.progress, 50)
+  assert.equal(t1.title, '索引核心')
+  const t2 = b.tickets.find((t) => t.key === '02')
+  assert.equal(t2.state, 'closed')
+  ok('场景 7：票字段解析 — Status / Type / Blocked by / 进度 / 标题 全部读对')
+
+  const c = ws.efforts.find((e) => e.slug === 'idea-c')
+  assert.equal(c.chain.complete, true)
+  assert.equal(c.chain.currentId, null)
+  assert.equal(c.chain.progress, 100)
+  assert.equal(c.tickets[0].state, 'closed')
+  ok('场景 3：票全部关闭 → 四阶段完成，进度 100%')
+
+  const s = ws.efforts.find((e) => e.slug === 'only-spec')
+  assert.equal(s.chain.currentId, 'tickets', 'spec 已在，当前步应越过 grill 与 spec')
+  assert.equal(s.chain.stages[0].status, 'done')
+  assert.equal(s.chain.stages[0].inferred, true)
+  assert.equal(s.chain.stages[0].inferLabel, '推定 · 无 map')
+  assert.equal(s.chain.progress, 50)
+  ok('场景 4：只有 spec.md → grill 由 spec 推定完成并标「推定 · 无 map」，当前步 to-tickets')
+
+  const rootEffort = ws.efforts[0]
+  assert.equal(rootEffort.slug, '__root')
+  assert.equal(rootEffort.map.exists, true)
+  ok('场景 5：.scratch 根目录的 map.md → __root effort')
+
+  // ── 工单 key 排序：编号到三位数后仍按数字序（字符串比较会让 '100' 排到 '99' 前面）──
+  const sortTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-sort-'))
+  try {
+    await writeFile(nodePath.join(sortTmp, '.scratch/sorting/map.md'), '# 排序\n\n## Destination\n验证编号排序\n')
+    for (const n of ['98', '99', '100', '101', '07', '12']) {
+      await writeFile(nodePath.join(sortTmp, '.scratch/sorting/issues/' + n + '-t.md'), '# 票 ' + n + '\nStatus: ready-for-agent\n')
+    }
+    const sorted = await scanWorkspace(sortTmp)
+    assert.deepEqual(
+      sorted.efforts[0].tickets.map((t) => t.key),
+      ['07', '12', '98', '99', '100', '101']
+    )
+  } finally {
+    await fs.rm(sortTmp, { recursive: true, force: true })
+  }
+  ok('工单 key 排序：98/99/100/101 按数字序盘点，两位编号（07/12）顺序不变')
+
+  // ── 标题规则单一真相（票 02 改写）：唯一实现 = parseDocStructure 单遍导出，map/spec 与票同源 ──
+  const titleTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-title-'))
+  try {
+    await writeFile(nodePath.join(titleTmp, '.scratch/no-heading/spec.md'), '先有第一行说明\n\n没有 # 标题行。\n')
+    await writeFile(nodePath.join(titleTmp, '.scratch/heading-after-text/map.md'), '导语在标题前\n\n# 真标题\n\n## Destination\n目标\n')
+    const titled = await scanWorkspace(titleTmp)
+    const noHeading = titled.efforts.find((e) => e.slug === 'no-heading')
+    assert.equal(noHeading.spec.title, '先有第一行说明')
+    assert.equal(noHeading.title, '先有第一行说明', 'effort 标题回落到 spec 标题（不再退回 slug）')
+    const headingAfter = titled.efforts.find((e) => e.slug === 'heading-after-text')
+    assert.equal(headingAfter.map.title, '真标题', '取第一个任意级别的标题行，而非第一行文字')
+    assert.equal(headingAfter.title, '真标题')
+
+    // 唯一实现的等价断言：parseMd 的标题 = parseDocStructure 的标题（对任意输入逐字一致）；
+    // parseMapBody 的区块 = parseDocStructure(normalizeBody) 的区块（输出形状不变是硬约束）。
+    const parseMod = await import('./lib/parse.mjs')
+    for (const text of [T1_B, T2_B, SPEC_B, MAP_B, '', '   \n\n  ', '# 只有正文没有区块\n\n段落一。\n', '导语在前\n\n# 后出现的标题\n', '#x 无空格井号\n']) {
+      assert.deepEqual(parseMod.parseDocStructure(text).title, parseMod.parseMd(text, { key: '01', parentKey: '00' }).title, 'parseMd 标题必须出自 parseDocStructure：' + JSON.stringify(String(text).slice(0, 20)))
+    }
+    for (const text of [MAP_B, '# A\n## Destination\nx\n## Not yet specified\n- y\n', '', '# 无区块\n\n正文', '## Destination\n有区块无标题\n']) {
+      const doc = parseMod.parseDocStructure(parseMod.normalizeBody(text))
+      assert.deepEqual(
+        { destination: doc.destination, notes: doc.notes, decisions: doc.decisions, fog: doc.fog, outOfScope: doc.outOfScope },
+        parseMod.parseMapBody(text),
+        'parseMapBody 区块必须出自 parseDocStructure：' + JSON.stringify(String(text).slice(0, 20))
+      )
+    }
+  } finally {
+    await fs.rm(titleTmp, { recursive: true, force: true })
+  }
+  ok('标题规则单一真相：唯一实现 = parseDocStructure 单遍导出；parseMd 标题与 parseMapBody 区块逐字等价，map/spec 与票同源消费')
+
+  // ── 字段行格式：加粗与裸写等价合法；"!" 只标读不懂的疑似字段行与多行 Status ──
+  const fmtTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-fmt-'))
+  try {
+    await writeFile(nodePath.join(fmtTmp, '.scratch/fmt/map.md'), '# 格式\n\n## Destination\n双形式判准\n')
+    // 加粗 = to-tickets 模板形式；What to build 是散文块，不在字段判准内
+    await writeFile(nodePath.join(fmtTmp, '.scratch/fmt/issues/01-bold.md'), [
+      '# 加粗票', '',
+      '**What to build:** 端到端行为', '',
+      '**Blocked by:** None — can start immediately.', '',
+      '**Status:** done', '',
+      '- [x] 验收项', '',
+    ].join('\n'))
+    // 裸写 = issue-tracker.md 约定形式
+    await writeFile(nodePath.join(fmtTmp, '.scratch/fmt/issues/02-plain.md'), '# 裸票\nStatus: resolved\nType: task\n')
+    // 斜体 Status：形似字段行但读不懂 → unrecognizedField；生效的是后面那行裸 claimed
+    await writeFile(nodePath.join(fmtTmp, '.scratch/fmt/issues/03-drift.md'), '# 漂移票\n*Status:* done\nStatus: claimed\n')
+    // 多行 Status：重复 Status 行 → multiStatus，以第一行为准
+    await writeFile(nodePath.join(fmtTmp, '.scratch/fmt/issues/04-dup.md'), '# 重复票\n**Status:** done\nStatus: claimed\n')
+    const fmt = await scanWorkspace(fmtTmp)
+    const eff = fmt.efforts.find((e) => e.slug === 'fmt')
+    const bold = eff.tickets.find((t) => t.key === '01')
+    assert.equal(bold.state, 'closed', '加粗 Status（to-tickets 模板形式）应判已关闭')
+    assert.deepEqual(bold.blockedBy, [], '加粗 Blocked by 无编号 → 空阻塞')
+    assert.deepEqual(bold.formatWarnings, [], '合法形态（加粗、裸写、散文加粗块）一律不标')
+    const plain = eff.tickets.find((t) => t.key === '02')
+    assert.equal(plain.state, 'closed')
+    assert.equal(plain.type, 'task')
+    assert.deepEqual(plain.formatWarnings, [])
+    const drift = eff.tickets.find((t) => t.key === '03')
+    assert.equal(drift.state, 'open', '读不懂的斜体 Status 不生效，落到后面那行裸 claimed')
+    assert.equal(drift.formatWarnings.length, 1)
+    assert.equal(drift.formatWarnings[0].kind, 'unrecognizedField')
+    assert.equal(drift.formatWarnings[0].line, '*Status:* done')
+    const dup = eff.tickets.find((t) => t.key === '04')
+    assert.equal(dup.state, 'closed', '多行 Status 以第一行为准')
+    assert.equal(dup.formatWarnings.length, 1)
+    assert.equal(dup.formatWarnings[0].kind, 'multiStatus')
+    assert.match(dup.formatWarnings[0].message, /done \/ claimed/)
+  } finally {
+    await fs.rm(fmtTmp, { recursive: true, force: true })
+  }
+  ok('字段行格式：加粗与裸写等价合法；"!" 只标读不懂的疑似字段行与多行 Status（以第一行为准）')
+
+  // ── IO 护栏（读侧，票 03）：单文件 1MB 上限——先 stat 超限限长读；截断照常尽力推导 + "!" 警告 ──
+  const guardTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-guard-'))
+  try {
+    await writeFile(nodePath.join(guardTmp, '.scratch/g/map.md'), '# G\n\n## Destination\n正常地图\n')
+    await writeFile(nodePath.join(guardTmp, '.scratch/g/spec.md'), 'x'.repeat(1024 * 1024 + 4096))
+    await writeFile(nodePath.join(guardTmp, '.scratch/g/issues/02-big.md'), '# 大票\nStatus: ready-for-agent\n\n' + 'y'.repeat(1024 * 1024 + 2048))
+    await writeFile(nodePath.join(guardTmp, '.scratch/g/issues/01-small.md'), '# 小票\nStatus: ready-for-agent\n')
+    // 超大 map：终点写在 1MB 内、后面全是填充 → 链从截断内容尽力推导
+    await writeFile(
+      nodePath.join(guardTmp, '.scratch/bigmap/map.md'),
+      '# BM\n\n## Destination\n尽力推导\n\n## Notes\n\n' + 'z'.repeat(1024 * 1024 + 1024)
+    )
+    const guarded = await scanWorkspace(guardTmp)
+    const g = guarded.efforts.find((e) => e.slug === 'g')
+    assert.equal(g.spec.contentLength, 1024 * 1024, '超大 spec 截到恰好 1MB（限长读，不是读完再切）')
+    assert.equal(g.spec.formatWarnings.length, 1)
+    assert.equal(g.spec.formatWarnings[0].kind, 'oversized')
+    assert.match(g.spec.formatWarnings[0].message, /文件过大/)
+    assert.ok(g.spec.formatWarnings[0].message.includes(String(1024 * 1024 + 4096)), '警告里给实际大小')
+    const bigTicket = g.tickets.find((t) => t.key === '02')
+    assert.ok(bigTicket.formatWarnings.some((w) => w.kind === 'oversized'), '超大票经 "!" 通道透出警告')
+    assert.equal(bigTicket.title, '大票', '标题在截断区内照常解析')
+    assert.deepEqual(g.tickets.find((t) => t.key === '01').formatWarnings, [], '未超限的文件零警告')
+    assert.deepEqual(g.map.formatWarnings, [], '正常 map 零警告')
+    const bm = guarded.efforts.find((e) => e.slug === 'bigmap')
+    assert.equal(bm.map.formatWarnings[0].kind, 'oversized')
+    assert.equal(bm.map.destination, '尽力推导', '链从截断内容尽力推导（Destination 在 1MB 内照常入链）')
+  } finally {
+    await fs.rm(guardTmp, { recursive: true, force: true })
+  }
+  ok('读侧护栏：单文件 1MB 截断（先 stat 后限长读），截断内容尽力推导，「文件过大」警告经 "!" 通道透出')
+
+  // ── 幽灵夹具（票 08）：扫描竞态兜底的确定性直测——issues/ 放名字像票文件的目录，
+  //    readdir 过正则、readFile 必抛 EISDIR，走的正是「打不开 → null → filter(Boolean) 丢弃」
+  //    的兜底路径（ENOENT 与 EISDIR 在 readIfExists 的 catch 里一视同仁）。──
+  const ghostTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-ghost-'))
+  try {
+    await writeFile(nodePath.join(ghostTmp, '.scratch/ghosted/map.md'), '# 幽灵间\n\n## Destination\n竞态兜底验证\n')
+    await writeFile(nodePath.join(ghostTmp, '.scratch/ghosted/issues/01-real.md'), '# 真票\nStatus: ready-for-agent\n')
+    await fs.mkdir(nodePath.join(ghostTmp, '.scratch/ghosted/issues/02-幽灵.md'), { recursive: true })
+    await fs.mkdir(nodePath.join(ghostTmp, '.scratch/ghosted/issues/03-phantom.md/里面还有一层'), { recursive: true })
+    // 变体：某 effort 唯一「产物」是名为 map.md 的目录 → mapText 为 null，三样皆无 → 不计数
+    await fs.mkdir(nodePath.join(ghostTmp, '.scratch/mapdir/map.md'), { recursive: true })
+    const ghosted = await scanWorkspace(ghostTmp)
+    const gEff = ghosted.efforts.find((e) => e.slug === 'ghosted')
+    assert.ok(gEff, '正常 effort 照常盘点（进程没崩）')
+    assert.deepEqual(gEff.tickets.map((t) => t.key), ['01'], '幽灵票（目录伪装）被兜底丢弃，真票完好')
+    assert.ok(!ghosted.efforts.some((e) => e.slug === 'mapdir'), '唯一「产物」是 map.md 目录的 effort 不计数')
+    assert.deepEqual(ghosted.efforts.map((e) => e.slug), ['ghosted'], '盘点结果里没有任何幽灵')
+  } finally {
+    await fs.rm(ghostTmp, { recursive: true, force: true })
+  }
+  ok('幽灵夹具：目录伪装票文件走「打不开→丢弃」竞态同款兜底——不崩、不出现、真票完好；map.md 目录不算 effort')
+
+  // ── Comments 夹具（票 08）：解析器的 Comments 分支从零测试保护变钉死，独立运行也常驻的本地断言。──
+  const COMMENTS_FIXTURES = [
+    {
+      name: '作者—日期头（全角破折号 + ISO 时间 + 正文）',
+      text: ['# 评论票 A', 'Status: ready-for-agent', '', '## Comments', '', '### alice—2026-09-16T10:30:00Z', '', '第一条正文。'].join('\n'),
+      comments: [{ author: { login: 'alice' }, authorAssociation: '', body: '第一条正文。', createdAt: '2026-09-16T10:30:00Z', updatedAt: '2026-09-16T10:30:00Z' }],
+    },
+    {
+      name: '中文作者名 + 全角破折号',
+      text: ['# 评论票 B', 'Status: ready-for-agent', '', '## Comments', '', '### 张三—2026-09-17T01:02:03Z', '', '中文正文。'].join('\n'),
+      comments: [{ author: { login: '张三' }, authorAssociation: '', body: '中文正文。', createdAt: '2026-09-17T01:02:03Z', updatedAt: '2026-09-17T01:02:03Z' }],
+    },
+    {
+      name: '半角连字符头（全角/半角分支的另一半）',
+      text: ['# 评论票 C', 'Status: ready-for-agent', '', '## Comments', '', '### bob - 2026-09-16T08:00:00Z', '', '半角分支。'].join('\n'),
+      comments: [{ author: { login: 'bob' }, authorAssociation: '', body: '半角分支。', createdAt: '2026-09-16T08:00:00Z', updatedAt: '2026-09-16T08:00:00Z' }],
+    },
+    {
+      name: '无日期裸名头（首词当作者）',
+      text: ['# 评论票 D', 'Status: ready-for-agent', '', '## Comments', '', '### carol', '', '没有日期。'].join('\n'),
+      comments: [{ author: { login: 'carol' }, authorAssociation: '', body: '没有日期。', createdAt: '', updatedAt: '' }],
+    },
+    {
+      name: '日期在但不识（作者认出、时间留空）',
+      text: ['# 评论票 E', 'Status: ready-for-agent', '', '## Comments', '', '### henry—September 16', '', '老式日期。'].join('\n'),
+      comments: [{ author: { login: 'henry' }, authorAssociation: '', body: '老式日期。', createdAt: '', updatedAt: '' }],
+    },
+    {
+      name: '多条 + 收在下一个二级标题（段外内容不漏进评论）',
+      text: ['# 评论票 F', 'Status: ready-for-agent', '', '## Comments', '', '### frank—2026-09-13T09:00:00Z', '', '第一条。', '', '### grace - 2026-09-13T10:00:00Z', '', '第二条。', '', '## 进度：10%', '', '评论区之外。'].join('\n'),
+      comments: [
+        { author: { login: 'frank' }, authorAssociation: '', body: '第一条。', createdAt: '2026-09-13T09:00:00Z', updatedAt: '2026-09-13T09:00:00Z' },
+        { author: { login: 'grace' }, authorAssociation: '', body: '第二条。', createdAt: '2026-09-13T10:00:00Z', updatedAt: '2026-09-13T10:00:00Z' },
+      ],
+    },
+    {
+      name: '正文 --- 截断（签名丢弃）',
+      text: ['# 评论票 G', 'Status: ready-for-agent', '', '## Comments', '', '### dave—2026-09-15T00:00:00Z', '', '保留正文。', '', '---', '', '丢弃签名。'].join('\n'),
+      comments: [{ author: { login: 'dave' }, authorAssociation: '', body: '保留正文。', createdAt: '2026-09-15T00:00:00Z', updatedAt: '2026-09-15T00:00:00Z' }],
+    },
+    {
+      name: '空正文（光杆头的评论）',
+      text: ['# 评论票 H', 'Status: ready-for-agent', '', '## Comments', '', '### eve—2026-09-14T12:00:00Z'].join('\n'),
+      comments: [{ author: { login: 'eve' }, authorAssociation: '', body: '', createdAt: '2026-09-14T12:00:00Z', updatedAt: '2026-09-14T12:00:00Z' }],
+    },
+  ]
+  const cmParse = await import('./lib/parse.mjs')
+  for (const f of COMMENTS_FIXTURES) {
+    assert.deepEqual(cmParse.parseMd(f.text, { key: '01', parentKey: '00' }).comments, f.comments, 'Comments 夹具「' + f.name + '」应解析出期望输出')
+  }
+  ok('Comments 夹具（本地断言）：作者—日期 / 中文作者全角破折号 / 半角连字符 / 无日期裸名 / 非ISO日期 / 多条收段 / --- 截断 / 空正文——八分支钉死')
+
+  // ── 流程链是纯函数：同一输入两次推导结果一致（无隐藏状态）──
+  const { deriveChain } = await import('./flowchain.mjs')
+  const r1 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
+  const r2 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
+  assert.deepEqual(r1, r2)
+  assert.equal(r1.currentId, 'implement')
+  ok('流程链纯函数：同输入同输出，推进只来自重新盘点')
+
+  // ── 后向推定：下游产物推定上游完成；未留本阶段产物时以 inferLabel 标注 ──
+  const infSpec = deriveChain({ slug: 'x', map: { exists: false, destination: '', fogCount: 0 }, spec: { exists: true, contentLength: 42 } })
+  assert.deepEqual(infSpec.stages.map((st) => st.status), ['done', 'done', 'current', 'pending'])
+  assert.equal(infSpec.stages[0].inferred, true)
+  assert.equal(infSpec.stages[0].inferLabel, '推定 · 无 map')
+  assert.equal(infSpec.stages[1].inferred, false, 'spec 有自己的产物，实证完成不标推定')
+  assert.equal(infSpec.stages[1].inferLabel, '')
+  assert.match(infSpec.stages[0].evidence, /推定拷问已完成/)
+  assert.equal(infSpec.progress, 50)
+
+  const infTickets = deriveChain({ slug: 'x', map: { exists: false, destination: '', fogCount: 0 }, spec: { exists: false, contentLength: 0 }, tickets: [{ state: 'closed', blockedBy: [] }] })
+  assert.equal(infTickets.complete, true, '无 map 无 spec 有票 → 全部推定完成')
+  assert.equal(infTickets.progress, 100)
+  assert.equal(infTickets.stages[0].inferLabel, '推定 · 无 map')
+  assert.equal(infTickets.stages[1].inferLabel, '推定 · 无 spec')
+  assert.equal(infTickets.stages[2].inferred, false, '有票本身即是 tickets 的实证')
+
+  const infFog = deriveChain({ slug: 'x', map: { exists: true, destination: '终点', fogCount: 2 }, spec: { exists: true, contentLength: 9 } })
+  assert.equal(infFog.stages[0].status, 'done', 'map 未走完但 spec 已在 → 推定压过迷雾')
+  assert.equal(infFog.stages[0].inferred, true)
+  assert.equal(infFog.stages[0].inferLabel, '推定')
+  assert.match(infFog.stages[0].evidence, /迷雾还有 2 条/)
+  assert.match(infFog.stages[0].hint, /推定拷问已完成/)
+
+  const infEarly = deriveChain({ slug: 'x', map: { exists: true, destination: '终点', fogCount: 3 }, spec: { exists: false, contentLength: 0 } })
+  assert.equal(infEarly.currentId, 'grill', '纯早期（无下游产物）行为不变')
+  assert.equal(infEarly.stages[0].status, 'current')
+  assert.equal(infEarly.stages[0].inferred, false)
+  assert.equal(infEarly.stages[0].inferLabel, '')
+  assert.match(infEarly.stages[0].hint, /继续 grilling/)
+  ok('链后向推定：spec/票推定 grill 与 spec 完成，无产物标「推定 · 无 map」「推定 · 无 spec」，早期 effort 零变化')
+
+  // ── 前沿口径（票 02）：阻塞计数与前沿判定同口径——依赖未全结才算阻塞 ──
+  const { isFrontierTicket, closedKeySet } = await import('./flowchain.mjs')
+  // 依赖全结不计阻塞（旧口径「有 Blocked by 行就算」在此仍计 1，属有意修正）
+  assert.equal(deriveChain({ slug: 'x', tickets: [
+    { key: '01', state: 'open', blockedBy: ['02'] },
+    { key: '02', state: 'closed', blockedBy: [] },
+  ] }).counts.blocked, 0, '依赖全结 → 不阻塞')
+  // 闭环依赖：互相依赖的两张 open 票都算阻塞，谁也不被误判为可干
+  assert.equal(deriveChain({ slug: 'x', tickets: [
+    { key: '01', state: 'open', blockedBy: ['02'] },
+    { key: '02', state: 'open', blockedBy: ['01'] },
+  ] }).counts.blocked, 2, '闭环依赖双双阻塞')
+  // 依赖票号不存在 → 文件事实上不是 resolved，按未结计（不静默放行）
+  assert.equal(deriveChain({ slug: 'x', tickets: [{ key: '01', state: 'open', blockedBy: ['99'] }] }).counts.blocked, 1, '幽灵依赖计阻塞')
+  // 前沿判定纯函数：open、未认领、依赖全结
+  const fSet = closedKeySet([{ key: '02', state: 'closed' }, { key: '03', state: 'open' }])
+  assert.equal(isFrontierTicket({ state: 'open', claimedBy: '', blockedBy: [] }, fSet), true, '空依赖 open 未认领即前沿')
+  assert.equal(isFrontierTicket({ state: 'open', claimedBy: '', blockedBy: ['02'] }, fSet), true, '依赖已全结即前沿')
+  assert.equal(isFrontierTicket({ state: 'open', claimedBy: '', blockedBy: ['03'] }, fSet), false, '依赖未结非前沿')
+  assert.equal(isFrontierTicket({ state: 'open', claimedBy: '', blockedBy: ['99'] }, fSet), false, '幽灵依赖非前沿（不误判为可干）')
+  assert.equal(isFrontierTicket({ state: 'open', claimedBy: '@me', blockedBy: [] }, fSet), false, '已认领非前沿')
+  assert.equal(isFrontierTicket({ state: 'open', status: 'claimed', blockedBy: [] }, fSet), false, 'claimed（status 形态）非前沿')
+  assert.equal(isFrontierTicket({ state: 'closed', blockedBy: [] }, fSet), false, '已关闭非前沿')
+  ok('前沿口径：依赖全结不计阻塞、闭环/幽灵依赖双双阻塞不误判、open 未认领即前沿、claimed 两形态都不算')
+
+  // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
+  const { deriveEvents } = await import('./notify.mjs')
+  const mkEffort = (slug, tickets, fogCount, currentId) => ({
+    slug, title: slug,
+    map: { fogCount },
+    tickets,
+    chain: { currentId },
+    latestAt: '',
+  })
+  const ROOT = '/tmp/fd-notify'
+  const snap = (efforts, extra = {}) => ({ root: ROOT, generatedAt: '2026-09-18T00:00:00Z', efforts, ...extra })
+  const ev = (prev, next) => deriveEvents(snap(prev), snap(next)).map((e) => e.text)
+  // 各事件类：票关闭 / 票重开 / 迷雾增减 / 阶段推进 / 新 effort
+  assert.deepEqual(
+    ev([mkEffort('feat', [{ key: '03', state: 'open' }], 13, 'spec')], [mkEffort('feat', [{ key: '03', state: 'closed' }], 13, 'spec')]),
+    ['feat：票 #03 已关闭'], '票关闭出一条人话事件'
+  )
+  assert.deepEqual(
+    ev([mkEffort('feat', [{ key: '03', state: 'closed' }], 0, 'implement')], [mkEffort('feat', [{ key: '03', state: 'open' }], 0, 'implement')]),
+    ['feat：票 #03 重新打开'], '重开也有事件（开关态变化的双向）'
+  )
+  assert.deepEqual(
+    ev([mkEffort('feat', [], 13, 'grill')], [mkEffort('feat', [], 12, 'grill')]),
+    ['feat：迷雾 13→12'], '迷雾数变化出「旧→新」事件'
+  )
+  assert.deepEqual(
+    ev([mkEffort('feat', [], 0, 'spec')], [mkEffort('feat', [], 0, 'tickets')]),
+    ['feat：阶段推进 To-Spec 规格 → To-Tickets 拆票'], '当前步推进带阶段人话标签'
+  )
+  assert.deepEqual(
+    ev([mkEffort('feat', [], 0, 'implement')], [mkEffort('feat', [], 0, null)]),
+    ['feat：阶段推进 Implement 实现 → 四阶段完成'], '推进到完成（currentId → null）也是事件'
+  )
+  assert.deepEqual(
+    ev([mkEffort('feat', [], 0, null)], [mkEffort('feat', [], 0, 'implement')]),
+    ['feat：阶段回落 四阶段完成 → Implement 实现'], '回退如实说「回落」不误称推进'
+  )
+  assert.deepEqual(
+    ev([mkEffort('old', [], 0, 'grill')], [mkEffort('old', [], 0, 'grill'), mkEffort('new', [], 1, 'grill')]),
+    ['新 effort：new'], '新 effort 出现一条事件'
+  )
+  // 无变化 / mtime-only / effort 消失 / 换目录 / 新票出现：零事件或不误报
+  const sameEffort = mkEffort('feat', [{ key: '01', state: 'open', updatedAt: '2026-09-17T00:00:00Z' }], 5, 'implement')
+  assert.deepEqual(ev([sameEffort], [sameEffort]), [], '无变化零事件')
+  const touchedEffort = JSON.parse(JSON.stringify(sameEffort))
+  touchedEffort.tickets[0].updatedAt = '2026-09-18T09:00:00Z' // 仅 mtime 变
+  touchedEffort.latestAt = '2026-09-18T09:00:00Z'
+  touchedEffort.git = { hash: 'abc1234', date: '2026-09-18T09:00:00Z', subject: '提交了但没动票' }
+  assert.deepEqual(ev([sameEffort], [touchedEffort]), [], '仅 mtime / git 旁证变化零事件')
+  assert.deepEqual(ev([mkEffort('a', [], 0, 'grill'), mkEffort('gone', [], 0, 'grill')], [mkEffort('a', [], 0, 'grill')]),
+    [], 'effort 消失零事件零误报（不反着报「新 effort」）')
+  assert.equal(deriveEvents(snap([mkEffort('a', [], 0, 'grill')], { root: '/tmp/one' }), snap([mkEffort('a', [], 0, 'grill')], { root: '/tmp/two' })).length,
+    0, '换目录两拍不可比：root 不同零事件（防跨项目误报）')
+  assert.deepEqual(
+    ev([mkEffort('feat', [], 0, 'implement')], [mkEffort('feat', [{ key: '09', state: 'open' }], 0, 'implement')]),
+    [], '已有 effort 里新票出现不是事件（四类之外）'
+  )
+  // 组合事件的确定性次序：票开关 → 迷雾 → 当前步；__root 用根目录名
+  assert.deepEqual(
+    ev(
+      [mkEffort('__root', [{ key: '01', state: 'open' }], 2, 'spec')],
+      [mkEffort('__root', [{ key: '01', state: 'closed' }], 1, 'tickets')]
+    ),
+    ['.scratch 根目录：票 #01 已关闭', '.scratch 根目录：迷雾 2→1', '.scratch 根目录：阶段推进 To-Spec 规格 → To-Tickets 拆票'],
+    '一个 effort 多类事件按固定次序输出，__root 用根目录名'
+  )
+  assert.equal(deriveEvents(null, snap([])).length, 0, '缺拍（首次加载）零事件')
+  ok('通知事件推导：四类事件各自成话（含回落与完成的边界）、mtime-only / effort 消失 / 换目录 / 新票零误报、次序确定')
+
+  // ── resolveRoot：配置里目录写法的解析规则 ──
+  assert.equal(resolveRoot(''), process.cwd())
+  assert.ok(resolveRoot('~/笔记').startsWith(os.homedir()))
+  assert.equal(resolveRoot('./sub'), nodePath.resolve(HERE, 'sub'))
+  assert.equal(resolveRoot('/tmp/abc'), nodePath.resolve('/tmp/abc'))
+  ok('resolveRoot：空=当前目录，~=主目录，相对=按本目录解析，绝对=原样')
+
+  // ── 常用目录（recentRoots）：MRU 变换是导出的小纯函数 ──
+  const homeRec = resolveRoot('~/flowdeck-verify-recent')
+  assert.deepEqual(
+    normalizeRecentRoots(['/tmp/fd-a', '/tmp/fd-a', '~/flowdeck-verify-recent', './neighbor', 42, '', null]),
+    ['/tmp/fd-a', homeRec, nodePath.resolve(HERE, 'neighbor')]
+  )
+  assert.deepEqual(normalizeRecentRoots(undefined), [])
+  assert.deepEqual(normalizeRecentRoots('不是数组'), [])
+  ok('normalizeRecentRoots：手写条目按 resolveRoot 归一，去重，非法条目丢弃，非数组回落空列表')
+
+  assert.deepEqual(touchRecentRoot(['/tmp/fd-a', '/tmp/fd-b'], '/tmp/fd-c'), ['/tmp/fd-c', '/tmp/fd-a', '/tmp/fd-b'])
+  assert.deepEqual(touchRecentRoot(['/tmp/fd-a', '/tmp/fd-b'], '/tmp/fd-b'), ['/tmp/fd-b', '/tmp/fd-a'])
+  assert.deepEqual(touchRecentRoot(['/tmp/fd-a', '/tmp/fd-b'], '~/flowdeck-verify-recent/'), [homeRec, '/tmp/fd-a', '/tmp/fd-b'])
+  const touched = touchRecentRoot(['/tmp/fd-a', '/tmp/fd-b'], '/tmp/fd-b')
+  assert.deepEqual(touchRecentRoot(touched, '/tmp/fd-b'), touched)
+  assert.deepEqual(touchRecentRoot(touchRecentRoot(['/tmp/fd-a'], '/tmp/fd-c'), '/tmp/fd-c'), ['/tmp/fd-c', '/tmp/fd-a'])
+  ok('touchRecentRoot：新使用进头部；重复与 ~/ 写法归一移顶不重复；同输入同输出（幂等）')
+
+  const crowd = []
+  for (let i = 0; i < RECENT_ROOTS_LIMIT + 10; i++) crowd.push('/tmp/fd-r' + i)
+  const capped = touchRecentRoot(crowd, '/tmp/fd-new')
+  assert.equal(capped.length, RECENT_ROOTS_LIMIT)
+  assert.equal(capped[0], '/tmp/fd-new')
+  assert.equal(capped[capped.length - 1], '/tmp/fd-r' + (RECENT_ROOTS_LIMIT - 2))
+  ok('touchRecentRoot：超过上限淘汰最久未用的尾部（上限 ' + RECENT_ROOTS_LIMIT + '）')
+
+
+  // ── HTTP 基础 ──
+  const first = await startServer({ root: tmp, port: 0 })
+  try {
+    assert.equal(first.root, nodePath.resolve(tmp))
+    const res = await fetch(first.url + '/api/state')
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.root, nodePath.resolve(tmp))
+    assert.equal(data.efforts.length, 5)
+    assert.equal(data.efforts.find((e) => e.slug === 'idea-b').chain.progress, 75)
+
+    const page = await fetch(first.url + '/')
+    assert.equal(page.status, 200)
+    const html = await page.text()
+    assert.match(html, /AI 编程流程板/)
+
+    const missing = await fetch(first.url + '/nope')
+    assert.equal(missing.status, 404)
+    ok('HTTP：/api/state 返回完整盘点，/ 返回界面，未知路径 404')
+
+    // 端口被占 → 自动 +1
+    const base = first.port
+    const second = await startServer({ root: tmp, port: base })
+    try {
+      assert.equal(second.port, base + 1)
+      const health = await fetch(second.url + '/api/health')
+      assert.equal(health.status, 200)
+      ok('HTTP：端口被占自动换下一个（' + base + ' → ' + second.port + '）')
+    } finally {
+      await new Promise((r) => second.server.close(r))
+    }
+  } finally {
+    await new Promise((r) => first.server.close(r))
+  }
+
+  // ── 双层短路（票 01）：指纹缓存——磁盘没变不重扫；ETag/304——If-None-Match 命中空身 ──
+  // 「复用上一拍」的黑盒可观测面 = generatedAt（只有真重盘才会换时间戳）。
+  const etagTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-etag-'))
+  const etagOther = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-etag2-'))
+  try {
+    await writeFile(nodePath.join(etagTmp, '.scratch/e1/map.md'), '# E1\n\n## Destination\n短路验证\n')
+    await writeFile(nodePath.join(etagTmp, '.scratch/e1/issues/01-a.md'), '# 票A\nStatus: ready-for-agent\n')
+    await writeFile(nodePath.join(etagOther, '.scratch/other/map.md'), '# 另一目录\n\n## Destination\n换过去\n')
+    const etagCfg = nodePath.join(etagTmp, 'config-etag.json')
+    await writeFile(etagCfg, JSON.stringify({ root: etagTmp, pollMs: 4000 }))
+    const etagServer = await startServer({ port: 0, configPath: etagCfg })
+    try {
+      const r1 = await fetch(etagServer.url + '/api/state')
+      assert.equal(r1.status, 200)
+      const etag1 = r1.headers.get('etag')
+      assert.ok(etag1, '200 应带 ETag（内容编号）')
+      assert.match(r1.headers.get('cache-control') || '', /no-cache/, '必须同发 no-cache（防浏览器不问直接用旧副本）')
+      const d1 = await r1.json()
+
+      const r2 = await fetch(etagServer.url + '/api/state')
+      const d2 = await r2.json()
+      assert.equal(d2.generatedAt, d1.generatedAt, '指纹不变必复用：generatedAt 不换（没重盘）')
+      assert.equal(r2.headers.get('etag'), etag1, '复用拍的内容编号稳定')
+
+      const r304 = await fetch(etagServer.url + '/api/state', { headers: { 'If-None-Match': etag1 } })
+      assert.equal(r304.status, 304, 'If-None-Match 命中应 304')
+      assert.equal(await r304.text(), '', '304 空身')
+      assert.equal(r304.headers.get('etag'), etag1)
+      assert.match(r304.headers.get('cache-control') || '', /no-cache/, '304 也带 no-cache，复验链不断')
+
+      // 改文件 → 指纹失效 → 必重盘，变化下一拍可见，ETag 换新
+      await writeFile(nodePath.join(etagTmp, '.scratch/e1/issues/01-a.md'), '# 票A\nStatus: resolved\n')
+      const r3 = await fetch(etagServer.url + '/api/state', { headers: { 'If-None-Match': etag1 } })
+      assert.equal(r3.status, 200, '改文件后指纹失效：旧 If-None-Match 不再命中')
+      const d3 = await r3.json()
+      assert.notEqual(d3.generatedAt, d1.generatedAt, '真变化拍必重盘')
+      assert.equal(d3.efforts.find((e) => e.slug === 'e1').tickets[0].state, 'closed', '改动内容下一拍可见')
+      assert.notEqual(r3.headers.get('etag'), etag1)
+
+      // 手改 config.json 下一拍可见（指纹含 config.json 的 mtime+大小——覆盖条款不回退）
+      await writeFile(etagCfg, JSON.stringify({ root: etagTmp, pollMs: 2500 }))
+      const d4 = await (await fetch(etagServer.url + '/api/state')).json()
+      assert.equal(d4.pollMs, 2500, '手改 config.json 的 pollMs 下一拍生效')
+      assert.notEqual(d4.generatedAt, d3.generatedAt)
+
+      // 换目录后缓存作废：state 立刻反映新目录，不吐旧目录的复用体
+      const sw = await postJson(etagServer.url + '/api/config', { root: etagOther })
+      assert.equal(sw.status, 200)
+      const d5 = await (await fetch(etagServer.url + '/api/state')).json()
+      assert.equal(d5.root, nodePath.resolve(etagOther))
+      assert.equal(d5.efforts.find((e) => e.slug === 'other').map.destination, '换过去')
+    } finally {
+      await new Promise((r) => etagServer.server.close(r))
+    }
+    ok('双层短路：指纹命中复用上一拍（generatedAt 不动）、改文件必重盘；ETag/304 + no-cache 往返；手改 config 与换目录语义不回退')
+
+    // ── 大目录退化基准：文件量上去后短路仍成立（指纹命中不随规模退化）──
+    const bigTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-big-'))
+    try {
+      for (let i = 0; i < 120; i++) {
+        const dir = nodePath.join(bigTmp, '.scratch/effort-' + String(i).padStart(3, '0'))
+        await writeFile(nodePath.join(dir, 'map.md'), '# 大树 ' + i + '\n\n## Destination\n压指纹\n')
+        await writeFile(nodePath.join(dir, 'spec.md'), '# 大树 ' + i + ' 规格\n\n正文。')
+        await writeFile(nodePath.join(dir, 'issues/01-t.md'), '# 票\nStatus: ready-for-agent\n')
+      }
+      const bigServer = await startServer({ root: bigTmp, port: 0 })
+      try {
+        const b1 = await (await fetch(bigServer.url + '/api/state')).json()
+        assert.equal(b1.efforts.length, 120)
+        const b2 = await (await fetch(bigServer.url + '/api/state')).json()
+        assert.equal(b2.generatedAt, b1.generatedAt, '大树下的没变拍照样命中指纹缓存')
+        await fs.rm(nodePath.join(bigTmp, '.scratch/effort-000/issues/01-t.md'))
+        const b3 = await (await fetch(bigServer.url + '/api/state')).json()
+        assert.notEqual(b3.generatedAt, b1.generatedAt, '删文件必重盘')
+        assert.equal(b3.efforts.find((e) => e.slug === 'effort-000').tickets.length, 0)
+      } finally {
+        await new Promise((r) => bigServer.server.close(r))
+      }
+    } finally {
+      await fs.rm(bigTmp, { recursive: true, force: true })
+    }
+    ok('大目录基准：120 个 effort 的树下指纹命中照常复用、删票即失效重盘')
+  } finally {
+    await fs.rm(etagTmp, { recursive: true, force: true })
+    await fs.rm(etagOther, { recursive: true, force: true })
+  }
+
+  // ── 配置：config.json 的 root/pollMs 生效；缺文件用默认 ──
+  assert.deepEqual(loadConfig(nodePath.join(tmp, '不存在的配置.json')), { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', configPath: nodePath.resolve(nodePath.join(tmp, '不存在的配置.json')) })
+  ok('配置缺省：config.json 不存在时不报错，全部字段回落默认（含 token 空 = 不启用、pollMode 观测）')
+
+  const cfgHandPath = nodePath.join(tmp, 'config-handwritten.json')
+  await writeFile(cfgHandPath, JSON.stringify({
+    root: tmp,
+    recentRoots: ['/tmp/fd-hand-b', '~/flowdeck-verify-recent', '/tmp/fd-hand-b', './neighbor', 7],
+  }))
+  const cfgHand = loadConfig(cfgHandPath)
+  assert.deepEqual(cfgHand.recentRoots, ['/tmp/fd-hand-b', resolveRoot('~/flowdeck-verify-recent'), nodePath.resolve(HERE, 'neighbor')])
+  ok('配置读入：config.json 里手写的 recentRoots 按 resolveRoot 归一去重后进入配置对象')
+
+  const anotherProject = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-other-'))
+  await writeFile(nodePath.join(anotherProject, '.scratch/m/map.md'), '# M\n\n## Destination\n另一个项目\n')
+  const cfgPath = nodePath.join(tmp, 'config-test.json')
+  await writeFile(cfgPath, JSON.stringify({
+    root: anotherProject,
+    pollMs: 2000,
+    recentRoots: [anotherProject, '/tmp/fd-没有这个目录'],
+    说明: '这是给人看的说明。',
+    字段说明: { root: '要追踪的目录' },
+  }))
+  const withCfg = await startServer({ port: 0, configPath: cfgPath })
+  try {
+    assert.equal(withCfg.root, nodePath.resolve(anotherProject))
+    const st = await (await fetch(withCfg.url + '/api/state')).json()
+    assert.equal(st.root, nodePath.resolve(anotherProject))
+    assert.equal(st.pollMs, 2000)
+    assert.equal(st.efforts.length, 1)
+    ok('配置生效：config.json 的 root 决定追踪目录，pollMs 透传给界面')
+
+    assert.deepEqual(st.recentRoots, [
+      { path: nodePath.resolve(anotherProject), exists: true },
+      { path: '/tmp/fd-没有这个目录', exists: false },
+    ])
+    ok('盘点接口：recentRoots 以对象数组透出（归一路径 + 该目录当前是否存在），按最近使用在前')
+
+    // ── 换目录 API：合法 → 热切换 + 写盘；非法 → 拒绝且不碰配置 ──
+    const cfgBefore = await fs.readFile(cfgPath, 'utf8')
+    const bad1 = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: tmp }),
+    })
+    assert.equal(bad1.status, 403)
+    const bad2 = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: JSON.stringify({ root: nodePath.join(tmp, '没有这个目录') }),
+    })
+    assert.equal(bad2.status, 400)
+    const bad3 = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: JSON.stringify({ root: '  ' }),
+    })
+    assert.equal(bad3.status, 400)
+    assert.equal(await fs.readFile(cfgPath, 'utf8'), cfgBefore)
+    ok('换目录防护：缺自定义头 403，目录不存在 400，空白 400；三种失败都不碰 config.json')
+
+    const good = await postJson(withCfg.url + '/api/config', { root: tmp })
+    assert.equal(good.status, 200)
+    assert.equal(good.data.root, nodePath.resolve(tmp))
+    const saved = JSON.parse(await fs.readFile(cfgPath, 'utf8'))
+    assert.equal(saved.root, nodePath.resolve(tmp))
+    assert.equal(saved.pollMs, 2000)
+    assert.equal(saved.说明, '这是给人看的说明。')
+    assert.deepEqual(saved.字段说明, { root: '要追踪的目录' })
+    assert.deepEqual(saved.recentRoots, [
+      nodePath.resolve(tmp),
+      nodePath.resolve(anotherProject),
+      '/tmp/fd-没有这个目录',
+    ])
+    const after = await (await fetch(withCfg.url + '/api/state')).json()
+    assert.equal(after.root, nodePath.resolve(tmp))
+    assert.equal(after.efforts.length, 5)
+    ok('换目录生效：POST 之后服务热切换、config.json 写回，且保留文件里其他字段')
+    ok('换目录收录：成功切换的目录进 recentRoots 头部，与换目录合并为一次写盘')
+
+    await postJson(withCfg.url + '/api/config', { root: anotherProject })
+    let saved2 = JSON.parse(await fs.readFile(cfgPath, 'utf8'))
+    assert.deepEqual(saved2.recentRoots, [nodePath.resolve(anotherProject), nodePath.resolve(tmp), '/tmp/fd-没有这个目录'])
+    await postJson(withCfg.url + '/api/config', { root: anotherProject })
+    saved2 = JSON.parse(await fs.readFile(cfgPath, 'utf8'))
+    assert.deepEqual(saved2.recentRoots, [nodePath.resolve(anotherProject), nodePath.resolve(tmp), '/tmp/fd-没有这个目录'])
+    ok('收录去重：重复切换同一目录只移顶不重复；切到当前已是追踪目录的目录也算一次使用')
+
+    // ── 删除端点：防护与换目录同款；写回并返回最新列表；删未知条目幂等 ──
+    const delGuard1 = await fetch(withCfg.url + '/api/recent-roots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remove: '/tmp/fd-没有这个目录' }),
+    })
+    assert.equal(delGuard1.status, 403)
+    const delGuard2 = await fetch(withCfg.url + '/api/recent-roots', {
+      method: 'POST',
+      headers: { 'X-FlowDeck': '1' },
+      body: JSON.stringify({ remove: '/tmp/fd-没有这个目录' }),
+    })
+    assert.equal(delGuard2.status, 403)
+    assert.equal((await fs.readFile(cfgPath, 'utf8')).includes('/tmp/fd-没有这个目录'), true)
+    ok('删除防护：缺 X-FlowDeck 头 403、Content-Type 不对 403，两种失败都不碰 config.json')
+
+    const delEmpty = await postJson(withCfg.url + '/api/recent-roots', { remove: '  ' })
+    assert.equal(delEmpty.status, 400)
+
+    const del = await postJson(withCfg.url + '/api/recent-roots', { remove: '/tmp/fd-没有这个目录' })
+    assert.equal(del.status, 200)
+    assert.deepEqual(del.data.recentRoots, [
+      { path: nodePath.resolve(anotherProject), exists: true },
+      { path: nodePath.resolve(tmp), exists: true },
+    ])
+    assert.deepEqual(JSON.parse(await fs.readFile(cfgPath, 'utf8')).recentRoots, [nodePath.resolve(anotherProject), nodePath.resolve(tmp)])
+    const delAgain = await postJson(withCfg.url + '/api/recent-roots', { remove: '/tmp/fd-没有这个目录' })
+    assert.equal(delAgain.status, 200)
+    assert.deepEqual(delAgain.data.recentRoots, del.data.recentRoots)
+    ok('删除端点：空白 remove 400；成功后写回并返回最新列表（含存在性）；删未知条目幂等返回成功')
+
+    // ── Host 校验：回环绑定下伪造 Host 的读写请求 403（封 DNS rebinding），本机写法全放行 ──
+    const cfgBeforeHost = await fs.readFile(cfgPath, 'utf8')
+    const forgedPost = await rawHttp({
+      method: 'POST', url: withCfg.url + '/api/config',
+      headers: { Host: 'evil.example.com', 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: JSON.stringify({ root: tmp }),
+    })
+    assert.equal(forgedPost.status, 403)
+    const forgedGet = await rawHttp({
+      method: 'GET', url: withCfg.url + '/api/state',
+      headers: { Host: 'evil.example.com:1234' },
+    })
+    assert.equal(forgedGet.status, 403)
+    assert.equal(await fs.readFile(cfgPath, 'utf8'), cfgBeforeHost, '伪造 Host 的请求不该碰 config.json')
+    const hostUpper = await rawHttp({ method: 'GET', url: withCfg.url + '/api/health', headers: { Host: 'LOCALHOST:' + withCfg.port } })
+    assert.equal(hostUpper.status, 200)
+    const hostV6 = await rawHttp({ method: 'GET', url: withCfg.url + '/api/health', headers: { Host: '[::1]:' + withCfg.port } })
+    assert.equal(hostV6.status, 200)
+    ok('Host 校验：伪造 Host 的读写请求 403 且不碰 config.json；localhost 大小写、[::1]、带端口写法放行')
+
+    // ── 超限 POST：应答真实 413 JSON，而不是掐断连接让浏览器只看到网络错误（票 03 起按字节、上限 30KB）──
+    const tooBigRes = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: 'x'.repeat(30721),
+    })
+    assert.equal(tooBigRes.status, 413)
+    const tooBigData = await tooBigRes.json()
+    assert.match(String(tooBigData.error || ''), /30KB/)
+    ok('超限 POST：超过 30KB（30720 字节）的合法防护请求拿到 413 JSON 应答（fetch 收到响应而非网络错误）')
+
+    // ── 字节语义（票 03）：全中文按字节放行（旧字符上限下的合法载荷零收紧）；30720 边界两侧 ──
+    // 夹带一个未知字段当填充（服务端忽略未知字段），pollMs 保证请求本身合法保存。
+    const zhRes = await postJson(withCfg.url + '/api/config', { pollMs: 3000, filler: '令'.repeat(6000) }) // ≈18KB 字节的中文
+    assert.equal(zhRes.status, 200, '全中文 18KB 字节（6000 字 < 旧 10240 字符上限）照常放行')
+    const padBody = (n) => {
+      // 壳 {"filler":"","pollMs":3000} 固定 27 个 ASCII 字节；填 a 到恰好 n 字节
+      const body = '{"filler":"' + 'a'.repeat(n - 27) + '","pollMs":3000}'
+      assert.equal(Buffer.byteLength(body), n, '夹具自检：字节数要正好是 ' + n)
+      return body
+    }
+    const exact = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: padBody(30720),
+    })
+    assert.equal(exact.status, 200, '正好 30720 字节 = 上限内，放行')
+    const over = await fetch(withCfg.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: padBody(30721),
+    })
+    assert.equal(over.status, 413, '30721 字节即超限')
+    ok('POST 字节语义：按字节计上限 30720——全中文 18KB 放行、边界值 30720 放行、30721 拿 413')
+
+    // ── 客户端中断：POST 发一半断开，进程不崩、服务继续应答 ──
+    await new Promise((resolve) => {
+      const u = new URL(withCfg.url + '/api/config')
+      const req = http.request({
+        host: u.hostname, port: u.port, path: u.pathname, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'Content-Length': String(50 * 1024) },
+      }, () => resolve())
+      req.on('error', () => {}) // 我们主动断开，客户端侧报错是预期的
+      req.write('{"root":"/tmp/so')
+      setTimeout(() => { req.destroy(); resolve() }, 50)
+    })
+    const aliveAfterAbort = await fetch(withCfg.url + '/api/health')
+    assert.equal(aliveAfterAbort.status, 200)
+    ok('客户端中断：POST 半途断开不崩进程，服务照常应答')
+  } finally {
+    await new Promise((r) => withCfg.server.close(r))
+    await fs.rm(anotherProject, { recursive: true, force: true })
+  }
+
+  // ── 坏配置：非法 JSON 告警恰好一次（含路径与原因），回退默认语义不变、不随轮询刷屏 ──
+  const badCfgPath = nodePath.join(tmp, 'config-broken.json')
+  await writeFile(badCfgPath, '{ 这不是合法 JSON')
+  const warns = []
+  const origWarn = console.warn
+  console.warn = (...args) => { warns.push(args.join(' ')) }
+  let badCfgServer
+  try {
+    badCfgServer = await startServer({ port: 0, configPath: badCfgPath })
+    const stBad1 = await (await fetch(badCfgServer.url + '/api/state')).json()
+    await fetch(badCfgServer.url + '/api/state')
+    assert.equal(stBad1.root, resolveRoot(''), '坏配置回退：root 回落到启动时当前目录')
+    assert.equal(stBad1.pollMs, 5000, '坏配置回退：pollMs 用内置默认')
+    assert.equal(warns.length, 1, '启动 + 两次轮询共读了 config 三次以上，告警只能有一次')
+    assert.ok(warns[0].indexOf(nodePath.resolve(badCfgPath)) >= 0, '告警里要点名是哪个文件')
+    assert.match(warns[0], /JSON/)
+  } finally {
+    console.warn = origWarn
+    if (badCfgServer) await new Promise((r) => badCfgServer.server.close(r))
+  }
+  ok('坏配置告警：非法 JSON 首次读取告警一次（含路径与原因），回退默认值，不随轮询重复')
+
+  // ── 非回环绑定：Host 校验放宽，不破坏局域网用法（README 记录的残留风险正来自这里）──
+  const lanServer = await startServer({ root: tmp, port: 0, host: '0.0.0.0' })
+  try {
+    const lanForged = await rawHttp({ method: 'GET', url: 'http://127.0.0.1:' + lanServer.port + '/api/health', headers: { Host: 'evil.example.com' } })
+    assert.equal(lanForged.status, 200)
+  } finally {
+    await new Promise((r) => lanServer.server.close(r))
+  }
+  ok('非回环绑定：0.0.0.0 下 Host 校验放宽，任意 Host 照常服务（局域网用法不破坏）')
+
+  // ── 技能文档接口：/api/skills 清单 + /api/skills/<名字> 单篇；未知名字与路径穿越 404 ──
+  const skillsServer = await startServer({ root: tmp, port: 0 })
+  try {
+    const listRes = await fetch(skillsServer.url + '/api/skills')
+    assert.equal(listRes.status, 200)
+    const skills = (await listRes.json()).skills
+    assert.ok(Array.isArray(skills) && skills.length >= 35, '清单应收录全部技能介绍文档（>=35 篇）')
+    assert.equal(skills[0].name, 'README', '总览（README）排第一')
+    assert.equal(skills[0].category, 'overview')
+    const names = skills.map((s) => s.name)
+    for (const must of ['ask-matt', 'grill-with-docs', 'tdd', 'wayfinder', 'wizard', 'grilling', 'teach', 'git-guardrails-claude-code', 'writing-shape']) {
+      assert.ok(names.includes(must), '清单应包含 ' + must)
+    }
+    const tddEntry = skills.find((s) => s.name === 'tdd')
+    assert.equal(tddEntry.category, 'engineering')
+    assert.ok(tddEntry.title && tddEntry.summary, '清单条目带标题与一句话简介')
+    assert.equal(tddEntry.inProgress, false)
+    assert.equal(skills.find((s) => s.name === 'writing-beats').inProgress, true, 'in-progress 文档带开发中标')
+    const catSeq = skills.map((s) => s.category).filter((c, i, arr) => i === 0 || arr[i - 1] !== c)
+    assert.deepEqual(catSeq, ['overview', 'engineering', 'productivity', 'misc', 'in-progress'], '清单按分类聚合且次序固定')
+
+    const docRes = await fetch(skillsServer.url + '/api/skills/tdd')
+    assert.equal(docRes.status, 200)
+    assert.match(docRes.headers.get('content-type') || '', /text\/markdown/)
+    const docText = await docRes.text()
+    assert.match(docText, /^---\nname: tdd\n/)
+    assert.match(docText, /红 → 绿循环/)
+
+    assert.equal((await fetch(skillsServer.url + '/api/skills/没有这个技能')).status, 404)
+    assert.equal((await fetch(skillsServer.url + '/api/skills/server')).status, 404, '同名非 md 文件不存在的 404')
+    assert.equal((await fetch(skillsServer.url + '/api/skills/..%2F..%2Fserver.mjs')).status, 404, '路径穿越 404')
+    assert.equal((await fetch(skillsServer.url + '/api/skills/%ZZ')).status, 404, '畸形百分号转义 404 不炸进程')
+  } finally {
+    await new Promise((r) => skillsServer.server.close(r))
+  }
+  ok('技能文档接口：清单完整有序（总览最前、分类聚合）、单篇取原文 Markdown；未知/穿越/畸形转义一律 404')
+
+  // ── 访问令牌：config.json 的 token 非空时，/api/* 无/错令牌 401，头与查询串携带皆可；静态壳不设防 ──
+  const tokenCfgPath = nodePath.join(tmp, 'config-token.json')
+  await writeFile(tokenCfgPath, JSON.stringify({ root: tmp, token: 'sekrit-1' }))
+  const tokenServer = await startServer({ port: 0, configPath: tokenCfgPath })
+  try {
+    const noToken = await fetch(tokenServer.url + '/api/state')
+    assert.equal(noToken.status, 401)
+    const noTokenHealth = await fetch(tokenServer.url + '/api/health')
+    assert.equal(noTokenHealth.status, 401)
+    const noTokenSkills = await fetch(tokenServer.url + '/api/skills')
+    assert.equal(noTokenSkills.status, 401, '技能文档接口也在 /api/* 令牌闸门之内')
+    const wrongToken = await rawHttp({ method: 'GET', url: tokenServer.url + '/api/state', headers: { 'X-FlowDeck-Token': 'wrong-token' } })
+    assert.equal(wrongToken.status, 401)
+    const shell = await fetch(tokenServer.url + '/')
+    assert.equal(shell.status, 200, '界面静态壳不设防：数据与写操作都在 /api/*，令牌只守那里')
+    const byHeader = await fetch(tokenServer.url + '/api/state', { headers: { 'X-FlowDeck-Token': 'sekrit-1' } })
+    assert.equal(byHeader.status, 200)
+    const byQuery = await fetch(tokenServer.url + '/api/state?token=sekrit-1')
+    assert.equal(byQuery.status, 200)
+    // 票原文端点也在令牌闸门之内（读面扩展与既有防护同款）
+    const noTokenIssue = await fetch(tokenServer.url + '/api/issue?effort=idea-b&ticket=01')
+    assert.equal(noTokenIssue.status, 401, '/api/issue 无令牌 401')
+    const okTokenIssue = await fetch(tokenServer.url + '/api/issue?effort=idea-b&ticket=01', { headers: { 'X-FlowDeck-Token': 'sekrit-1' } })
+    assert.equal(okTokenIssue.status, 200, '/api/issue 带令牌放行')
+    assert.equal((await fetch(tokenServer.url + '/api/roots-overview')).status, 401, '/api/roots-overview 无令牌 401（读面扩展同款闸门）')
+
+    // 写操作：令牌闸门在防跨站写校验之前——没有令牌，带头也进不来；令牌 + 防护头齐全才放行。
+    const postNoToken = await rawHttp({
+      method: 'POST', url: tokenServer.url + '/api/config',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1' },
+      body: JSON.stringify({ root: tmp }),
+    })
+    assert.equal(postNoToken.status, 401)
+    const cfgBeforeTokenPost = await fs.readFile(tokenCfgPath, 'utf8')
+    const postWithToken = await rawHttp({
+      method: 'POST', url: tokenServer.url + '/api/config',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'X-FlowDeck-Token': 'sekrit-1' },
+      body: JSON.stringify({ root: tmp }),
+    })
+    assert.equal(postWithToken.status, 200)
+    const savedAfterTokenPost = JSON.parse(await fs.readFile(tokenCfgPath, 'utf8'))
+    assert.equal(savedAfterTokenPost.token, 'sekrit-1', '换目录写回保留 token 字段')
+    assert.equal(savedAfterTokenPost.root, nodePath.resolve(tmp))
+    assert.notEqual(await fs.readFile(tokenCfgPath, 'utf8'), cfgBeforeTokenPost)
+  } finally {
+    await new Promise((r) => tokenServer.server.close(r))
+  }
+  ok('访问令牌：token 非空时 /api/* 无/错令牌 401，X-FlowDeck-Token 头与 ?token= 皆可；静态壳不设防；写操作同样设防且写回不丢 token')
+
+  // ── 票查证三件（票 01）：/api/issue 端点 + 盘点新字段（status 原值、git 旁证、Labels 仍不投影）──
+  const forensicsServer = await startServer({ root: tmp, port: 0 })
+  try {
+    const issueRes = await fetch(forensicsServer.url + '/api/issue?effort=idea-b&ticket=01')
+    assert.equal(issueRes.status, 200)
+    assert.match(issueRes.headers.get('content-type') || '', /text\/markdown/)
+    assert.equal(await issueRes.text(), T1_B, '票原文端点返回磁盘现状的 Markdown 原文')
+    // 编号补零：ticket=1 命中 01（与 Blocked by 的口径一致）
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=idea-b&ticket=1')).status, 200, '个位票号补零命中')
+    // 404 家族：无 issues/ 的 effort、不存在的 effort、不存在的票号、穿越样式 effort、非数字票号
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=__root&ticket=01')).status, 404, '根 effort 无 issues/ → 404')
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=没有这个effort&ticket=01')).status, 404)
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=idea-b&ticket=99')).status, 404)
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=..%2F..&ticket=01')).status, 404, '路径穿越样式的 effort 404')
+    assert.equal((await fetch(forensicsServer.url + '/api/issue?effort=idea-b&ticket=1%3Brm')).status, 404, '非数字票号 404')
+    const forgedIssue = await rawHttp({ method: 'GET', url: forensicsServer.url + '/api/issue?effort=idea-b&ticket=01', headers: { Host: 'evil.example.com' } })
+    assert.equal(forgedIssue.status, 403, '伪造 Host 的票原文请求 403（Host 校验先于路由）')
+
+    const stF = await (await fetch(forensicsServer.url + '/api/state')).json()
+    const bF = stF.efforts.find((e) => e.slug === 'idea-b')
+    assert.equal(bF.tickets.find((t) => t.key === '01').status, 'ready-for-agent', '票载荷带 Status 行原值')
+    assert.equal(bF.tickets.find((t) => t.key === '02').status, 'resolved')
+    for (const e of stF.efforts) {
+      assert.equal(e.git, null, '无 .git 的目录 git 旁证一律 null（确定性降级，恒测）：' + e.slug)
+      for (const t of e.tickets || []) {
+        assert.ok(!('labels' in t), 'Labels 仍不投影进票载荷（过滤轴是 Status 行）')
+      }
+    }
+  } finally {
+    await new Promise((r) => forensicsServer.server.close(r))
+  }
+  ok('票原文端点：正常取原文、票号补零、404 家族（无 effort/无票/穿越/非数字）、Host 与令牌防护同款；盘点新字段 status 原值进载荷、无 .git 恒 null、Labels 仍不投影')
+
+  // ── git 旁证正路径：临时 git 仓库夹具；git 二进制缺席自动跳过（同 jsdom 未装即跳过先例）──
+  const gitBinaryOk = await new Promise((resolve) => {
+    const p = spawn('git', ['--version'], { stdio: 'ignore' })
+    p.on('error', () => resolve(false))
+    p.on('close', (code) => resolve(code === 0))
+  })
+  if (!gitBinaryOk) {
+    console.log('  ⊘ 跳过 git 旁证正路径（环境里没有 git 二进制）；无 .git 的降级路径已在上方恒测')
+  } else {
+    const gitRun = (args, cwd) => new Promise((resolve, reject) => {
+      const p = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+      let out = ''
+      p.stdout.on('data', (d) => { out += d })
+      p.on('error', reject)
+      p.on('close', (code) => (code === 0 ? resolve(out.trim()) : reject(new Error('git ' + args.join(' ') + ' 退出码 ' + code))))
+    })
+    const gitTmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-git-'))
+    const prevTtl = process.env.FLOWDECK_GIT_TTL
+    process.env.FLOWDECK_GIT_TTL = '40' // 测试专用的 TTL 缩短缝（非配置面）：验证「不随指纹走」不用等 15 秒
+    try {
+      await writeFile(nodePath.join(gitTmp, '.scratch/giteff/map.md'), '# Git 旁证\n\n## Destination\n最近提交展示\n')
+      await writeFile(nodePath.join(gitTmp, '.scratch/giteff/issues/01-a.md'), '# 票A\nStatus: ready-for-agent\n')
+      await writeFile(nodePath.join(gitTmp, 'notes.md'), '# 笔记\n')
+      await gitRun(['init'], gitTmp)
+      await gitRun(['config', 'user.email', 'verify@flowdeck.local'], gitTmp)
+      await gitRun(['config', 'user.name', 'flowdeck-verify'], gitTmp)
+      await gitRun(['add', '.'], gitTmp)
+      await gitRun(['commit', '-m', '第一提交：建骨架'], gitTmp)
+      const hash1 = await gitRun(['log', '-1', '--pretty=format:%h'], gitTmp)
+      const gitServer = await startServer({ root: gitTmp, port: 0 })
+      try {
+        const s1 = await (await fetch(gitServer.url + '/api/state')).json()
+        const g1 = s1.efforts.find((e) => e.slug === 'giteff').git
+        assert.ok(g1, 'git 仓库内的 effort 应带旁证字段')
+        assert.equal(g1.hash, hash1, '短哈希与 git 自己报的一致')
+        assert.match(g1.date, /^\d{4}-\d{2}-\d{2}T/, 'ISO 时间')
+        assert.equal(g1.subject, '第一提交：建骨架', '提交标题')
+
+        // 陈旧陷阱回归（旁证不随指纹走）：amend 改写提交——工作树一个字节没动（指纹必然不变），
+        // 但该目录的最近提交变了。若旁证随指纹走，这一拍的 body 会永远复用旧值；TTL（40ms）过后必须追上。
+        await gitRun(['commit', '--amend', '-m', '第二提交：改写历史'], gitTmp)
+        const hash2 = await gitRun(['log', '-1', '--pretty=format:%h'], gitTmp)
+        await new Promise((r) => setTimeout(r, 90)) // 过 TTL
+        const s2 = await (await fetch(gitServer.url + '/api/state')).json()
+        const g2 = s2.efforts.find((e) => e.slug === 'giteff').git
+        assert.equal(g2.hash, hash2, '.scratch 未动（指纹命中拍）也要在 TTL 后追上 amend 的新提交')
+        assert.equal(g2.subject, '第二提交：改写历史')
+        // 判据红线：git 旁证在场时链推导输入不含它——四格与进度照常由文件事实决定
+        assert.equal(s2.efforts.find((e) => e.slug === 'giteff').chain.currentId, 'implement', '旁证不参与链推导（map+一开票 → 当前步 implement）')
+      } finally {
+        await new Promise((r) => gitServer.server.close(r))
+      }
+    } finally {
+      if (prevTtl === undefined) delete process.env.FLOWDECK_GIT_TTL
+      else process.env.FLOWDECK_GIT_TTL = prevTtl
+      await fs.rm(gitTmp, { recursive: true, force: true })
+    }
+    ok('git 旁证正路径：临时仓夹具出短哈希/ISO 时间/标题；提交不动 .scratch 也能在 TTL 后追上（不随指纹走）；链推导不含 git 字段')
+  }
+
+  // ── 项目总览（票 03）：/api/roots-overview 混合夹具（正常 + 无 .scratch + 不可读），单坏不拖垮整窗 ──
+  const ovRootA = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-ov-a-'))
+  const ovNoScratch = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-ov-noscratch-'))
+  try {
+    await writeFile(nodePath.join(ovRootA, '.scratch/proj/map.md'), '# 完工项\n\n## Destination\n总览 A\n')
+    await writeFile(nodePath.join(ovRootA, '.scratch/proj/issues/01-t.md'), '# 票\nStatus: resolved\n')
+    await writeFile(nodePath.join(ovRootA, 'pretend-dir.md'), '路径其实是文件的常用目录条目')
+    // wip 最后写（mtime 最新）：未完工 effort 里最近活跃的那个决定「链阶段」
+    await writeFile(nodePath.join(ovRootA, '.scratch/wip/map.md'), '# 进行中\n\n## Destination\n总览 A 的活票\n\n## Not yet specified\n- 一条迷雾\n')
+    await writeFile(nodePath.join(ovRootA, '.scratch/wip/spec.md'), '# 规格\n\n正文。')
+    await writeFile(nodePath.join(ovRootA, '.scratch/wip/issues/01-w.md'), '# 活票\nStatus: ready-for-agent\n')
+    const ovCfg = nodePath.join(tmp, 'config-ov.json')
+    await writeFile(ovCfg, JSON.stringify({ root: ovRootA, pollMs: 5000, recentRoots: [ovRootA, ovNoScratch, nodePath.join(ovRootA, 'pretend-dir.md')] }))
+    const ovServer = await startServer({ port: 0, configPath: ovCfg })
+    try {
+      const ov = await (await fetch(ovServer.url + '/api/roots-overview')).json()
+      assert.equal(ov.roots.length, 3, '当前目录与 recentRoots 去重后三行')
+      const rowA = ov.roots[0]
+      assert.equal(rowA.path, nodePath.resolve(ovRootA))
+      assert.equal(rowA.current, true, '当前追踪目录置顶')
+      assert.equal(rowA.status, 'ok')
+      assert.equal(rowA.stage, 'implement', '链阶段取最近活跃的未完工 effort 的当前步（wip 有一张开票）')
+      assert.equal(rowA.efforts, 2)
+      assert.equal(rowA.tickets, 2)
+      assert.equal(rowA.closed, 1)
+      assert.equal(rowA.fog, 1)
+      const rowB = ov.roots[1]
+      assert.equal(rowB.status, 'no-scratch', '目录在但没有 .scratch/ → 无产物行')
+      assert.equal(rowB.current, false)
+      assert.equal(rowB.stage, undefined, '无产物行不带链阶段')
+      const rowC = ov.roots[2]
+      assert.equal(rowC.status, 'unreadable', '路径其实是文件 → 不可读行（单坏不拖垮整窗）')
+      // GET 不触碰常用目录排序：配置一个字节都不动
+      assert.deepEqual(JSON.parse(await fs.readFile(ovCfg, 'utf8')).recentRoots, [ovRootA, ovNoScratch, nodePath.join(ovRootA, 'pretend-dir.md')])
+      const ovForged = await rawHttp({ method: 'GET', url: ovServer.url + '/api/roots-overview', headers: { Host: 'evil.example.com' } })
+      assert.equal(ovForged.status, 403, '伪造 Host 的总览请求 403')
+    } finally {
+      await new Promise((r) => ovServer.server.close(r))
+    }
+  } finally {
+    await fs.rm(ovRootA, { recursive: true, force: true })
+    await fs.rm(ovNoScratch, { recursive: true, force: true })
+  }
+  ok('项目总览端点：当前置顶、行字段（阶段/票计数/迷雾）齐；无 .scratch 与不可读分行标注不拖垮整窗；GET 不碰 recentRoots；Host 校验罩住')
+
+  // 空常用目录清单：只有置顶的当前行
+  const ovEmptyCfg = nodePath.join(tmp, 'config-ov-empty.json')
+  const ovEmptyServer = await startServer({ root: tmp, port: 0, configPath: ovEmptyCfg })
+  try {
+    const ovE = await (await fetch(ovEmptyServer.url + '/api/roots-overview')).json()
+    assert.deepEqual(ovE.roots.map((r) => [r.path, r.current, r.status]), [[nodePath.resolve(tmp), true, 'ok']])
+  } finally {
+    await new Promise((r) => ovEmptyServer.server.close(r))
+  }
+  ok('项目总览空清单：没有常用目录时只有置顶的当前目录一行')
+
+  // opts.token（CLI --token 同路径）：令牌优先级高于 config.json 的空值
+  const tokenOptServer = await startServer({ root: tmp, port: 0, configPath: tokenCfgPath, token: 'opt-2' })
+  try {
+    const optDenied = await fetch(tokenOptServer.url + '/api/state?token=sekrit-1')
+    assert.equal(optDenied.status, 401, '命令行令牌覆盖配置里的令牌')
+    const optOk = await fetch(tokenOptServer.url + '/api/state?token=opt-2')
+    assert.equal(optOk.status, 200)
+  } finally {
+    await new Promise((r) => tokenOptServer.server.close(r))
+  }
+  ok('令牌参数：--token / opts.token 生效并覆盖 config.json 的令牌')
+
+  // ── 设置服务端（settings-modal）：POST /api/config 扩字段逐字段校验；pollMs 手改即跟随；令牌热切换 ──
+  const setCfgPath = nodePath.join(tmp, 'config-settings.json')
+  await writeFile(setCfgPath, JSON.stringify({ root: tmp, pollMs: 5000, 说明: '整段保留' }))
+  const setServer = await startServer({ port: 0, configPath: setCfgPath })
+  try {
+    // pollMs 跟随 config.json：手改文件，下一拍 /api/state 就换，不用重启
+    await fs.writeFile(setCfgPath, JSON.stringify({ root: tmp, pollMs: 2500, 说明: '整段保留' }))
+    let setState = await (await fetch(setServer.url + '/api/state')).json()
+    assert.equal(setState.pollMs, 2500, '手改 config.json 的 pollMs 下一拍生效')
+    await fs.writeFile(setCfgPath, JSON.stringify({ root: tmp, pollMs: 'abc', 说明: '整段保留' }))
+    setState = await (await fetch(setServer.url + '/api/state')).json()
+    assert.equal(setState.pollMs, 5000, '非法 pollMs 归一回默认')
+    assert.equal(setState.pollMode, 'observe', 'pollMode 缺省 observe、随 /api/state 下发')
+    assert.equal(setState.tokenEnabled, false, 'state 携带非机密的 tokenEnabled')
+    assert.equal(setState.host, '127.0.0.1', 'state 携带运行值 host/port（设置表单初值）')
+    assert.equal(typeof setState.port, 'number')
+
+    // 逐字段 400：钳位下限、端口越界/非整数、host 空/非法字符、token 非字符串、pollMode 非法档位、全未知字段；一个都不写盘
+    for (const bad of [{ pollMs: 999 }, { pollMs: 'x' }, { pollMode: 'sometimes' }, { port: 70000 }, { port: 1.5 }, { host: '   ' }, { host: 'bad host!' }, { token: 123 }, { 没这字段: 1 }]) {
+      const r = await postJson(setServer.url + '/api/config', bad)
+      assert.equal(r.status, 400, '非法字段应 400：' + JSON.stringify(bad))
+    }
+    assert.equal(JSON.parse(await fs.readFile(setCfgPath, 'utf8')).pollMs, 'abc', '全非法请求一个字都不写盘')
+
+    // 合法保存：pollMs 即时、host/port 重启；写盘保留「说明」；响应 applied 给生效语义
+    const savedOk = await postJson(setServer.url + '/api/config', { pollMs: 3000, host: '0.0.0.0', port: 4000 })
+    assert.equal(savedOk.status, 200)
+    assert.deepEqual(savedOk.data.applied, { pollMs: 'immediate', host: 'restart', port: 'restart' })
+    const savedSet = JSON.parse(await fs.readFile(setCfgPath, 'utf8'))
+    assert.equal(savedSet.pollMs, 3000)
+    assert.equal(savedSet.host, '0.0.0.0')
+    assert.equal(savedSet.port, 4000)
+    assert.equal(savedSet['说明'], '整段保留')
+    setState = await (await fetch(setServer.url + '/api/state')).json()
+    assert.equal(setState.pollMs, 3000, 'pollMs 写盘后下一拍即生效')
+    assert.equal(setState.host, '127.0.0.1', 'host 上报运行值：新值重启才接管')
+
+    // ── pollMode 三档（票 06）：保存即时生效、随状态下发；display/manual 档同样可切 ──
+    for (const mode of ['manual', 'display', 'observe']) {
+      const ms = await postJson(setServer.url + '/api/config', { pollMode: mode })
+      assert.equal(ms.status, 200, 'pollMode=' + mode + ' 保存成功')
+      assert.deepEqual(ms.data.applied, { pollMode: 'immediate' }, 'pollMode 生效语义 immediate')
+      const stMode = await (await fetch(setServer.url + '/api/state')).json()
+      assert.equal(stMode.pollMode, mode, 'pollMode=' + mode + ' 下一拍即生效并随状态下发')
+    }
+    assert.equal(JSON.parse(await fs.readFile(setCfgPath, 'utf8')).pollMode, 'observe', 'pollMode 写进 config.json')
+
+    // 令牌热切换：写盘即接管——无/旧令牌即刻 401、新令牌即刻可用；响应不含令牌值
+    const tokSet = await postJson(setServer.url + '/api/config', { token: 'tok-beta' })
+    assert.equal(tokSet.status, 200)
+    assert.ok(!JSON.stringify(tokSet.data).includes('tok-beta'), '响应不含令牌值')
+    assert.equal((await fetch(setServer.url + '/api/state')).status, 401)
+    assert.equal((await fetch(setServer.url + '/api/state', { headers: { 'X-FlowDeck-Token': 'wrong' } })).status, 401)
+    setState = await (await fetch(setServer.url + '/api/state', { headers: { 'X-FlowDeck-Token': 'tok-beta' } })).json()
+    assert.equal(setState.tokenEnabled, true)
+    // 清除令牌：空串恢复无鉴权（改令牌的请求本身带当令牌）
+    const tokClear = await rawHttp({
+      method: 'POST', url: setServer.url + '/api/config',
+      headers: { 'Content-Type': 'application/json', 'X-FlowDeck': '1', 'X-FlowDeck-Token': 'tok-beta' },
+      body: JSON.stringify({ token: '' }),
+    })
+    assert.equal(tokClear.status, 200)
+    assert.equal((await fetch(setServer.url + '/api/state')).status, 200, '清除令牌后恢复无鉴权')
+    assert.equal(JSON.parse(await fs.readFile(setCfgPath, 'utf8')).token, '')
+  } finally {
+    await new Promise((r) => setServer.server.close(r))
+  }
+  ok('设置服务端：POST /api/config 收 pollMs/host/port/token（逐字段校验、applied 生效语义、非法不写盘）；pollMs/令牌即时生效，host/port 重启生效')
+
+
+  // ── 收录边界：上限淘汰最久未用；CLI --root 启动是临时覆盖，不收录 ──
+  const crowdCfgPath = nodePath.join(tmp, 'config-crowd.json')
+  const crowdList = []
+  for (let i = 0; i < RECENT_ROOTS_LIMIT; i++) crowdList.push('/tmp/fd-crowd-' + String(i).padStart(2, '0'))
+  await writeFile(crowdCfgPath, JSON.stringify({ root: '/tmp/fd-没有这个目录', recentRoots: crowdList }))
+  const crowdServer = await startServer({ port: 0, configPath: crowdCfgPath })
+  try {
+    const sw = await postJson(crowdServer.url + '/api/config', { root: tmp })
+    assert.equal(sw.status, 200)
+    const savedCrowd = JSON.parse(await fs.readFile(crowdCfgPath, 'utf8'))
+    assert.equal(savedCrowd.recentRoots.length, RECENT_ROOTS_LIMIT)
+    assert.equal(savedCrowd.recentRoots[0], nodePath.resolve(tmp))
+    assert.equal(savedCrowd.recentRoots[RECENT_ROOTS_LIMIT - 1], '/tmp/fd-crowd-' + String(RECENT_ROOTS_LIMIT - 2).padStart(2, '0'))
+    ok('收录上限：手写满 ' + RECENT_ROOTS_LIMIT + ' 条后切换，新目录进头部、最久未用的尾部被淘汰')
+  } finally {
+    await new Promise((r) => crowdServer.server.close(r))
+  }
+
+  const cliCfgPath = nodePath.join(tmp, 'config-根本没建.json')
+  const cliServer = await startServer({ root: tmp, port: 0, configPath: cliCfgPath })
+  try {
+    const stCli = await (await fetch(cliServer.url + '/api/state')).json()
+    assert.deepEqual(stCli.recentRoots, [])
+    assert.equal(existsSync(cliCfgPath), false)
+    ok('--root 启动不收录：CLI 临时覆盖不写 recentRoots，也不凭空建配置文件')
+  } finally {
+    await new Promise((r) => cliServer.server.close(r))
+  }
+
+  // ── CLI 参数防护：吞值/缺值清晰报错退出；正常传参（含相对 --config）不受影响 ──
+  const cliSwallow = await runCli(['--root', '--port', '4321'])
+  assert.equal(cliSwallow.code, 1)
+  assert.match(cliSwallow.err, /--root/, '报错要点名是哪个参数缺值')
+  const cliMissing = await runCli(['--root'])
+  assert.equal(cliMissing.code, 1)
+  assert.match(cliMissing.err, /--root/)
+  const cliTail = await runCli(['--port', '3999', '--host'])
+  assert.equal(cliTail.code, 1)
+  assert.match(cliTail.err, /--host/)
+
+  const cliOk = await new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [nodePath.join(HERE, 'server.mjs'), '--config', 'cli-ok.json', '--port', '0'], { cwd: tmp, stdio: ['ignore', 'pipe', 'inherit'] })
+    const timer = setTimeout(() => { p.kill(); reject(new Error('CLI 子进程 15 秒内没启动完')) }, 15000)
+    let buf = ''
+    p.stdout.on('data', (d) => {
+      buf += d
+      const m = /流程板已启动：(http:\/\/\S+)/.exec(buf)
+      if (m) { clearTimeout(timer); resolve({ url: m[1], proc: p }) }
+    })
+    p.on('close', (code) => { clearTimeout(timer); reject(new Error('CLI 子进程提前退出，code=' + code)) })
+  })
+  try {
+    const cliHealth = await (await fetch(cliOk.url + '/api/health')).json()
+    // macOS 上 os.tmpdir() 是 /var/... 符号链接，子进程的 cwd 是物理路径，得按 realpath 对
+    assert.equal(cliHealth.root, await fs.realpath(tmp), '--config 相对路径按 cwd 解析，root 默认回落 cwd')
+  } finally {
+    cliOk.proc.kill()
+  }
+  ok('CLI 参数防护：--root --port 4321、末尾缺值、--host 吞值都报错退出 1；正常传参照常启动（--config 支持相对路径）')
+
+  // ── 界面运行时烟雾验证：用 jsdom 把 index.html 真正跑起来 ──
+  let JSDOM = null
+  try { JSDOM = (await import('jsdom')).JSDOM } catch {}
+  if (!JSDOM) {
+    console.log('  ⊘ 跳过界面运行时验证（未安装 jsdom）')
+  } else {
+    const { VirtualConsole } = await import('jsdom')
+    const html = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+    const tick = () => new Promise((r) => setTimeout(r, 40))
+    const absTmp = nodePath.resolve(tmp)
+    // 盘点载荷：真实扫描数据 + 常用目录（当前目录在列表里，另有一条存在的、两条失效的）
+    let statePayload = {
+      ...ws, pollMs: 5000, configPath: '/tmp/config.json', root: absTmp,
+      recentRoots: [
+        { path: absTmp, exists: true },
+        { path: '/tmp/fd-proj-alpha', exists: true },
+        { path: '/tmp/fd-gone-1', exists: false },
+        { path: '/tmp/fd-gone-2', exists: false },
+      ],
+    }
+    // 给 idea-b 的 01 票注上格式警告：真扫描的票没有警告，"!" 徽标走注数据验证
+    statePayload.efforts.find((e) => e.slug === 'idea-b').tickets[0].formatWarnings = [
+      { kind: 'unrecognizedField', line: '*Status:* done', message: '有一行像是字段行但没读懂（原文：*Status:* done）' },
+    ]
+    const jsErrors = []
+    const vc = new VirtualConsole()
+    vc.on('jsdomError', (e) => jsErrors.push(String((e && e.message) || e)))
+    const calls = []
+    const dom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39311/',
+      pretendToBeVisual: true,
+      virtualConsole: vc,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          calls.push({ url, opts })
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })
+          }
+          // 切换与删除按服务端语义回应：切换即收录移顶，删除即返回剩余列表
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            const root = JSON.parse(opts.body).root
+            statePayload = { ...statePayload, root, recentRoots: [{ path: root, exists: true }].concat(statePayload.recentRoots.filter((r) => r.path !== root)) }
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root }) })
+          }
+          if (url.indexOf('/api/recent-roots') >= 0 && opts && opts.method === 'POST') {
+            const removed = JSON.parse(opts.body).remove
+            statePayload = { ...statePayload, recentRoots: statePayload.recentRoots.filter((r) => r.path !== removed) }
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, recentRoots: statePayload.recentRoots }) })
+          }
+          return Promise.reject(new Error('界面不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const doc = dom.window.document
+    const win = dom.window
+    const input = doc.getElementById('rootInput')
+    const menu = doc.getElementById('rootMenu')
+    const opts = () => Array.from(doc.querySelectorAll('#rootMenu .opt'))
+    const postCalls = () => calls.filter((c) => c.opts && c.opts.method === 'POST')
+    const key = (k) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+
+  // 默认选中第一个 effort（__root）：地图干净 → grill 完成，当前步是 spec
+  assert.equal(doc.querySelectorAll('#tabs button').length, 6, '5 个 effort + 尾部「全部」伪条目')
+    const stageEls = doc.querySelectorAll('.stage')
+    assert.equal(stageEls.length, 4)
+    assert.match(stageEls[0].className, /done/)
+    assert.match(stageEls[1].className, /current/)
+    assert.match(doc.querySelector('.next .txt').textContent, /to-spec/)
+    // 切到 idea-b：两张票、implement 是当前步
+    const tabs = Array.from(doc.querySelectorAll('#tabs button'))
+    tabs.find((btn) => btn.textContent.indexOf('idea-b') === 0).dispatchEvent(new win.Event('click'))
+    assert.match(doc.querySelector('.next .txt').textContent, /Blocked by 为空的票/)
+    assert.equal(doc.querySelectorAll('tr.ticket').length, 2)
+    assert.match(doc.querySelectorAll('.stage')[3].className, /current/)
+    assert.ok(doc.querySelector('tr.ticket .warn'), '带 formatWarnings 的票应在标题旁亮 "!" 徽标')
+    assert.match(doc.querySelector('tr.ticket .warn').title, /\*Status:\* done/, '徽标 tooltip 应给出原文行')
+
+    // ── 「更新于」按本地时区显示：服务端出 UTC ISO 串，旧实现直接切片会差出一个时区（如 UTC+8 慢 8 小时）──
+    const bTicket = ws.efforts.find((e) => e.slug === 'idea-b').tickets[0]
+    const bd = new Date(bTicket.updatedAt)
+    const pad2 = (n) => String(n).padStart(2, '0')
+    const expectLocal = bd.getFullYear() + '-' + pad2(bd.getMonth() + 1) + '-' + pad2(bd.getDate()) + ' ' + pad2(bd.getHours()) + ':' + pad2(bd.getMinutes())
+    assert.equal(doc.querySelectorAll('tr.ticket')[0].children[6].textContent, expectLocal, '「更新于」应为本地时区格式化的时间')
+    if (bd.getTimezoneOffset() !== 0) {
+      assert.notEqual(doc.querySelectorAll('tr.ticket')[0].children[6].textContent, bTicket.updatedAt.slice(0, 16).replace('T', ' '), '非 UTC 时区下不得直接展示 UTC 串切片')
+    }
+
+    // ── 后向推定标注：切到 only-spec（无 map 有 spec），Grill 格推定完成并亮「推定 · 无 map」──
+    // 标签页按钮在 render() 里整体重建，点击后旧引用脱挂，必须现查现用
+    const tabBtn = (name) => Array.from(doc.querySelectorAll('#tabs button')).find((btn) => btn.textContent.indexOf(name) === 0)
+    tabBtn('only-spec').dispatchEvent(new win.Event('click'))
+    const infStages = doc.querySelectorAll('.stage')
+    assert.match(infStages[0].className, /done/)
+    assert.equal(infStages[0].querySelector('.chip.infer').textContent, '推定 · 无 map')
+    assert.equal(infStages[1].querySelectorAll('.chip.infer').length, 0, 'spec 实证完成不标推定')
+    assert.match(doc.querySelector('.next .txt').textContent, /to-tickets/)
+    tabBtn('idea-b').dispatchEvent(new win.Event('click'))
+    assert.equal(doc.querySelectorAll('.stage .chip.infer').length, 0, '全实证 effort 无任何推定标注')
+
+    // ── 常用目录下拉：聚焦弹出；当前追踪目录置顶标示（主行目录名、次行全路径），纯展示不写回 ──
+    assert.equal(postCalls().length, 0, '没动下拉之前不该有任何写请求')
+    input.focus()
+    await tick()
+    assert.equal(menu.hasAttribute('hidden'), false, '聚焦输入框应展开常用目录下拉')
+    assert.equal(opts().length, 4)
+    assert.equal(opts()[0].querySelector('.main').textContent.indexOf(nodePath.basename(absTmp)), 0)
+    assert.equal(opts()[0].querySelector('.sub').textContent, absTmp)
+    assert.ok(opts()[0].querySelector('.chip.cur'), '当前追踪目录应有「当前」标示')
+    assert.equal(opts().filter((o) => o.className.indexOf('missing') >= 0).length, 2)
+    assert.ok(opts()[2].textContent.indexOf('目录不存在') >= 0, '失效条目应标注「目录不存在」')
+    const cfgPostsBeforeMissingClick = postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).length
+    opts().find((o) => o.querySelector('.sub').textContent === '/tmp/fd-gone-2').dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).length, cfgPostsBeforeMissingClick, '置灰条目点了不该发起切换')
+    assert.equal(menu.hasAttribute('hidden'), false, '点置灰条目也不该关下拉')
+    ok('常用目录下拉：聚焦展开；当前目录置顶标示；主行目录名、次行全路径；失效条目置灰标注且不可点选')
+
+    // ── ✕ 即删即生效：删掉失效条目，菜单原地更新、不关闭 ──
+    const gone1 = opts().find((o) => o.querySelector('.sub').textContent === '/tmp/fd-gone-1')
+    gone1.querySelector('.del').dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(postCalls().filter((c) => c.url.indexOf('/api/recent-roots') >= 0).length, 1)
+    assert.equal(JSON.parse(postCalls().find((c) => c.url.indexOf('/api/recent-roots') >= 0).opts.body).remove, '/tmp/fd-gone-1')
+    assert.equal(menu.hasAttribute('hidden'), false)
+    assert.equal(opts().length, 3)
+    assert.ok(!opts().some((o) => o.querySelector('.sub').textContent === '/tmp/fd-gone-1'))
+    ok('常用目录删除：点 ✕ 立即 POST 删除并按返回列表原地刷新，无确认弹窗')
+
+    // ── 输入过滤：全路径子串、不区分大小写；无匹配有自己的空态 ──
+    input.value = 'ALPHA'
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    assert.equal(opts().length, 1)
+    assert.equal(opts()[0].querySelector('.sub').textContent, '/tmp/fd-proj-alpha')
+    input.value = 'zzz-没有这种目录'
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    assert.equal(opts().length, 0)
+    assert.ok(menu.textContent.indexOf('没有匹配') >= 0)
+    input.value = ''
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    assert.equal(opts().length, 3)
+    ok('常用目录过滤：输入按全路径子串过滤（不区分大小写），无匹配时给出空态文案')
+
+    // ── 键盘：↑↓ 移动高亮；Enter 选中即切换；高亮在失效条目上时回落为按输入框内容换目录 ──
+    assert.ok(opts()[0].className.indexOf('hl') >= 0)
+    key('ArrowDown')
+    key('ArrowDown')
+    assert.ok(opts()[2].className.indexOf('hl') >= 0)
+    const postsBeforeEnter = postCalls().length
+    key('Enter')
+    assert.equal(postCalls().length, postsBeforeEnter, '输入框为空时 Enter 不发起换目录')
+    // 输入的新路径没有匹配条目：Enter 仍按输入框内容换目录（老行为不回归）
+    input.value = '/tmp/fd-typed-new'
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    assert.equal(opts().length, 0)
+    key('Enter')
+    await tick()
+    assert.equal(JSON.parse(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).pop().opts.body).root, '/tmp/fd-typed-new')
+    input.dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    input.value = '/tmp/fd-proj-alpha'
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    key('Enter')
+    await tick()
+    const cfgPosts = postCalls().filter((c) => c.url.indexOf('/api/config') >= 0)
+    assert.equal(JSON.parse(cfgPosts.pop().opts.body).root, '/tmp/fd-proj-alpha')
+    assert.equal(menu.hasAttribute('hidden'), true, '选中即切换后收起下拉')
+    assert.match(doc.getElementById('meta').textContent, /fd-proj-alpha/)
+    ok('常用目录键盘操作：↑↓ 移动高亮，Enter 选中立即切换；高亮失效或无匹配时回落为按输入框换目录')
+
+    // ── 点选即切换：重开下拉（输入框已持有焦点，focus 不会再派发事件，用点击展开），直接点一条 ──
+    input.dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(opts().length, 4, '切换后当前目录仍在置顶，被删的条目不再回来')
+    assert.ok(opts()[0].querySelector('.chip.cur'))
+    const alphaOpt = opts().find((o) => o.querySelector('.sub').textContent === '/tmp/fd-proj-alpha')
+    alphaOpt.dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(JSON.parse(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).pop().opts.body).root, '/tmp/fd-proj-alpha')
+    ok('常用目录点选：点一条立即发起切换')
+
+    // ── 轮询刷新不打扰：下拉开着、焦点在输入框，后台刷新（无用户点击）后两者都保住，数据还更新了 ──
+    input.focus()
+    input.dispatchEvent(new win.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(menu.hasAttribute('hidden'), false)
+    statePayload.recentRoots.push({ path: '/tmp/fd-proj-beta', exists: true })
+    doc.dispatchEvent(new win.Event('visibilitychange'))
+    await tick()
+    assert.equal(menu.hasAttribute('hidden'), false, '后台刷新不应关闭展开的下拉')
+    assert.equal(doc.activeElement, input, '后台刷新不应抢走输入框焦点')
+    assert.ok(opts().some((o) => o.querySelector('.sub').textContent === '/tmp/fd-proj-beta'), '刷新后的新数据应进入下拉')
+
+    key('Escape')
+    assert.equal(menu.hasAttribute('hidden'), true, 'Esc 应关闭下拉')
+    assert.deepEqual(jsErrors, [])
+    dom.window.close()
+    ok('常用目录轮询共存：刷新不关闭下拉、不抢焦点，新数据照常进来；Esc 关闭')
+
+    // ── 空列表场景：只有置顶的当前目录 + 引导文案，纯展示不写回 ──
+    const jsErrors2 = []
+    const vc2 = new VirtualConsole()
+    vc2.on('jsdomError', (e) => jsErrors2.push(String((e && e.message) || e)))
+    const unexpectedWrites = []
+    const emptyDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39312/',
+      pretendToBeVisual: true,
+      virtualConsole: vc2,
+      beforeParse(window) {
+        window.fetch = (u) => {
+          if (String(u).indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-手改配置的目录', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          unexpectedWrites.push(String(u))
+          return Promise.reject(new Error('空列表场景不该有写请求：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const eDoc = emptyDom.window.document
+    eDoc.getElementById('rootInput').focus()
+    await tick()
+    assert.equal(eDoc.querySelectorAll('#rootMenu .opt').length, 1, '空列表时只有置顶的当前目录')
+    assert.ok(eDoc.getElementById('rootMenu').textContent.indexOf('切换过的目录会出现在这里') >= 0)
+    assert.deepEqual(unexpectedWrites, [])
+    assert.deepEqual(jsErrors2, [])
+    emptyDom.window.close()
+    ok('常用目录空态：当前目录置顶展示但不写回，空列表显示「切换过的目录会出现在这里」')
+
+    // ── 界面令牌：URL 带 ?token= 打开 → 记忆到 localStorage、抹掉地址栏令牌、请求自动带头 ──
+    const jsErrors3 = []
+    const vc3 = new VirtualConsole()
+    vc3.on('jsdomError', (e) => jsErrors3.push(String((e && e.message) || e)))
+    const tokenCalls = []
+    const tokenDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39313/?token=t-123',
+      pretendToBeVisual: true,
+      virtualConsole: vc3,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          tokenCalls.push({ url, opts })
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-token', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          return Promise.reject(new Error('令牌场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const stateCall = tokenCalls.find((c) => c.url.indexOf('/api/state') >= 0)
+    assert.ok(stateCall, '令牌场景下 /api/state 应被请求')
+    assert.equal(stateCall.opts.headers['X-FlowDeck-Token'], 't-123', '请求应自动携带 URL 里收到的令牌')
+    assert.equal(tokenDom.window.localStorage.getItem('flowdeck-token'), 't-123', '令牌应记忆到 localStorage')
+    assert.equal(tokenDom.window.location.search, '', '地址栏里的令牌应被抹掉')
+    assert.deepEqual(jsErrors3, [])
+    tokenDom.window.close()
+    ok('界面令牌：URL ?token= 打开即记忆并随请求携带，地址栏抹净')
+
+    // ── 双层短路（前端半边）：首拍收 ETag，后续拍带 If-None-Match；304 空身不重解析、不报错 ──
+    const jsErrors304 = []
+    const vc304 = new VirtualConsole()
+    vc304.on('jsdomError', (e) => jsErrors304.push(String((e && e.message) || e)))
+    let etagCalls304 = 0
+    const etagHeaderBox = { get: (k) => (k === 'ETag' ? '"etag-304-test"' : null) }
+    const etagDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39316/',
+      pretendToBeVisual: true,
+      virtualConsole: vc304,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') < 0) return Promise.reject(new Error('304 场景不该请求别的接口：' + u))
+          etagCalls304++
+          if (etagCalls304 === 1) {
+            return Promise.resolve({ ok: true, status: 200, headers: etagHeaderBox, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-etag', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          assert.equal((opts && opts.headers && opts.headers['If-None-Match']) || '', '"etag-304-test"', '第二拍起应带 If-None-Match（首拍收到的 ETag）')
+          return Promise.resolve({ ok: false, status: 304, headers: etagHeaderBox, text: async () => '' })
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const e3Doc = etagDom.window.document
+    const tabsBefore = e3Doc.querySelectorAll('#tabs button').length
+    e3Doc.dispatchEvent(new etagDom.window.Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 60))
+    assert.equal(etagCalls304, 2, '回前台即刷触发第二拍')
+    assert.equal(e3Doc.querySelectorAll('#tabs button').length, tabsBefore, '304 拍界面数据保持（本地 state 即最新）')
+    assert.match(e3Doc.getElementById('meta').textContent, /已刷新/, '304 拍照常更新「已刷新」时间')
+    assert.deepEqual(jsErrors304, [])
+    etagDom.window.close()
+    ok('前端 304：首拍收 ETag 记忆，后续拍带 If-None-Match；304 空身不重解析、无报错、界面照常')
+
+    // ── apiFetch 归一（票 05）：POST 遇 401 由服务端泛文案升级为定向提示（含 ?token= 补救指引）──
+    const jsErrors401 = []
+    const vc401 = new VirtualConsole()
+    vc401.on('jsdomError', (e) => jsErrors401.push(String((e && e.message) || e)))
+    const unauthDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39317/',
+      pretendToBeVisual: true,
+      virtualConsole: vc401,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-unauth', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: '需要有效的访问令牌：URL 加 ?token=… 或请求头 X-FlowDeck-Token。' }) })
+          }
+          return Promise.reject(new Error('401 场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const uDoc = unauthDom.window.document
+    const uWin = unauthDom.window
+    uDoc.getElementById('rootInput').value = '/tmp/fd-switch-target'
+    uDoc.getElementById('switchBtn').dispatchEvent(new uWin.Event('click', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 60))
+    assert.match(uDoc.getElementById('err').textContent, /换目录失败：需要访问令牌/, 'POST 401 显示定向文案（不走服务端泛文案）')
+    assert.match(uDoc.getElementById('err').textContent, /\?token=/, '定向文案带 ?token= 补救指引')
+    assert.equal(uDoc.getElementById('switchBtn').disabled, false, '失败后按钮恢复可用')
+    assert.deepEqual(jsErrors401, [])
+    unauthDom.window.close()
+    ok('apiFetch 归一：POST 错令牌拿到定向 401 提示（含 ?token= 补救指引），按钮状态恢复')
+
+    // ── 轮询模式三档（票 06）：惰性档常驻徽标 + 零自动请求 + 操作后自动一拍；切档随状态下发 ──
+    const jsErrorsMode = []
+    const vcMode = new VirtualConsole()
+    vcMode.on('jsdomError', (e) => jsErrorsMode.push(String((e && e.message) || e)))
+    let modePayload = { ...ws, root: '/tmp/fd-mode', pollMs: 1000, pollMode: 'manual', configPath: '/tmp/config.json', recentRoots: [] }
+    const modeCalls = { state: 0, post: 0 }
+    const modeDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39318/',
+      pretendToBeVisual: true,
+      virtualConsole: vcMode,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            modeCalls.state++
+            return Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(modePayload)) })
+          }
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            modeCalls.post++
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true, root: '/tmp/fd-mode-b' }) })
+          }
+          return Promise.reject(new Error('模式场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const mDoc = modeDom.window.document
+    const mWin = modeDom.window
+    const badge = mDoc.getElementById('manualBadge')
+    assert.equal(badge.hidden, false, '惰性档常驻徽标可见')
+    assert.match(badge.textContent, /^手动模式 · \d\d:\d\d:\d\d 盘点$/, '徽标给「手动模式 · HH:MM:SS 盘点」')
+    assert.equal(modeCalls.state, 1, '首载一拍')
+    await new Promise((r) => setTimeout(r, 1300)) // pollMs=1000：若仍有自动轮询，这里早该多出请求
+    assert.equal(modeCalls.state, 1, '惰性档零自动请求（过了 pollMs 周期也没有新请求）')
+    // 状态变更操作（换目录）完成后自动刷一拍
+    mDoc.getElementById('rootInput').value = '/tmp/fd-mode-b'
+    mDoc.getElementById('switchBtn').dispatchEvent(new mWin.Event('click', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 120))
+    assert.equal(modeCalls.state, 2, '换目录成功后自动补一拍')
+    assert.match(badge.textContent, /盘点$/, '补拍后徽标盘点时间更新')
+    // 别处改成观测档 → 本浏览器手动刷新一拍即跟随（无轮询所致的已知边角，记档）
+    modePayload = { ...modePayload, pollMode: 'observe' }
+    mDoc.getElementById('refreshBtn').dispatchEvent(new mWin.Event('click', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 120))
+    assert.equal(modeCalls.state, 3)
+    assert.equal(badge.hidden, true, '切回观测档徽标隐藏')
+    assert.deepEqual(jsErrorsMode, [])
+    modeDom.window.close()
+    ok('轮询模式（惰性档）：常驻「手动模式 · 盘点」徽标、零自动请求、状态变更操作后自动一拍；手动刷新即跟随服务端档位')
+
+    // ── 观测档停表与回台即刷：不可见期间零请求；回前台立即一拍 ──
+    const jsErrorsObs = []
+    const vcObs = new VirtualConsole()
+    vcObs.on('jsdomError', (e) => jsErrorsObs.push(String((e && e.message) || e)))
+    let obsPayload = { ...ws, root: '/tmp/fd-obs', pollMs: 1000, pollMode: 'observe', configPath: '/tmp/config.json', recentRoots: [] }
+    const obsCalls = { state: 0 }
+    const obsDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39319/',
+      pretendToBeVisual: true,
+      virtualConsole: vcObs,
+      beforeParse(window) {
+        window.fetch = (u) => {
+          if (String(u).indexOf('/api/state') >= 0) {
+            obsCalls.state++
+            return Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(obsPayload)) })
+          }
+          return Promise.reject(new Error('观测档场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const oDoc = obsDom.window.document
+    const oWin = obsDom.window
+    assert.equal(obsCalls.state, 1, '首载一拍')
+    Object.defineProperty(oDoc, 'hidden', { value: true, configurable: true })
+    oDoc.dispatchEvent(new oWin.Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 1300)) // pollMs=1000：观测档不可见期间不该有任何请求
+    assert.equal(obsCalls.state, 1, '不可见期间零请求（观测档停表）')
+    Object.defineProperty(oDoc, 'hidden', { value: false, configurable: true })
+    oDoc.dispatchEvent(new oWin.Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 120))
+    assert.equal(obsCalls.state, 2, '回前台立即补一拍')
+    assert.deepEqual(jsErrorsObs, [])
+    obsDom.window.close()
+    ok('轮询模式（观测档）：页面不可见零请求（停表），回前台立即一拍')
+
+    // ── a11y 三层（票 07）：键盘层、兜底层、播报层、弹窗焦点圈禁 ──
+    const jsErrorsA = []
+    const vcA = new VirtualConsole()
+    vcA.on('jsdomError', (e) => jsErrorsA.push(String((e && e.message) || e)))
+    const copiesA = []
+    const postsA = []
+    let a11yPayload = JSON.parse(JSON.stringify({
+      ...ws, pollMs: 5000, configPath: '/tmp/config.json', root: '/tmp/fd-a11y',
+      recentRoots: [{ path: '/tmp/fd-a11y', exists: true }, { path: '/tmp/fd-a11y-old', exists: true }, { path: '/tmp/fd-gone-a', exists: false }],
+    }))
+    a11yPayload.efforts.find((e) => e.slug === 'idea-b').tickets[0].formatWarnings = [
+      { kind: 'unrecognizedField', line: '*Status:* done', message: '有一行像是字段行但没读懂（原文：*Status:* done）' },
+    ]
+    const a11yDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39320/',
+      pretendToBeVisual: true,
+      virtualConsole: vcA,
+      beforeParse(window) {
+        // 剪贴板打桩：copyText 的成功路径走 navigator.clipboard（jsdom 没有，注入）
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { copiesA.push(t); return Promise.resolve() } } })
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(a11yPayload)) })
+          }
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            postsA.push(JSON.parse(opts.body))
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: JSON.parse(opts.body).root }) })
+          }
+          return Promise.reject(new Error('a11y 场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const aDoc = a11yDom.window.document
+    const aWin = a11yDom.window
+    const aKey = (target, k, shift) => target.dispatchEvent(new aWin.KeyboardEvent('keydown', { key: k, shiftKey: !!shift, bubbles: true, cancelable: true }))
+    const aTab = (name) => Array.from(aDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf(name) === 0)
+
+    // 切到 idea-b：有一张带格式警告的进行中票
+    aTab('idea-b').dispatchEvent(new aWin.Event('click'))
+
+    // 播报层：toast 是礼貌播报区、错误横幅是 alert——属性在位，改文即出声
+    assert.equal(aDoc.getElementById('toast').getAttribute('aria-live'), 'polite', 'toast 应为 aria-live=polite')
+    assert.equal(aDoc.getElementById('err').getAttribute('role'), 'alert', '错误横幅应为 role=alert')
+
+    // 键盘层：票行 focus 后 Enter 触发复制（与 click 同一处理）；Space 同款
+    const aRow = aDoc.querySelectorAll('tr.ticket')[0]
+    assert.equal(aRow.getAttribute('tabindex'), '0', '进行中的票行应可 Tab 停留')
+    assert.equal(aRow.getAttribute('role'), 'button')
+    aRow.focus()
+    assert.equal(aDoc.activeElement, aRow, '票行可聚焦')
+    aKey(aRow, 'Enter')
+    await tick()
+    assert.equal(copiesA.length, 1, 'focus 后 Enter 触发复制')
+    assert.match(copiesA[0], /请实现票 01/)
+    assert.match(copiesA[0], /01-index-core/)
+    aKey(aRow, ' ')
+    await tick()
+    assert.equal(copiesA.length, 2, 'Space 与 Enter 同一处理')
+    assert.match(aDoc.getElementById('toast').textContent, /已复制/, '复制成功经 aria-live 区播报')
+
+    // 兜底层：票行与 "!" 徽标的 aria-label 同载警告原文（title 仍是鼠标福利）
+    assert.match(aRow.getAttribute('aria-label'), /警告：.*\*Status:\* done/, '票行 aria-label 载警告原文')
+    assert.equal(aRow.querySelector('.warn').getAttribute('role'), 'img')
+    assert.match(aRow.querySelector('.warn').getAttribute('aria-label'), /警告：.*\*Status:\* done/, '徽标 aria-label 载警告原文')
+
+    // 键盘层 + 兜底层：链格可 Tab 停留、Enter 复制本格指引词；aria-label 同载状态与指引全文
+    const aStages = aDoc.querySelectorAll('.stage')
+    assert.equal(aStages[3].getAttribute('tabindex'), '0', '链格应可 Tab 停留')
+    assert.equal(aStages[3].getAttribute('role'), 'button')
+    assert.match(aStages[3].getAttribute('aria-label'), /Blocked by 为空的票/, '链格 aria-label 载指引全文')
+    assert.equal(aStages[3].querySelector('.dot').getAttribute('aria-hidden'), 'true', '指引点是装饰（状态已进链格 aria-label）')
+    aStages[3].focus()
+    aKey(aStages[3], 'Enter')
+    await tick()
+    assert.match(copiesA[copiesA.length - 1], /Blocked by 为空的票/, '链格 Enter 复制本格指引词')
+
+    // 推定含义不再只藏悬停：推定链格的 aria-label 与推定徽标都载说明
+    aTab('only-spec').dispatchEvent(new aWin.Event('click'))
+    const inferStage = aDoc.querySelectorAll('.stage')[0]
+    assert.match(inferStage.getAttribute('aria-label'), /推定 · 无 map：此格不是由本阶段产物证成/, '链格 aria-label 载推定含义')
+    assert.match(inferStage.querySelector('.chip.infer').getAttribute('aria-label'), /推定 · 无 map：/, '推定徽标 aria-label 载推定含义')
+
+    // 键盘层：下拉项可 Tab 停留、Enter 触发切换；失效条目不可点也不进 Tab 序
+    const aInput = aDoc.getElementById('rootInput')
+    aInput.focus()
+    await tick()
+    const aOpts = Array.from(aDoc.querySelectorAll('#rootMenu .opt'))
+    assert.equal(aOpts[0].getAttribute('tabindex'), '0', '可点下拉项可 Tab 停留')
+    assert.equal(aOpts[0].getAttribute('role'), 'button')
+    assert.equal(aOpts[2].getAttribute('tabindex'), null, '失效条目不进 Tab 序')
+    aOpts[1].focus()
+    aKey(aOpts[1], 'Enter')
+    await tick()
+    assert.equal(postsA.length, 1, '下拉项 focus 后 Enter 发起切换')
+    assert.equal(postsA[0].root, '/tmp/fd-a11y-old')
+    assert.equal(aDoc.getElementById('rootMenu').hasAttribute('hidden'), true, 'Enter 切换后收起下拉')
+
+    // 焦点圈禁（makeModal 第六件）：弹窗内 Tab 循环不外逃
+    aDoc.getElementById('settingsBtn').dispatchEvent(new aWin.Event('click', { bubbles: true }))
+    await tick()
+    const setBox = aDoc.getElementById('settingsModal')
+    assert.ok(setBox.contains(aDoc.activeElement), '开窗即把焦点放进弹窗')
+    const focusIn = () => Array.from(setBox.querySelectorAll('button, input, select')).filter((n) => !n.disabled && !n.closest('[hidden]'))
+    const firstF = focusIn()[0]
+    const lastF = focusIn()[focusIn().length - 1]
+    aKey(lastF, 'Tab')
+    assert.equal(aDoc.activeElement, firstF, '最后一个元素上 Tab 圈回第一个（不外逃）')
+    aKey(firstF, 'Tab', true)
+    assert.equal(aDoc.activeElement, lastF, '第一个元素上 Shift+Tab 圈回最后一个（不外逃）')
+    aKey(aDoc.activeElement, 'Escape')
+    assert.equal(setBox.hasAttribute('hidden'), true, 'Esc 关闭弹窗')
+    assert.deepEqual(jsErrorsA, [])
+    a11yDom.window.close()
+    ok('a11y 三层：票行/链格/下拉项 focus 后 Enter（Space）触发同 click 的复制与切换；aria-label 同载推定含义、警告原文、指引全文；toast aria-live 与 err role=alert 在位；弹窗内 Tab 圈禁不外逃')
+
+    // ── 票查证三件（票 01）：票正文弹窗（懒加载/快照/字段行剥除）、档位 chip 过滤、git 旁证行 ──
+    const jsErrorsFx = []
+    const vcFx = new VirtualConsole()
+    vcFx.on('jsdomError', (e) => jsErrorsFx.push(String((e && e.message) || e)))
+    const fxTickets = [
+      { key: '01', fileName: '01-a.md', title: '查证票', state: 'open', status: 'needs-triage', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+      { key: '02', fileName: '02-b.md', title: '认领中的票', state: 'open', status: 'claimed', claimedBy: '@me', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+      { key: '03', fileName: '03-c.md', title: '可开工票', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+      { key: '04', fileName: '04-d.md', title: '已关票', state: 'closed', status: 'resolved', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+    ]
+    let fxPayload = {
+      root: '/tmp/fd-forensics', rootName: 'fd-forensics', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 5000, pollMode: 'observe', configPath: '/tmp/config.json', recentRoots: [],
+      efforts: [
+        {
+          slug: 'tiers', title: '档位过滤',
+          map: { exists: true, title: '', destination: '终点', fog: [], decisions: [], outOfScope: [], fogCount: 0, progress: null, formatWarnings: [] },
+          spec: { exists: true, title: '', contentLength: 10, content: '# 规格', formatWarnings: [] },
+          git: { hash: 'abc1234', date: new Date(Date.now() - 3600 * 1000).toISOString(), subject: '修了一刀' },
+          tickets: fxTickets,
+          chain: deriveChain({ slug: 'tiers', map: { exists: true, destination: '终点', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: fxTickets }),
+        },
+        {
+          slug: 'nogit', title: '无旁证',
+          map: { exists: true, title: '', destination: '终点2', fog: [], decisions: [], outOfScope: [], fogCount: 0, progress: null, formatWarnings: [] },
+          spec: { exists: false, title: '', contentLength: 0, content: '', formatWarnings: [] },
+          git: null,
+          tickets: [],
+          chain: deriveChain({ slug: 'nogit', map: { exists: true, destination: '终点2', fogCount: 0 } }),
+        },
+      ],
+    }
+    let issueStubText = ['# 查证票', 'Status: ready-for-agent', 'Type: task', '', '正文第一段。', '', '## Comments', '', '### alice—2026-09-16T10:30:00Z', '', '评论正文。'].join('\n')
+    const fxCopies = []
+    const fxDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39321/',
+      pretendToBeVisual: true,
+      virtualConsole: vcFx,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { fxCopies.push(t); return Promise.resolve() } } })
+        window.fetch = (u) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(fxPayload)) })
+          }
+          if (url.indexOf('/api/issue') >= 0) {
+            return Promise.resolve({ ok: true, status: 200, text: async () => issueStubText })
+          }
+          return Promise.reject(new Error('票查证场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const fDoc = fxDom.window.document
+    const fWin = fxDom.window
+
+    // git 旁证行：有值渲染（短哈希 + 相对时间 + 标题），null 整块消失
+    assert.ok(fDoc.querySelector('.gitline'), '带 git 旁证的 effort 卡片有一行')
+    assert.match(fDoc.querySelector('.gitline').textContent, /abc1234/, '短哈希入行')
+    assert.match(fDoc.querySelector('.gitline').textContent, /1 小时前/, '相对时间入行')
+    assert.match(fDoc.querySelector('.gitline').textContent, /修了一刀/, '标题入行')
+    Array.from(fDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf('nogit') === 0).dispatchEvent(new fWin.Event('click'))
+    assert.equal(fDoc.querySelectorAll('.gitline').length, 0, 'git 为 null 时整块不渲染（零占位零报错）')
+    Array.from(fDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf('tiers') === 0).dispatchEvent(new fWin.Event('click'))
+
+    // 档位 chip 过滤：六档在位；点亮=只看该档（已关闭不参与）、再点回全量；过滤态经轮询重画保持
+    assert.equal(fDoc.querySelectorAll('.tierchip').length, 6, '六档 chip 在位')
+    const chipOf = (id) => Array.from(fDoc.querySelectorAll('.tierchip')).find((c) => c.textContent.indexOf(id) === 0)
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 4, '默认全量四行')
+    chipOf('claimed').dispatchEvent(new fWin.Event('click'))
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 1, '点亮 claimed 只看该档')
+    assert.equal(fDoc.querySelector('tr.ticket .key').textContent, '02')
+    assert.match(chipOf('claimed').className, /on/, '点亮态有 on 类')
+    assert.equal(chipOf('claimed').getAttribute('aria-pressed'), 'true', 'chip 用 aria-pressed 表达开关态')
+    // 轮询重画（同数据）不丢过滤态：手动一拍走 refresh 的签名跳过路径
+    fDoc.getElementById('refreshBtn').dispatchEvent(new fWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 1, '刷新后过滤态保持')
+    chipOf('claimed').dispatchEvent(new fWin.Event('click'))
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 4, '再点同档回全量')
+    chipOf('needs-triage').dispatchEvent(new fWin.Event('click'))
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 1, 'needs-triage 档只有 01')
+    assert.equal(fDoc.querySelector('tr.ticket .key').textContent, '01')
+    chipOf('needs-triage').dispatchEvent(new fWin.Event('click'))
+    assert.equal(fDoc.querySelectorAll('tr.ticket').length, 4)
+
+    // 票正文弹窗：查看按钮打开（拦住行点击的复制）、懒加载原文、字段行剥除、Comments 成节、快照语义。
+    // 查看按钮是原生 <button>：Enter/Space → click 是浏览器默认键盘行为（jsdom 的合成 keydown
+    // 不模拟该默认，故此处验证「可聚焦 + 点击路径」，键盘层由原生语义保证）。
+    const viewBtn = fDoc.querySelector('tr.ticket button')
+    viewBtn.focus()
+    assert.equal(fDoc.activeElement, viewBtn, '查看按钮可聚焦（键盘可达）')
+    viewBtn.dispatchEvent(new fWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(fDoc.getElementById('readModal').hasAttribute('hidden'), false, '点查看打开弹窗')
+    assert.deepEqual(fxCopies, [], '点查看不得触发票行的复制指引')
+    assert.equal(fDoc.getElementById('readTitle').textContent, '查证票', '弹窗标题 = 票标题')
+    assert.match(fDoc.getElementById('readMeta').textContent, /issues\/01-a\.md/, '元信息带票文件路径')
+    assert.match(fDoc.getElementById('readMeta').textContent, /更新于/, '元信息带更新时间')
+    const fxDoc1 = fDoc.getElementById('readDoc')
+    assert.ok(fxDoc1.textContent.indexOf('正文第一段') >= 0, '正文渲染')
+    assert.ok(fxDoc1.textContent.indexOf('评论正文') >= 0, 'Comments 正文渲染')
+    assert.ok(fxDoc1.textContent.indexOf('Status:') < 0, '机器字段行不裸露（裸写剥除）')
+    assert.ok(fxDoc1.textContent.indexOf('Type:') < 0, 'Type 字段行剥除')
+    assert.ok(fxDoc1.textContent.indexOf('alice') >= 0, '评论作者成节')
+    // 快照语义：stub 换新原文 + 手动刷新，弹窗内容不动
+    issueStubText = issueStubText.replace('正文第一段', '正文被改了')
+    fDoc.getElementById('refreshBtn').dispatchEvent(new fWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.ok(fDoc.getElementById('readDoc').textContent.indexOf('正文第一段') >= 0, '打开时刻快照：后台刷新不改弹窗内容')
+    fDoc.dispatchEvent(new fWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(fDoc.getElementById('readModal').hasAttribute('hidden'), true, 'Esc 关闭票正文弹窗')
+    assert.equal(fDoc.activeElement, viewBtn, '关闭后焦点归还查看按钮')
+    assert.deepEqual(jsErrorsFx, [])
+    fxDom.window.close()
+    ok('票查证（jsdom）：档位 chip 过滤/取消/轮询保持/aria-pressed；查看按钮键盘可达且不误触行复制；票正文弹窗懒加载、字段行剥除、Comments 成节、快照语义')
+
+    // ── 纵览一屏（票 02）：全部视图两组制与折叠记忆、行点击切换、徽标计数、面板跳转 ──
+    const mkEffort = (slug, title, latestAt, fog, tickets, extraMap) => ({
+      slug, title, latestAt,
+      map: { exists: true, title: '', destination: '终点-' + slug, fog: [], decisions: [], outOfScope: [], fogCount: fog, progress: null, formatWarnings: [], ...(extraMap || {}) },
+      spec: { exists: true, title: '', contentLength: 10, content: '# 规格', formatWarnings: [] },
+      git: null,
+      tickets,
+      chain: deriveChain({ slug, map: { exists: true, destination: '终点-' + slug, fogCount: fog }, spec: { exists: true, contentLength: 10 }, tickets }),
+    })
+    const tk = (key, over) => Object.assign({ key, fileName: key + '-x.md', title: '票' + key, state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' }, over)
+    const allPayload = {
+      root: '/tmp/fd-all', rootName: 'fd-all', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 5000, pollMode: 'observe', configPath: '/tmp/config.json', recentRoots: [],
+      efforts: [
+        mkEffort('alpha', '热的', new Date(Date.now() - 7200e3).toISOString(), 2, [
+          tk('01'),                       // 前沿：空依赖未认领
+          tk('02', { blockedBy: ['01'] }), // 依赖未结 → 非前沿
+          tk('03', { blockedBy: ['99'] }), // 幽灵依赖 → 非前沿（不误判为可干）
+        ]),
+        mkEffort('beta', '温的', new Date(Date.now() - 2 * 86400e3).toISOString(), 0, [
+          tk('01', { status: 'claimed', claimedBy: '@me' }), // 已认领 → 非前沿
+        ]),
+        mkEffort('gamma', '完了', '2026-09-10T00:00:00Z', 0, [tk('01', { state: 'closed', status: 'resolved' })]),
+        mkEffort('delta', '也完了', '2026-09-09T00:00:00Z', 0, [tk('01', { state: 'closed', status: 'resolved' })]),
+      ],
+    }
+    // gamma/delta 要真「完工」：四格全绿（票全关），mkEffort 的通用链重算一遍即可（closed 票在 tickets 里）
+    const jsErrorsAll = []
+    const vcAll = new VirtualConsole()
+    vcAll.on('jsdomError', (e) => jsErrorsAll.push(String((e && e.message) || e)))
+    const allDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39322/',
+      pretendToBeVisual: true,
+      virtualConsole: vcAll,
+      beforeParse(window) {
+        window.fetch = () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(allPayload)) })
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const ovDoc = allDom.window.document
+    const ovWin = allDom.window
+    const tabBtn2 = (name) => Array.from(ovDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf(name) === 0)
+
+    // 徽标：全局迷雾总数 + 前沿票总数（跨 effort 聚合；前沿只有 alpha#01）
+    const badge2 = ovDoc.getElementById('frontierBadge')
+    assert.equal(badge2.hidden, false, '有 effort 时徽标常驻')
+    assert.equal(badge2.textContent, '迷雾 2 · 前沿 1', '迷雾 2（alpha）+ 前沿 1（alpha#01；认领/依赖/幽灵都不算）')
+
+    // 面板：按 effort 分组列前沿票；票行点击切到所属 effort、面板收起
+    badge2.dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.equal(ovDoc.getElementById('frontierPanel').hasAttribute('hidden'), false, '点徽标开面板')
+    assert.equal(ovDoc.querySelectorAll('#frontierPanel .fgroup').length, 1, '只有 alpha 有前沿票（一个分组）')
+    assert.equal(ovDoc.querySelectorAll('#frontierPanel .fticket').length, 1)
+    assert.match(ovDoc.querySelector('#frontierPanel .fticket').textContent, /#01/)
+    assert.equal(ovDoc.querySelector('#frontierPanel .fticket').getAttribute('tabindex'), '0', '面板票行可 Tab 停留')
+    ovDoc.querySelector('#frontierPanel .fticket').dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.equal(ovDoc.getElementById('frontierPanel').hasAttribute('hidden'), true, '点票行收起面板')
+    assert.match(tabBtn2('alpha').className, /on/, '票行点击切到所属 effort')
+    assert.match(ovDoc.querySelector('#main .card h2').textContent, /热的/, '主区渲染该 effort 的链卡（alpha 的标题）')
+
+    // 全部视图：两组制——进行中按最近活跃倒序在前、完工折叠成一行计数
+    tabBtn2('全部').dispatchEvent(new ovWin.Event('click'))
+    const rows2 = () => Array.from(ovDoc.querySelectorAll('#main tr.effortrow'))
+    assert.equal(rows2().length, 2, '完工默认折叠：只有两张进行中行')
+    assert.equal(rows2()[0].querySelector('.name').textContent, 'alpha', '最新活跃（2 小时前）排第一')
+    assert.equal(rows2()[1].querySelector('.name').textContent, 'beta', '两天前的 beta 随后')
+    assert.match(rows2()[0].children[5].textContent, /小时前/, '最近活跃列给相对时间')
+    const doneRow = ovDoc.querySelector('#main tr.donegroup')
+    assert.ok(doneRow, '完工折叠行在位')
+    assert.match(doneRow.textContent, /2 个/, '折叠行给计数')
+    assert.equal(doneRow.getAttribute('aria-expanded'), 'false', '折叠态用 aria-expanded 表达')
+
+    // 展开：完工明细行出现（完工组内也按最近活跃倒序：gamma 在 delta 前），偏好落 localStorage
+    doneRow.dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.equal(rows2().length, 4, '展开后四张 effort 行')
+    assert.equal(rows2()[2].querySelector('.name').textContent, 'gamma', '完工组按最近活跃倒序（gamma 09-10 > delta 09-09）')
+    assert.equal(allDom.window.localStorage.getItem('flowdeck-all-done-collapsed'), '0', '展开偏好写入 localStorage')
+
+    // 行点击 = 既有 effort 切换（零新机制）
+    rows2()[1].dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.match(tabBtn2('beta').className, /on/, '全部视图行点击切到 beta')
+
+    // 「显示完工」开关：关掉后完工组整块消失；再开回（上次的展开偏好仍记得）
+    tabBtn2('全部').dispatchEvent(new ovWin.Event('click'))
+    Array.from(ovDoc.querySelectorAll('#main .cardhead button')).find((b) => b.textContent === '隐藏完工').dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.equal(ovDoc.querySelectorAll('#main tr.donegroup').length, 0, '关掉后完工组整块不渲染')
+    assert.equal(rows2().length, 2)
+    assert.equal(allDom.window.localStorage.getItem('flowdeck-all-show-done'), '0', '开关偏好写入 localStorage')
+    Array.from(ovDoc.querySelectorAll('#main .cardhead button')).find((b) => b.textContent === '显示完工').dispatchEvent(new ovWin.Event('click', { bubbles: true }))
+    assert.equal(ovDoc.querySelectorAll('#main tr.donegroup').length, 1, '再开回完工组（上次的展开偏好生效，明细行直接在）')
+    assert.equal(rows2().length, 4)
+    assert.deepEqual(jsErrorsAll, [])
+    allDom.window.close()
+    ok('全部视图（jsdom）：两组排序（最近活跃倒序）、完工折叠一行计数/展开、显示完工开关、两偏好落 localStorage、行点击=既有切换；徽标计数跨 effort 聚合、面板分组列前沿票、票行点击直达所属 effort')
+
+    // 偏好读取路径：新开的浏览器带着「不显示完工」的记忆，首渲染即无完工组
+    const jsErrorsAll2 = []
+    const vcAll2 = new VirtualConsole()
+    vcAll2.on('jsdomError', (e) => jsErrorsAll2.push(String((e && e.message) || e)))
+    const allDom2 = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39323/',
+      pretendToBeVisual: true,
+      virtualConsole: vcAll2,
+      beforeParse(window) {
+        window.localStorage.setItem('flowdeck-all-show-done', '0')
+        window.localStorage.setItem('flowdeck-all-done-collapsed', '0')
+        window.fetch = () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(allPayload)) })
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const aDoc2 = allDom2.window.document
+    const aWin2 = allDom2.window
+    Array.from(aDoc2.querySelectorAll('#tabs button')).find((b) => b.textContent === '全部').dispatchEvent(new aWin2.Event('click'))
+    assert.equal(aDoc2.querySelectorAll('tr.donegroup').length, 0, '记忆「不显示完工」：完工组不渲染')
+    assert.equal(aDoc2.querySelectorAll('tr.effortrow').length, 2)
+    assert.deepEqual(jsErrorsAll2, [])
+    allDom2.window.close()
+    ok('全部视图偏好读取：localStorage 记忆跨会话生效（不显示完工 + 展开态）')
+
+    // ── 项目总览弹窗（票 03）：打开才单拍、坏行标注、点行触发现有切换流 ──
+    const jsErrorsOv = []
+    const vcOv = new VirtualConsole()
+    vcOv.on('jsdomError', (e) => jsErrorsOv.push(String((e && e.message) || e)))
+    const ovCalls = { overview: 0 }
+    const ovPosts = []
+    const ovRowsPayload = {
+      roots: [
+        { path: '/tmp/fd-ov-cur', name: 'fd-ov-cur', current: true, status: 'ok', stage: 'implement', efforts: 2, tickets: 3, closed: 1, fog: 2 },
+        { path: '/tmp/fd-ov-nos', name: 'fd-ov-nos', current: false, status: 'no-scratch' },
+        { path: '/tmp/fd-ov-bad', name: 'fd-ov-bad', current: false, status: 'unreadable' },
+      ],
+    }
+    const ovDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39324/',
+      pretendToBeVisual: true,
+      virtualConsole: vcOv,
+      beforeParse(window) {
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-ov-cur', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          if (url.indexOf('/api/roots-overview') >= 0) {
+            ovCalls.overview++
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(ovRowsPayload)) })
+          }
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            ovPosts.push(JSON.parse(opts.body))
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: JSON.parse(opts.body).root }) })
+          }
+          return Promise.reject(new Error('项目总览场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const rvDoc = ovDom.window.document
+    const rvWin = ovDom.window
+    assert.equal(ovCalls.overview, 0, '按需单拍：没打开弹窗之前零总览请求（不进轮询）')
+    rvDoc.getElementById('rootsBtn').dispatchEvent(new rvWin.Event('click', { bubbles: true }))
+    assert.equal(rvDoc.getElementById('rootsModal').hasAttribute('hidden'), false, '点「项目」打开总览弹窗')
+    await tick()
+    await tick()
+    assert.equal(ovCalls.overview, 1, '打开才请求一次')
+    const rvRows = Array.from(rvDoc.querySelectorAll('#rootsBody tr.rootrow'))
+    assert.equal(rvRows.length, 3)
+    assert.ok(rvRows[0].querySelector('.chip.cur'), '当前追踪目录带「当前」标示')
+    assert.equal(rvRows[0].querySelectorAll('td')[1].textContent, 'Implement 实现', '链阶段给中文标签')
+    assert.equal(rvRows[0].querySelectorAll('td')[2].textContent, '1/3', '票计数 closed/total')
+    assert.equal(rvRows[0].querySelectorAll('td')[3].textContent, '2', '迷雾数')
+    assert.match(rvRows[1].querySelector('.chip').textContent, /无产物/, '无 .scratch 行标注「无产物」')
+    assert.ok(rvRows[1].className.indexOf('bad') >= 0, '坏行置灰')
+    assert.match(rvRows[2].querySelector('.chip').textContent, /不可读/, '不可读行标注')
+    // 点行 = 既有换目录流：填输入框、POST /api/config、弹窗关闭
+    rvRows[0].dispatchEvent(new rvWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(rvDoc.getElementById('rootsModal').hasAttribute('hidden'), true, '切换后弹窗关闭')
+    assert.equal(ovPosts.length, 1)
+    assert.equal(ovPosts[0].root, '/tmp/fd-ov-cur', '走既有 POST /api/config 换目录')
+    assert.deepEqual(jsErrorsOv, [])
+    ovDom.window.close()
+    ok('项目总览（jsdom）：打开才单拍、当前置顶标示、无产物/不可读分行标注置灰、点行触发现有切换流并关窗')
+
+    // ── 技能包弹窗：按钮打开、侧栏清单分组、点条目/内链取正文渲染 Markdown、Esc 关闭 ──
+    const jsErrors4 = []
+    const vc4 = new VirtualConsole()
+    vc4.on('jsdomError', (e) => jsErrors4.push(String((e && e.message) || e)))
+    const skillsPayload = [
+      { name: 'README', category: 'overview', order: 0, title: '全景总览', summary: '总览一句话', inProgress: false },
+      { name: 'tdd', category: 'engineering', order: 13, title: '测试驱动开发', summary: 'tdd 一句话', inProgress: false },
+      { name: 'writing-beats', category: 'in-progress', order: 4, title: '写作·节拍', summary: '节拍一句话', inProgress: true },
+    ]
+    const skillDocs = {
+      README: '---\nname: README\ncategory: overview\n---\n\n# README\n\n全景正文，内链到 [tdd](tdd.md)。\n',
+      tdd: '---\nname: tdd\ncategory: engineering\n---\n\n# tdd\n\n**红绿循环**是核心，`seam` 上开测。\n\n## 什么时候用\n\n- 先红后绿；\n\n- 一次一片。\n\n## 原文描述\n\n> Test-driven development.\n',
+      'writing-beats': '---\nname: writing-beats\ncategory: in-progress\n---\n\n# writing-beats\n\n节拍正文。\n',
+    }
+    const skillCalls = []
+    const skillsDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39314/',
+      pretendToBeVisual: true,
+      virtualConsole: vc4,
+      beforeParse(window) {
+        window.fetch = (u) => {
+          const url = String(u)
+          skillCalls.push(url)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-skills', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+          }
+          if (/\/api\/skills\/?$/.test(url)) {
+            return Promise.resolve({ ok: true, json: async () => ({ skills: skillsPayload }) })
+          }
+          if (url.indexOf('/api/skills/') >= 0) {
+            const name = decodeURIComponent(url.split('/api/skills/')[1])
+            return Promise.resolve({ ok: true, status: 200, text: async () => skillDocs[name] })
+          }
+          return Promise.reject(new Error('技能弹窗场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const sDoc = skillsDom.window.document
+    const modal = sDoc.getElementById('skillsModal')
+    assert.equal(modal.hasAttribute('hidden'), true, '弹窗初始隐藏')
+    sDoc.getElementById('skillsBtn').dispatchEvent(new skillsDom.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(modal.hasAttribute('hidden'), false, '点「技能包」打开弹窗')
+    assert.equal(skillCalls.filter((u) => /\/api\/skills\/?$/.test(u)).length, 1, '清单只拉一次')
+    const navItems = Array.from(sDoc.querySelectorAll('#skillsNav .item'))
+    assert.equal(navItems.length, 3, '侧栏每个技能一个条目')
+    assert.match(sDoc.querySelector('#skillsNav .cat').textContent, /总览/, '分类标题分组展示')
+    const beatsBtn = navItems.find((b) => b.querySelector('.en').textContent === 'writing-beats')
+    assert.ok(beatsBtn.querySelector('.chip'), 'in-progress 条目亮「开发中」徽标')
+    const article = sDoc.getElementById('skillsDoc')
+    assert.equal(article.querySelector('h1').textContent, 'README', '默认打开总览')
+    const innerLink = article.querySelector('a')
+    assert.equal(innerLink.textContent, 'tdd', '文档内链渲染为链接')
+    innerLink.dispatchEvent(new skillsDom.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(article.querySelector('h1').textContent, 'tdd', '点内链切换到该技能的介绍')
+    assert.ok(article.querySelector('b'), '粗体渲染')
+    assert.equal(article.querySelectorAll('li').length, 2, '列表渲染（空行分隔的松散列表算一张）')
+    assert.match(article.querySelector('blockquote').textContent, /Test-driven development\./, '引用块渲染')
+    const navAfter = Array.from(sDoc.querySelectorAll('#skillsNav .item'))
+    assert.ok(navAfter.find((b) => b.querySelector('.en').textContent === 'tdd').className.indexOf('on') >= 0, '侧栏高亮当前技能')
+    sDoc.dispatchEvent(new skillsDom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(modal.hasAttribute('hidden'), true, 'Esc 关闭弹窗')
+    assert.equal(sDoc.body.style.overflow, '', '关闭后恢复页面滚动')
+    assert.deepEqual(jsErrors4, [])
+    skillsDom.window.close()
+    ok('技能包弹窗：按钮打开、清单分组渲染、「开发中」徽标、内链切换、Markdown 渲染、Esc 关闭，全套可用')
+
+    // ── 稳定阅读 + 设置弹窗：签名跳过重画、滚动恢复、Markdown 三扩展、阅读弹窗快照、设置表单 ──
+    const jsErrors5 = []
+    const vc5 = new VirtualConsole()
+    vc5.on('jsdomError', (e) => jsErrors5.push(String((e && e.message) || e)))
+    const stableCalls = []
+    const mdSpec = [
+      'Status: ready-for-agent', '',
+      '# 想法 B 规格', '',
+      '目标：全站搜索，先做 *索引核心*，再做 **分词器**。', '',
+      '| 票 | 批次 |', '|---|---|', '| 01 | 索引 |', '| 02 | 分词 |', '',
+      '```', '命令里的 ** 和 | 都不生效', '```', '',
+      '蛇形词 snake_case 不斜体，_词边界斜体_ 才斜体。', '',
+    ].join('\n')
+    let stablePayload = JSON.parse(JSON.stringify({
+      ...ws, root: '/tmp/fd-stable', pollMs: 5000, host: '127.0.0.1', port: 3210,
+      tokenEnabled: true, configPath: '/tmp/config.json', recentRoots: [],
+    }))
+    stablePayload.efforts.find((e) => e.slug === 'idea-b').spec.content = mdSpec
+    // 生效语义契约的可覆写桩：默认按 host/port=restart、其余 immediate；用例可换成未知值验证前端稳健性
+    let appliedOverride = null
+    const stableDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39315/',
+      pretendToBeVisual: true,
+      virtualConsole: vc5,
+      beforeParse(window) {
+        window.confirm = () => true
+        window.fetch = (u, opts) => {
+          const url = String(u)
+          stableCalls.push({ url, opts })
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(stablePayload)) })
+          }
+          if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+            const body = JSON.parse(opts.body)
+            const applied = {}
+            Object.keys(body).forEach((k) => { applied[k] = k === 'host' || k === 'port' ? 'restart' : 'immediate' })
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: '/tmp/fd-stable', applied: appliedOverride || applied }) })
+          }
+          return Promise.reject(new Error('稳定阅读场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const stDoc = stableDom.window.document
+    const stWin = stableDom.window
+    const stRefresh = async () => {
+      stDoc.getElementById('refreshBtn').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+      await tick()
+      await tick()
+    }
+    const findReadBtn = () => Array.from(stDoc.querySelectorAll('.cardhead button')).find((b) => b.textContent === '展开阅读')
+
+    // 渲染器直测：表格 / 围栏代码块 / 斜体 / 头部字段行剥除 / 孤立 | 行降级
+    const mdBox = stDoc.createElement('div')
+    stWin.renderMarkdown(mdSpec, mdBox)
+    assert.ok(mdBox.querySelector('table thead'), '表格渲染进 thead')
+    assert.equal(mdBox.querySelectorAll('tbody tr').length, 2, '表体两行')
+    assert.equal(mdBox.querySelectorAll('tbody td').length, 4, '单元格数量对')
+    assert.ok(mdBox.textContent.indexOf('Status:') < 0, '头部机器字段行剥除')
+    const mdPre = mdBox.querySelector('pre code')
+    assert.ok(mdPre && mdPre.textContent.indexOf('** 和 |') >= 0, '围栏代码块原样保留 ** 与 |')
+    const italics = Array.from(mdBox.querySelectorAll('i')).map((i) => i.textContent)
+    assert.ok(italics.includes('索引核心'), '*斜体* 生效')
+    assert.ok(italics.includes('词边界斜体'), '_斜体_ 生效')
+    assert.ok(!italics.some((t) => t.indexOf('snake_case') >= 0), 'snake_case 不斜体')
+    const mdBox2 = stDoc.createElement('div')
+    stWin.renderMarkdown('孤立行 | 没有 | 分隔行', mdBox2)
+    assert.ok(!mdBox2.querySelector('table'), '无分隔行的 | 行降级为段落')
+    ok('渲染器扩展：表格/围栏代码块/斜体渲染正确，头部字段行剥除，孤立 | 行降级')
+
+    // 规格卡片轻渲染：切到 idea-b 看卡片
+    Array.from(stDoc.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf('idea-b') === 0).dispatchEvent(new stWin.Event('click'))
+    await tick()
+    const preview = stDoc.querySelector('.spec-preview')
+    assert.ok(preview, '规格卡片正文是 .md 轻渲染容器')
+    assert.ok(preview.querySelector('table'), '卡片内表格已渲染')
+    assert.ok(preview.textContent.indexOf('Status:') < 0, '卡片内不出现字段行')
+    assert.ok(findReadBtn(), '规格卡片头部有「展开阅读」按钮')
+
+    // map/spec 卡头 "!" 徽标（票 03）：文件过大截断警告经同一徽标通道出现在卡片头
+    stablePayload.efforts.find((e) => e.slug === 'idea-b').map.formatWarnings = [
+      { kind: 'oversized', line: '', message: '文件过大，已截断（实际 2000000 字节，只读了前 1MB）——内容按截断文本尽力推导' },
+    ]
+    stablePayload.efforts.find((e) => e.slug === 'idea-b').spec.formatWarnings = [
+      { kind: 'oversized', line: '', message: '文件过大，已截断（实际 2000000 字节，只读了前 1MB）——内容按截断文本尽力推导' },
+    ]
+    await stRefresh()
+    const mapHead = Array.from(stDoc.querySelectorAll('.cols .card h2')).find((h) => h.textContent.indexOf('地图（map.md）') === 0)
+    assert.ok(mapHead.querySelector('.warn'), 'map 卡头亮 "!" 徽标')
+    assert.match(mapHead.querySelector('.warn').title, /文件过大/, '徽标 tooltip 给警告原文')
+    const specTitleEl = Array.from(stDoc.querySelectorAll('.cols .card h2')).find((h) => h.textContent.indexOf('规格（spec.md）') === 0)
+    assert.ok(specTitleEl.querySelector('.warn'), 'spec 卡头亮 "!" 徽标')
+
+    // 签名跳过：同载荷刷新，#main 原地不动（元素身份不变）
+    const markerNode = stDoc.querySelector('.spec-preview')
+    await stRefresh()
+    assert.equal(stDoc.querySelector('.spec-preview'), markerNode, '数据没变：#main DOM 一根手指都不碰')
+
+    // 滚动恢复：数据变了重建 #main，容器滚动位置保住
+    markerNode.scrollTop = 64
+    stablePayload.efforts.find((e) => e.slug === 'idea-b').spec.content = mdSpec.replace('全站搜索', '全站搜索 v2')
+    await stRefresh()
+    const preview2 = stDoc.querySelector('.spec-preview')
+    assert.notEqual(preview2, markerNode, '数据变了：#main 重建')
+    assert.equal(preview2.scrollTop, 64, '重画后滚动位置恢复')
+    assert.ok(preview2.textContent.indexOf('v2') >= 0, '新数据进入卡片')
+    ok('刷新不打断：数据没变不重画；数据变了重画但滚动位置保住')
+
+    // 阅读弹窗：开-关回路（Esc 归还焦点）+ 快照语义（后台刷新不改弹窗内容）
+    const readBtn3 = findReadBtn()
+    readBtn3.focus()
+    readBtn3.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    const readModal = stDoc.getElementById('readModal')
+    assert.equal(readModal.hasAttribute('hidden'), false, '「展开阅读」打开弹窗')
+    assert.ok(stDoc.getElementById('readDoc').querySelector('table'), '弹窗内 Markdown 渲染')
+    stDoc.dispatchEvent(new stWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(readModal.hasAttribute('hidden'), true, 'Esc 关闭阅读弹窗')
+    assert.equal(stDoc.activeElement, readBtn3, '关闭后焦点归还触发按钮')
+    const readBtn4 = findReadBtn()
+    readBtn4.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    stablePayload.efforts.find((e) => e.slug === 'idea-b').spec.content = mdSpec.replace('全站搜索', '全站搜索 v3')
+    await stRefresh()
+    assert.ok(stDoc.getElementById('readDoc').textContent.indexOf('v3') < 0, '后台刷新不改弹窗内容（快照语义）')
+    assert.ok(stDoc.querySelector('.spec-preview').textContent.indexOf('v3') >= 0, '卡片预览照常跟随新数据')
+    stDoc.getElementById('readMask').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    assert.equal(readModal.hasAttribute('hidden'), true, '点遮罩关闭阅读弹窗')
+    ok('规格阅读弹窗：按钮打开、Markdown 渲染、轮询快照不打扰、Esc/遮罩关闭且焦点归还')
+
+    // 设置弹窗：表单初值、只提交变更字段、生效 toast、token 只写不读与清除
+    const setBtn = stDoc.getElementById('settingsBtn')
+    setBtn.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    const setModal = stDoc.getElementById('settingsModal')
+    assert.equal(setModal.hasAttribute('hidden'), false, '点「设置」打开弹窗')
+    assert.equal(stDoc.getElementById('setPollMs').value, '5000', 'pollMs 初值来自 /api/state')
+    assert.equal(stDoc.getElementById('setPollMode').value, 'observe', '轮询模式初值 observe（载荷未带时回落默认）')
+    assert.equal(stDoc.getElementById('setHost').value, '127.0.0.1', 'host 初值来自运行值')
+    assert.equal(stDoc.getElementById('setPort').value, '3210', 'port 初值来自运行值')
+    assert.equal(stDoc.getElementById('setToken').value, '', '令牌不回显当前值')
+    assert.equal(stDoc.getElementById('setToken').placeholder, '已启用——输入新值可替换', '已启用时只给状态提示')
+    assert.equal(stDoc.getElementById('setTokenClearRow').hidden, false, '已启用时出现「清除令牌」')
+    stDoc.getElementById('setPollMs').value = '3000'
+    stDoc.getElementById('setHost').value = '0.0.0.0'
+    stDoc.getElementById('settingsSave').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    const configPosts = () => stableCalls.filter((c) => c.opts && c.opts.method === 'POST' && String(c.url).indexOf('/api/config') >= 0)
+    assert.deepEqual(Object.keys(JSON.parse(configPosts()[configPosts().length - 1].opts.body)).sort(), ['host', 'pollMs'], '保存只提交变更字段')
+    assert.equal(setModal.hasAttribute('hidden'), true, '保存成功后关闭弹窗')
+    assert.match(stDoc.getElementById('toast').textContent, /已生效：轮询间隔/, 'toast 区分即时生效')
+    assert.match(stDoc.getElementById('toast').textContent, /重启后生效：监听地址/, 'toast 区分重启生效')
+
+    // 换令牌：保存后本地记忆与后续请求头同步（令牌值不进 DOM 文本）
+    setBtn.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    stDoc.getElementById('setToken').value = 'tok-new'
+    stDoc.getElementById('settingsSave').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(stWin.localStorage.getItem('flowdeck-token'), 'tok-new', '新令牌记忆到 localStorage')
+    await stRefresh()
+    assert.equal(stableCalls[stableCalls.length - 1].opts.headers['X-FlowDeck-Token'], 'tok-new', '后续请求自动携带新令牌')
+
+    // 清除令牌：二次确认（已打桩）→ 保存空串 → 本地记忆抹去
+    setBtn.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    stDoc.getElementById('setTokenClear').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(stDoc.getElementById('setTokenHint').textContent.indexOf('已标记清除') >= 0, true, '清除标记有明确提示')
+    stDoc.getElementById('settingsSave').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.deepEqual(JSON.parse(configPosts()[configPosts().length - 1].opts.body), { token: '' }, '清除令牌提交空串')
+    assert.equal(stWin.localStorage.getItem('flowdeck-token'), null, '本地记忆抹去')
+
+    // 生效语义契约：前端只特判 restart——未知 applied 值一律按立即生效（对演进稳健）
+    appliedOverride = { pollMs: '某个未来的新词' }
+    setBtn.dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    stDoc.getElementById('setPollMs').value = '4000'
+    stDoc.getElementById('setPollMode').value = 'manual'
+    stDoc.getElementById('settingsSave').dispatchEvent(new stWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.match(stDoc.getElementById('toast').textContent, /已生效：轮询间隔/, '未知 applied 值按立即生效')
+    const lastBody = JSON.parse(configPosts()[configPosts().length - 1].opts.body)
+    assert.equal(lastBody.pollMode, 'manual', '轮询模式变更进保存补丁')
+    assert.deepEqual(jsErrors5, [])
+    stableDom.window.close()
+    ok('设置弹窗：表单初值来自盘点、保存只提交变更字段、toast 区分生效时机、令牌只写不读（换/清除都同步本地记忆）')
+
+    // ── 桌面通知（票 04）：stub Notification——开关与权限回落、事件文案、积压聚合一条、点击切 effort ──
+    const jsErrorsN = []
+    const vcN = new VirtualConsole()
+    vcN.on('jsdomError', (e) => jsErrorsN.push(String((e && e.message) || e)))
+    const nfyTickets = () => [
+      { key: '01', fileName: '01-a.md', title: '通知票', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+    ]
+    const nfyEffort = (slug, fogCount) => {
+      const tickets = slug === 'beta' ? nfyTickets() : []
+      return {
+        slug, title: slug + ' 标题',
+        map: { exists: true, title: '', destination: '终点', fog: [], decisions: [], outOfScope: [], fogCount, progress: null, formatWarnings: [] },
+        spec: { exists: true, title: '', contentLength: 10, content: '# 规格', formatWarnings: [] },
+        git: null,
+        tickets,
+        latestAt: '2026-09-18T00:00:00Z',
+        chain: deriveChain({ slug, map: { exists: true, destination: '终点', fogCount }, spec: { exists: true, contentLength: 10 }, tickets }),
+      }
+    }
+    let nfyPayload = {
+      root: '/tmp/fd-notify-ui', rootName: 'fd-notify-ui', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 1000, pollMode: 'observe', configPath: '/tmp/config.json', recentRoots: [],
+      efforts: [nfyEffort('alpha', 0), nfyEffort('beta', 2)],
+    }
+    const rechain = (e) => {
+      e.chain = deriveChain({ slug: e.slug, map: { exists: e.map.exists, destination: e.map.destination, fogCount: e.map.fogCount }, spec: { exists: e.spec.exists, contentLength: e.spec.contentLength }, tickets: e.tickets })
+    }
+    // Notification 桩：记录实例与点击句柄；requestPermission 可编程应答，permission 随结果走（同真浏览器）
+    const nfyMade = []
+    let nfyGrant = 'granted'
+    function FakeNotification(title, opts) {
+      const inst = { title, body: opts && opts.body, clicks: [] }
+      inst.addEventListener = (ev, fn) => { if (ev === 'click') inst.clicks.push(fn) }
+      nfyMade.push(inst)
+      return inst // 构造函数显式返回对象：new 出来的才是这个实例（否则是空 this，addEventListener 无从挂）
+    }
+    FakeNotification.permission = 'default'
+    FakeNotification.requestPermissionCalls = 0
+    FakeNotification.requestPermission = () => {
+      FakeNotification.requestPermissionCalls++
+      return Promise.resolve(nfyGrant).then((r) => { FakeNotification.permission = r; return r })
+    }
+    const nfyStateCalls = []
+    let nfyFocus = 0
+    const notifyDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39330/',
+      pretendToBeVisual: true,
+      virtualConsole: vcN,
+      beforeParse(window) {
+        window.Notification = FakeNotification
+        window.focus = () => { nfyFocus++ }
+        window.fetch = (u) => {
+          const url = String(u)
+          if (url.indexOf('/api/state') >= 0) {
+            nfyStateCalls.push(url)
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(nfyPayload)) })
+          }
+          return Promise.reject(new Error('通知场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const nDoc = notifyDom.window.document
+    const nWin = notifyDom.window
+    const nBox = () => nDoc.getElementById('setNotify')
+    const nToggle = async (on) => {
+      nBox().checked = on
+      nBox().dispatchEvent(new nWin.Event('change', { bubbles: true }))
+      await tick()
+      await tick()
+    }
+
+    // 开关：默认关；开启即申请权限，granted 后偏好落本浏览器、不进任何 POST
+    assert.equal(nWin.localStorage.getItem('flowdeck-notify'), null, '默认关：本地无偏好')
+    nDoc.getElementById('settingsBtn').dispatchEvent(new nWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(nBox().checked, false, '弹窗初值 = 本地偏好（关）')
+    await nToggle(true)
+    assert.equal(FakeNotification.requestPermissionCalls, 1, '开启即申请权限（时机由用户掌控）')
+    assert.equal(nWin.localStorage.getItem('flowdeck-notify'), '1', 'granted 后偏好记本浏览器')
+    assert.equal(nBox().checked, true, '授权成功开关保持开')
+    assert.match(nDoc.getElementById('toast').textContent, /已开启/, '开启有 toast 播报')
+
+    // 拒绝回落：关掉再开、这次应答 denied——开关回落、偏好抹去、toast 给补救路径
+    await nToggle(false)
+    assert.equal(nWin.localStorage.getItem('flowdeck-notify'), null, '关掉即抹去偏好')
+    FakeNotification.permission = 'default' // 授权状态归零：模拟一台从没允许过的浏览器（真浏览器 granted 后不会再问）
+    nfyGrant = 'denied'
+    await nToggle(true)
+    assert.equal(FakeNotification.requestPermissionCalls, 2, '再次开启再次申请')
+    assert.equal(nBox().checked, false, '被拒后开关回落')
+    assert.equal(nWin.localStorage.getItem('flowdeck-notify'), null, '被拒不留偏好')
+    assert.match(nDoc.getElementById('toast').textContent, /拒绝/, 'toast 给补救路径（站点设置）')
+    assert.equal(FakeNotification.permission, 'denied', '桩的 permission 随应答结果走（同真浏览器）')
+    // 重开走 toast 指的补救路径：用户在浏览器站点设置里允许后（permission 已是 granted，页面无需再申请）
+    nfyGrant = 'granted'
+    FakeNotification.permission = 'granted'
+    await nToggle(true)
+    assert.equal(nWin.localStorage.getItem('flowdeck-notify'), '1', '补救路径后开关生效')
+    nDoc.dispatchEvent(new nWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(nDoc.getElementById('settingsModal').hasAttribute('hidden'), true, 'Esc 关设置弹窗')
+
+    // 积压聚合：回前台补拍（visibilitychange）把攒下的 3 类变化（关票/迷雾/阶段完成）聚成一条
+    assert.deepEqual(nfyMade, [], '此前零通知（开关才刚开）')
+    const beta = nfyPayload.efforts.find((e) => e.slug === 'beta')
+    beta.tickets[0].state = 'closed'
+    beta.map.fogCount = 1
+    rechain(beta)
+    nDoc.dispatchEvent(new nWin.Event('visibilitychange'))
+    await tick()
+    await tick()
+    assert.equal(nfyMade.length, 1, '积压聚合为一条（不逐条轰炸）')
+    assert.equal(nfyMade[0].title, '流程板 · fd-notify-ui', '通知标题带项目名')
+    assert.equal(nfyMade[0].body, '离开期间有 3 项变化', '三类事件（关票 + 迷雾 + 阶段完成）聚合成一条计数')
+    const selectedBefore = nDoc.querySelector('#tabs button.on').textContent
+    nfyMade[0].clicks.forEach((fn) => fn())
+    assert.equal(nfyFocus, 1, '通知点击聚焦窗口')
+    assert.equal(nDoc.querySelector('#tabs button.on').textContent, selectedBefore, '聚合通知不带 effort 上下文：只聚焦不切换')
+
+    // 仅 mtime 变化：补拍零通知
+    nfyPayload.generatedAt = '2026-09-18T09:00:00Z'
+    nfyPayload.efforts.forEach((e) => { e.latestAt = '2026-09-18T09:00:00Z'; e.tickets.forEach((t) => { t.updatedAt = '2026-09-18T09:00:00Z' }) })
+    nDoc.dispatchEvent(new nWin.Event('visibilitychange'))
+    await tick()
+    await tick()
+    assert.equal(nfyMade.length, 1, '仅 mtime / generatedAt 变化零通知')
+
+    // 定时拍逐条出事件：可见期间的轮询拍（非补拍、非主动）一条事件一条通知；点击切到涉及 effort
+    beta.map.fogCount = 0
+    rechain(beta)
+    await new Promise((r) => setTimeout(r, 1400))
+    const fogN = nfyMade.find((n) => n.body === 'beta：迷雾 1→0')
+    assert.ok(fogN, '定时拍逐条出事件文案（beta：迷雾 1→0）')
+    fogN.clicks.forEach((fn) => fn())
+    assert.equal(nfyFocus, 2, '通知点击聚焦窗口')
+    assert.match(nDoc.querySelector('#tabs button.on').textContent, /^beta/, '通知点击切到事件涉及的 effort')
+
+    // 用户主动触发的拍不通知（人在看）：重开一张票后点「立即刷新」，事件发生但不弹
+    beta.tickets[0].state = 'open'
+    rechain(beta)
+    const madeBeforeForce = nfyMade.length
+    nDoc.getElementById('refreshBtn').dispatchEvent(new nWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(nfyMade.length, madeBeforeForce, '主动拍（force 且非补拍）不通知')
+    assert.equal(nDoc.querySelectorAll('tr.ticket .state-open').length, 1, '主动拍照常更新界面（票重开可见）')
+
+    // 惰性档联动：先把 manual 送达页面（主动拍不通知已验证），此后回前台零补拍（零请求零通知）
+    nfyPayload.pollMode = 'manual'
+    nDoc.getElementById('refreshBtn').dispatchEvent(new nWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    nfyPayload.efforts.find((e) => e.slug === 'beta').map.fogCount = 5
+    rechain(nfyPayload.efforts.find((e) => e.slug === 'beta'))
+    const callsBeforeManual = nfyStateCalls.length
+    const madeBeforeManual = nfyMade.length
+    await new Promise((r) => setTimeout(r, 200)) // 让残留的定时拍（如有）先跑完
+    nDoc.dispatchEvent(new nWin.Event('visibilitychange'))
+    await tick()
+    await tick()
+    assert.equal(nfyStateCalls.length, callsBeforeManual, '惰性档回前台零补拍')
+    assert.equal(nfyMade.length, madeBeforeManual, '零自动拍零通知')
+    assert.deepEqual(jsErrorsN, [])
+    notifyDom.window.close()
+    ok('桌面通知（jsdom）：开关开启即申请、被拒回落带补救提示；积压聚合一条「期间 N 项变化」、仅 mtime 零通知、定时拍逐条文案、点击聚焦并切 effort、主动拍与惰性档零通知')
+
+    // ── 杂件三件（票 05）：导出快照（原始响应体）· 建骨架指令 · 技能联动定位 ──
+    const jsErrorsM = []
+    const vcM = new VirtualConsole()
+    vcM.on('jsdomError', (e) => jsErrorsM.push(String((e && e.message) || e)))
+    const miscTickets = [
+      { key: '01', fileName: '01-a.md', title: '联动票', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' },
+    ]
+    const miscPayload = {
+      root: '/tmp/fd-misc', rootName: 'fd-misc', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config.json', recentRoots: [],
+      efforts: [{
+        slug: 'demo', title: '联动演示',
+        map: { exists: true, title: '', destination: '终点', fog: [], decisions: [], outOfScope: [], fogCount: 0, progress: null, formatWarnings: [] },
+        spec: { exists: true, title: '', contentLength: 10, content: '# 规格', formatWarnings: [] },
+        git: null,
+        tickets: miscTickets,
+        latestAt: '2026-09-18T00:00:00Z',
+        chain: deriveChain({ slug: 'demo', map: { exists: true, destination: '终点', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: miscTickets }),
+      }],
+    }
+    // 原始响应体带缩进序列化：与 JSON.stringify(parsed) 的紧凑形态不同——钉「导的是原始响应体，不是重新序列化」
+    const miscRaw = JSON.stringify(miscPayload, null, 2)
+    const miscSkillDocs = {
+      README: '# 技能包总览\n\n总览正文。\n',
+      'to-spec': '# to-spec\n\n规格技能正文。\n',
+      implement: '# implement\n\n实现技能正文。\n',
+    }
+    const miscSkillsPayload = ['README', 'to-spec', 'implement'].map((name) => ({ name, category: name === 'README' ? 'overview' : 'engineering', order: 0, title: name, summary: name + ' 一句话', inProgress: false }))
+    const miscCalls = []
+    const miscCopies = []
+    const miscDownloads = []
+    const miscAnchorClicks = []
+    let miscRevoked = 0
+    const miscDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39331/',
+      pretendToBeVisual: true,
+      virtualConsole: vcM,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { miscCopies.push(t); return Promise.resolve() } } })
+        // URL.createObjectURL / revokeObjectURL 与 <a>.click() 的桩：jsdom 没有对象 URL 与下载导航，
+        // 桩住后把「给了哪个 Blob、文件名是什么」记录下来断言（内容读自 Blob 本体）
+        window.URL.createObjectURL = (blob) => { const u = 'blob:fake-' + miscDownloads.length; miscDownloads.push({ blob, url: u }); return u }
+        window.URL.revokeObjectURL = () => { miscRevoked++ }
+        window.HTMLAnchorElement.prototype.click = function () { miscAnchorClicks.push(this) }
+        window.fetch = (u) => {
+          const url = String(u)
+          miscCalls.push(url)
+          if (url.indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, status: 200, text: async () => miscRaw, json: async () => JSON.parse(miscRaw) })
+          }
+          if (/\/api\/skills\/?$/.test(url)) {
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({ skills: miscSkillsPayload }) })
+          }
+          if (url.indexOf('/api/skills/') >= 0) {
+            const name = decodeURIComponent(url.split('/api/skills/')[1])
+            return Promise.resolve({ ok: true, status: 200, text: async () => (miscSkillDocs[name] || '') })
+          }
+          return Promise.reject(new Error('杂件场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const zpDoc = miscDom.window.document
+    const zpWin = miscDom.window
+
+    // 导出快照：按钮在首拍后可用；文件名 flowdeck-snapshot-<项目名>-<YYYYMMDD-HHmmss>.json（本地时区无冒号）
+    assert.equal(zpDoc.getElementById('snapshotBtn').disabled, false, '首拍成功后快照按钮可用')
+    zpDoc.getElementById('snapshotBtn').dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(miscDownloads.length, 1, '点一下导出一个对象 URL')
+    assert.equal(miscAnchorClicks.length, 1, '触发一次下载点击')
+    assert.match(miscAnchorClicks[0].download, /^flowdeck-snapshot-fd-misc-\d{8}-\d{6}\.json$/, '文件名 = flowdeck-snapshot-<项目名>-<本地时间 YYYYMMDD-HHmmss>.json')
+    assert.equal(miscAnchorClicks[0].href, miscDownloads[0].url, '下载锚点指向刚建的对象 URL')
+    assert.equal(await miscDownloads[0].blob.text(), miscRaw, '快照内容 = 最近一拍盘点接口的原始响应体（带缩进原样，不重新序列化）')
+    assert.equal(miscDownloads[0].blob.type, 'application/json', 'Blob 类型是 JSON')
+    await new Promise((r) => setTimeout(r, 20))
+    assert.equal(miscRevoked, 1, '对象 URL 用完即释放')
+
+    // 技能联动：每个链格有对应技能的入口（grill 两枚、其余各一枚）；点击打开技能包弹窗并定位该篇
+    const skillBtns = Array.from(zpDoc.querySelectorAll('.stage .skillrow button'))
+    assert.equal(skillBtns.length, 5, '四格共五枚技能入口（grill→grilling/wayfinder，spec/tickets/implement 各一）')
+    assert.deepEqual(skillBtns.map((b) => b.textContent), ['grilling 介绍', 'wayfinder 介绍', 'to-spec 介绍', 'to-tickets 介绍', 'implement 介绍'], '技能名来自阶段定义旁的硬编码映射')
+    const toSpecBtn = skillBtns.find((b) => b.textContent === 'to-spec 介绍')
+    toSpecBtn.dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(zpDoc.getElementById('skillsModal').hasAttribute('hidden'), false, '点技能入口打开技能包弹窗')
+    assert.ok(miscCalls.some((u) => u.indexOf('/api/skills/to-spec') >= 0), '复用单篇懒加载端点取该篇')
+    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'to-spec', '清单回来后直接定位到该篇（不是默认总览）')
+    assert.deepEqual(miscCopies, [], '点技能入口不得触发链格的复制指引')
+    assert.ok(Array.from(zpDoc.querySelectorAll('#skillsNav .item')).find((b) => b.querySelector('.en').textContent === 'to-spec').className.indexOf('on') >= 0, '侧栏高亮定位篇')
+    // 已开窗再定位：点另一格的技能入口直接换篇，清单不重拉
+    const listCallsBefore = miscCalls.filter((u) => /\/api\/skills\/?$/.test(u)).length
+    skillBtns.find((b) => b.textContent === 'implement 介绍').dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'implement', '已开窗点别的技能入口直接换篇')
+    assert.equal(miscCalls.filter((u) => /\/api\/skills\/?$/.test(u)).length, listCallsBefore, '清单只拉一次')
+    zpDoc.dispatchEvent(new zpWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.deepEqual(jsErrorsM, [])
+    miscDom.window.close()
+    ok('导出快照 + 技能联动（jsdom）：文件名含项目名与本地时间、内容为原始响应体原样（不重新序列化）、对象 URL 用完释放；链格技能入口打开弹窗即定位该篇、已开窗换篇不重拉清单、不误触复制')
+
+    // ── 建骨架指令（票 05）：空态页「工作约定」旁的第二段一键复制 ──
+    const jsErrorsS = []
+    const vcS = new VirtualConsole()
+    vcS.on('jsdomError', (e) => jsErrorsS.push(String((e && e.message) || e)))
+    const scaffoldCopies = []
+    const scaffoldDom = new JSDOM(html, {
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39332/',
+      pretendToBeVisual: true,
+      virtualConsole: vcS,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { scaffoldCopies.push(t); return Promise.resolve() } } })
+        window.fetch = (u) => {
+          if (String(u).indexOf('/api/state') >= 0) {
+            return Promise.resolve({ ok: true, json: async () => ({ root: '/tmp/fd-scaffold', rootName: 'fd-scaffold', generatedAt: '2026-09-18T00:00:00Z', scratchExists: false, efforts: [], pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config.json', recentRoots: [] }) })
+          }
+          return Promise.reject(new Error('空态场景不该请求别的接口：' + u))
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const scDoc = scaffoldDom.window.document
+    const scWin = scaffoldDom.window
+    const scPres = Array.from(scDoc.querySelectorAll('pre.agreement'))
+    assert.equal(scPres.length, 2, '空态页有两段可复制文本（工作约定 + 建骨架指令）')
+    assert.match(scPres[1].textContent, /\.scratch\/<特性名>\/map\.md/, '骨架指令给出相对追踪目录的 map.md 路径')
+    assert.match(scPres[1].textContent, /Destination/, '要求 Destination 一节')
+    assert.match(scPres[1].textContent, /Not yet specified/, '要求 Not yet specified 一节')
+    assert.match(scPres[1].textContent, /盘点就会出现这个新 effort/, '一句预期盘点变化')
+    const scaffoldBtn = Array.from(scDoc.querySelectorAll('.empty button')).find((b) => b.textContent === '复制建骨架指令')
+    scaffoldBtn.dispatchEvent(new scWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(scaffoldCopies.length, 1, '点一下复制一段')
+    assert.equal(scaffoldCopies[0], scPres[1].textContent, '复制的内容就是展示的指令原文')
+    Array.from(scDoc.querySelectorAll('.empty button')).find((b) => b.textContent === '复制工作约定').dispatchEvent(new scWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(scaffoldCopies.length, 2)
+    assert.equal(scaffoldCopies[1], scPres[0].textContent, '两段各自复制各自的（互不串台）')
+    assert.deepEqual(jsErrorsS, [])
+    scaffoldDom.window.close()
+    ok('建骨架指令（jsdom）：空态页第二段在位（map.md 相对路径 + Destination/Not yet specified + 预期盘点变化），一键复制、与工作约定互不串台')
+
+
+    ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')
+  }
+}
+
+async function main() {
+  const tmp = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-'))
+  try {
+    await runScenarios(tmp)
+  } finally {
+    // 断言抛错也要清走临时工作区：各服务器句早有 try/finally，tmp 原先只在成功路径末尾删。
+    await fs.rm(tmp, { recursive: true, force: true })
+  }
+  console.log('\nOK · ' + passed + ' 组断言全绿')
+}
+
+main().catch((e) => {
+  console.error('\n验证失败：' + (e && e.stack ? e.stack : e))
+  process.exit(1)
+})

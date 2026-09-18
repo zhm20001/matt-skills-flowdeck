@@ -1,0 +1,27 @@
+{
+  "name": "flowdeck",
+  "version": "1.0.0",
+  "license": "MIT",
+  "description": "AI 编程流程板：追踪任意项目 .scratch/ 产物，可视化 grill → to-spec → to-tickets → implement 进度。零依赖，整体拷到任何地方都能跑。",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhm20001/flowdeck.git"
+  },
+  "homepage": "https://github.com/zhm20001/flowdeck#readme",
+  "bugs": "https://github.com/zhm20001/flowdeck/issues",
+  "scripts": {
+    "start": "node server.mjs",
+    "verify": "node verify-standalone.mjs",
+    "test": "node verify-standalone.mjs",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "jsdom": "^30.0.1"
+  }
+}

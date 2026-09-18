@@ -1,0 +1,23 @@
+name: CI
+
+# 最小一条：push/PR 时跑 lint + 全量验证（jsdom 已在 devDependencies，npm ci 装上即真跑界面）。
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # engines 声明 >=18：卡住下限（18）与当前 LTS（22）。
+        node-version: [18, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run verify
