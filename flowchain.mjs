@@ -16,7 +16,7 @@
 
 /** 四个固定阶段的展示信息（id 是稳定键，title/subtitle 供界面直接展示）。
  *  skills 是该阶段的对应技能（票 05 技能联动）：与指引词同源同漂移——硬编码在这里，
- *  指引卡「查看技能介绍」按它打开技能包弹窗定位该篇（docs/skills/ 已核有这五篇介绍）。 */
+ *  指引卡「查看技能介绍」按它打开技能包弹窗定位该篇（docs/skill-intros/ 已核有这五篇介绍）。 */
 export const FLOW_STAGES = [
   { id: 'grill',     title: 'Grill 拷问',    subtitle: '想法 → 地图 map.md',     skills: ['grilling', 'wayfinder'] },
   { id: 'spec',      title: 'To-Spec 规格',  subtitle: '理解 → 规格 spec.md',    skills: ['to-spec'] },

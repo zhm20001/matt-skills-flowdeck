@@ -203,7 +203,7 @@
 
   #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--fd-toast-bg); color: var(--fd-toast-ink); padding: 6px 16px; border-radius: 999px; display: none; box-shadow: var(--fd-shadow-float); }
 
-  /* ── 技能包弹窗：docs/skills/ 全景介绍的入口 ── */
+  /* ── 技能包弹窗：docs/skill-intros/ 全景介绍的入口 ── */
   .modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
   .modal[hidden] { display: none; }
   .modal .mask { position: absolute; inset: 0; background: color-mix(in srgb, var(--fd-ink) 32%, transparent); }
@@ -221,7 +221,7 @@
   .modal nav .item.on .en, .modal nav .item.on .chip { color: inherit; opacity: 0.8; border-color: transparent; }
   .modal article { flex: 1; overflow: auto; padding: 18px 22px 28px; }
 
-  /* Markdown 渲染层（.md）：只覆盖 docs/skills/ 文档用到的语法 */
+  /* Markdown 渲染层（.md）：只覆盖 docs/skill-intros/ 文档用到的语法 */
   .md h1 { font: 600 20px/1.35 var(--fd-font-serif); color: var(--fd-ink); margin: 0 0 10px; }  .md h2 { font: 600 15px/1.4 var(--fd-font-serif); color: var(--fd-ink); margin: 18px 0 6px; }
   .md h3 { font: 600 13.5px/1.4 var(--fd-font-serif); color: var(--fd-ink); margin: 14px 0 5px; }
   .md p { margin: 8px 0; }
@@ -283,7 +283,7 @@
     <button id="refreshBtn">立即刷新</button>
     <button id="snapshotBtn" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
     <button id="settingsBtn" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
-    <button id="skillsBtn" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skills/）">技能包</button>
+    <button id="skillsBtn" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）">技能包</button>
   </header>
 
   <div class="banner" id="err" role="alert"></div>
@@ -1568,7 +1568,7 @@ function makeModal(el) {
   return { open: open, close: close, isOpen: function () { return st.open } }
 }
 
-/* ── 技能包弹窗：docs/skills/ 全景介绍的静态展示 ──
+/* ── 技能包弹窗：docs/skill-intros/ 全景介绍的静态展示 ──
    文档是仓库里手写的 Markdown（每篇 frontmatter 供服务端 /api/skills 出清单），
    界面只负责取来渲染。渲染器只覆盖文档用到的语法（标题/列表/引用/粗体/行内码/链接），
    行内容全部经 textContent 组装进安全 DOM，不走 innerHTML。 */
@@ -1741,9 +1741,9 @@ function renderSkillsNav() {
   var count = document.getElementById('skillsCount')
   nav.textContent = ''
   var list = skillsState.list || []
-  count.textContent = list.length ? list.length + ' 篇介绍 · 来源 docs/skills/' : ''
+  count.textContent = list.length ? list.length + ' 篇介绍 · 来源 docs/skill-intros/' : ''
   if (!list.length) {
-    nav.appendChild(el('div', 'cat', '技能文档缺失（docs/skills/ 没有内容）'))
+    nav.appendChild(el('div', 'cat', '技能文档缺失（docs/skill-intros/ 没有内容）'))
     return
   }
   var cats = []

@@ -4,7 +4,11 @@ English · [简体中文](README.zh-CN.md)
 
 ## What is this
 
-**Matt Skills Flowdeck** (shortened to **flowdeck** below) is a **zero-dependency** local Node service (Node built-ins only) plus a single-page browser UI. It watches the `.scratch/` artifacts of **any** project and visualizes where each piece of work stands in the `grill → to-spec → to-tickets → implement` pipeline — a tracker that binds itself to no editor and no plugin.
+**Matt Skills Flowdeck** (shortened to **flowdeck** below) is an **unofficial visual board for [Matt Pocock's skills](https://github.com/mattpocock/skills)** — the `grill → to-spec → to-tickets → implement` workflow for AI coding agents. Run those skills and flowdeck keeps watching the `.scratch/` artifacts they produce: which of the four stages each piece of work is in, the next-step prompt for the current stage, and every ticket's status, type, blockers and progress — all in one local web dashboard.
+
+Not using mattpocock/skills yet? Start there — without those artifacts, this board has nothing to track.
+
+Technically it's a **zero-dependency** local Node service (Node built-ins only) plus a single-page browser UI — a tracker that binds itself to no editor and no plugin.
 
 - **Self-contained**: copy the whole directory anywhere (into a target project, onto another machine) and it runs — nothing else needed. Which directory to track lives in `config.json` and can be switched from the web UI at any time.
 - **Agent-agnostic**: Claude Code, Cursor, or files you write by hand — flowdeck tracks passively. Any agent that follows the file conventions below and writes into `.scratch/` shows up in the browser:
@@ -68,9 +72,9 @@ config.json is git-ignored (`.gitignore`): the server rewrites it at runtime, so
 - **Access token**: empty = disabled (the default; loopback use doesn't need it). Set it to a non-empty string and every `/api/*` request (inventory, root switch, recent-roots deletion, config changes) must carry it — as an `X-FlowDeck-Token` header or a `?token=` query value, compared in constant time. Open the page with `?token=yourtoken` in the URL once: the UI remembers it (localStorage), attaches it to every request afterwards, and scrubs it from the address bar. The static shell (HTML/CSS) is not gated — data lives only under `/api/*`. Changing the token in the settings modal is **immediate** (tokens are write-only: never echoed back; the UI switches over on save); editing the file by hand still needs a restart;
 - Switching roots, deleting recent roots, or changing settings from the UI all write back to this file — hand edits and UI edits are always the same truth.
 
-## The skills catalog (docs/skills/)
+## The skills catalog (docs/skill-intros/)
 
-The **"skills" button** in the top-right corner opens a static showcase: the 35 skills of Matt Pocock's skill pack, grouped by category, each with what it is, when to use it, how to trigger it, and the original description quoted at the end. The material is hand-written Markdown in the repo — one file per skill under `docs/skills/`, with `docs/skills/README.md` as the overview. The server exposes `GET /api/skills` (the catalog, read from each file's frontmatter, sorted by category) and `GET /api/skills/<name>` (the full text); the UI's built-in mini renderer displays it, and edits show up on refresh. The skill sources themselves are not in this repo — only these write-ups.
+The **"skills" button** in the top-right corner opens a static showcase: the 35 skills of Matt Pocock's skill pack, grouped by category, each with what it is, when to use it, how to trigger it, and the original description quoted at the end. The material is hand-written Markdown in the repo — one file per skill under `docs/skill-intros/`, with `docs/skill-intros/README.md` as the overview. The server exposes `GET /api/skills` (the catalog, read from each file's frontmatter, sorted by category) and `GET /api/skills/<name>` (the full text); the UI's built-in mini renderer displays it, and edits show up on refresh. The skill sources themselves are not in this repo — only these write-ups.
 
 ## What it reads (the `.scratch/` artifact conventions)
 
@@ -153,7 +157,7 @@ Push-verified: `.github/workflows/ci.yml` runs `npm run lint` + `npm run verify`
 | `tokens-paper.css` | the single authority for the "paper" light theme's design tokens; colors and font stacks live only in tokens files |
 | `tokens-github-dark.css` | dark theme tokens: overrides the same token names under `data-theme="dark"`; the whole skin swaps with zero business-style edits |
 | `index.html` | the browser UI (single file, no build; polls at the config interval, skips repainting when the data signature is unchanged and restores scroll when it does; light spec rendering with an expand-to-modal reader reused for ticket bodies; six-way triage chip filter and the git sidecar row; an "all" overview across efforts (in-progress by recency, done collapsed by default, preferences per browser); fog+frontier badges with a jump panel; a cross-root projects overview; snapshot export; opt-in desktop notifications; empty-state one-click starters; per-stage skill shortcuts; root switching with the recent-roots dropdown; a settings modal for pollMs/host/port/token and theme switching; business styles consume only one layer of `--fd-*` aliases) |
-| `docs/skills/` | the skills catalog: one Chinese write-up per skill (frontmatter feeds `/api/skills`), README is the overview; static material for the UI modal |
+| `docs/skill-intros/` | the skills catalog: one Chinese write-up per skill (frontmatter feeds `/api/skills`), README is the overview; static material for the UI modal |
 | `docs/screenshots/` | the README demo screenshots (light / dark / all-efforts overview) |
 | `verify-standalone.mjs` | the standalone verification script |
 

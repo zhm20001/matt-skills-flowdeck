@@ -24,8 +24,8 @@
  *                     不进轮询载荷；GET 不触碰常用目录排序（收录/置顶只发生在真切换）
  *   GET  /api/issue?effort=<slug>&ticket=<票号>  单张票的 Markdown 原文（懒加载：点开才取，不进轮询载荷；
  *                     读侧 1MB 护栏与扫描同款；effort 或票号不存在回 404）
- *   GET  /api/skills  技能介绍文档清单（docs/skills/*.md 的 frontmatter，按分类与 order 排序）
- *   GET  /api/skills/<名字>  单篇技能介绍原文（Markdown；名字限字母数字与连字符，只读 docs/skills/）
+ *   GET  /api/skills  技能介绍文档清单（docs/skill-intros/*.md 的 frontmatter，按分类与 order 排序）
+ *   GET  /api/skills/<名字>  单篇技能介绍原文（Markdown；名字限字母数字与连字符，只读 docs/skill-intros/）
  *   POST /api/config  改配置并持久化到 config.json：root（热切换+收录常用目录）、pollMs（下一拍生效）、
  *                     token（立即接管校验；空串=清除）、host/port（写盘，重启后生效）（要求带 X-FlowDeck 头，防跨站写）
  *   POST /api/recent-roots  删一条常用目录并写回 config.json（防护同上；删未知条目幂等成功）
@@ -56,8 +56,8 @@ const execFile = promisify(execFileCb)
 const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CONFIG_PATH = nodePath.join(HERE, 'config.json')
 const INDEX_HTML = nodePath.join(HERE, 'index.html')
-// 技能介绍文档目录（docs/skills/，随仓库自包含）。只读这一目录下的 .md，没有路径穿越面。
-const SKILLS_DOCS_DIR = nodePath.join(HERE, 'docs', 'skills')
+// 技能介绍文档目录（docs/skill-intros/，随仓库自包含）。只读这一目录下的 .md，没有路径穿越面。
+const SKILLS_DOCS_DIR = nodePath.join(HERE, 'docs', 'skill-intros')
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const SKILL_CATEGORY_RANK = { overview: 0, engineering: 1, productivity: 2, misc: 3, 'in-progress': 4 }
 // 界面引用的静态资源白名单：只放行本目录里点名的文件，不做通用静态服务，也就没有路径穿越。
@@ -563,7 +563,7 @@ async function sendFile(res, filePath, type) {
   }
 }
 
-// ── 技能介绍文档（docs/skills/）：/api/skills 清单 + /api/skills/<名字> 单篇 ──
+// ── 技能介绍文档（docs/skill-intros/）：/api/skills 清单 + /api/skills/<名字> 单篇 ──
 
 /** 解析文档顶部的 frontmatter（--- 包围的 key: value 行）。缺块、坏行都宽容：清单字段逐个回落。 */
 function parseSkillFrontmatter(text) {
@@ -579,7 +579,7 @@ function parseSkillFrontmatter(text) {
   return meta
 }
 
-/** 技能清单：读 docs/skills/ 全部 .md 的 frontmatter，按分类（总览最前）与 order 排序。
+/** 技能清单：读 docs/skill-intros/ 全部 .md 的 frontmatter，按分类（总览最前）与 order 排序。
  *  目录读不到（整体拷走时缺了文档）回落空清单，界面照常渲染空态。 */
 async function skillsList() {
   let files
@@ -683,7 +683,7 @@ function handleApiSkills(res) {
     .catch((e) => sendJson(res, 500, { error: '盘点技能文档失败：' + String((e && e.message) || e) }))
 }
 
-/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skills/，无路径穿越面）。 */
+/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skill-intros/，无路径穿越面）。 */
 function handleApiSkillDoc(res, url) {
   // 畸形百分号转义（%ZZ）decode 会抛 URIError：按名字不合法处理，404，不炸进程。
   let name = url.slice('/api/skills/'.length)
@@ -692,7 +692,7 @@ function handleApiSkillDoc(res, url) {
   } catch {
     name = ''
   }
-  // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，只读 docs/skills/。
+  // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，只读 docs/skill-intros/。
   const file = nodePath.resolve(SKILLS_DOCS_DIR, name + '.md')
   if (!name || !SKILL_NAME_RE.test(name) || !file.startsWith(SKILLS_DOCS_DIR + nodePath.sep)) {
     sendJson(res, 404, { error: '没有这个技能文档：' + name })
