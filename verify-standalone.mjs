@@ -49,6 +49,9 @@
  *  28. 技能介绍英文（票 03）     → /api/skills 与单篇认 ?lang（不带参数逐字节不变、英文只换 title/summary
  *                                与正文，骨架仍以中文目录为单一真相）；36 篇同名镜像逐篇对齐；
  *                                弹窗按语言取篇、缺镜像回退中文并挂标注。
+ *  29. 静态壳取词通道（票 04）   → markup 的 data-i18n* 键都在词表里、三条属性通道的中文默认态与词表
+ *                                逐字一致；英文态四条通道都取得到词且取的是英文列（空白页面骗得过
+ *                                「零中文残留」，骗不过这一组）。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -509,6 +512,37 @@ async function runScenarios(tmp) {
   assert.match(enClosed.stages[3].en.hint, /all .*closed|全部关闭/i)
   assert.match(enClosed.stages[3].en.evidence, /1 ticket|all/i, '全关时的证据英文列')
   ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
+
+  // ── 静态壳取词绑定（english-ui 票 02，票 04 实拍补的洞）：markup 的 data-i18n* 键不许悬空，
+  //    写死的中文默认态不许与词表漂移。悬空键把标签擦成空白，而「零中文残留」照样通过——所以这一组
+  //    在文件级钉：键都在词表里 + title/placeholder/aria 三条通道的 markup 默认值逐字等于中文列。──
+  const deckHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+  const wlFrom = deckHtml.indexOf('var UI_TEXT = {')
+  const wlTo = deckHtml.indexOf('\n}\n', wlFrom)
+  assert.ok(wlFrom > 0 && wlTo > wlFrom, '词表要能从 index.html 定位（界面人话的单一来源）')
+  // 词表是 HTML 里的对象字面量，没有导出可 import——按原样求值，绝不在测试里复制第二份词表。
+  const SHELL_TEXT = new Function('return ' + deckHtml.slice(wlFrom + 'var UI_TEXT = '.length, wlTo + 2))()
+  const SHELL_CHANNELS = { 'data-i18n': null, 'data-i18n-title': 'title', 'data-i18n-placeholder': 'placeholder', 'data-i18n-aria': 'aria-label' }
+  const dangling = []
+  const drifted = []
+  let bound = 0
+  for (const tag of (deckHtml.slice(deckHtml.indexOf('<body')).match(/<[a-zA-Z][^>]*data-i18n[^>]*>/g) || [])) {
+    const attrs = [...tag.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]])
+    for (const m of tag.matchAll(/\s(data-i18n(?:-[a-z]+)?)="([^"]+)"/g)) {
+      const [, attr, key] = m
+      bound++
+      if (!SHELL_TEXT[key]) { dangling.push(attr + '=' + key); continue }
+      const dom = SHELL_CHANNELS[attr]
+      if (dom === null) continue // 正文通道由 jsdom 那组按当前语言逐字钉，这里不比 innerHTML
+      const literal = (attrs.find((a) => a[0] === dom) || [])[1]
+      if (literal !== SHELL_TEXT[key].zh) drifted.push(key + '：markup ' + JSON.stringify(literal) + ' ≠ 词表 ' + JSON.stringify(SHELL_TEXT[key].zh))
+    }
+  }
+  assert.ok(Object.keys(SHELL_TEXT).length > 200, '词表整块求值成功（' + Object.keys(SHELL_TEXT).length + ' 条）')
+  assert.ok(bound >= 40, '静态壳的取词绑定全部进入扫描面（' + bound + ' 条）')
+  assert.deepEqual(dangling, [], 'markup 每个 data-i18n* 键都在词表里（悬空即空白，零残留扫不出来）')
+  assert.deepEqual(drifted, [], '写死的中文默认态与词表中文列逐字一致（中文态字节不变这条硬约束的静态壳侧）')
+  ok('静态壳取词绑定（文件级）：data-i18n* 键不悬空，title/placeholder/aria 三通道的 markup 中文默认态与词表中文列逐字一致')
 
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
   const { deriveEvents } = await import('./notify.mjs')
@@ -3140,6 +3174,18 @@ async function runScenarios(tmp) {
     assert.equal(shDoc.documentElement.getAttribute('lang'), 'en', '英文态 <html lang> 跟着翻（读屏与断字规则要选对语言）')
     assert.equal(shDoc.title, 'AI Coding Workflow Deck', '文档标题随语言')
     assert.deepEqual(cjkResidue(shDoc), [], '英文态首屏整页零中文残留（文本 + title + aria-label + placeholder + 标题）')
+    // 静态壳还得「取得到词」：残留扫描对一张空白页面同样通过（票 04 实拍撞出来的洞——取词通道
+    // 误按选择器读属性名，整条顶栏被擦成空标签，而「零中文」照样成立）。反向钉一遍四条通道。
+    for (const [attr, dom] of [['data-i18n', null], ['data-i18n-title', 'title'],
+      ['data-i18n-placeholder', 'placeholder'], ['data-i18n-aria', 'aria-label']]) {
+      const rows = Array.from(shDoc.querySelectorAll('[' + attr + ']')).map((n) => {
+        const key = n.getAttribute(attr)
+        return [key, dom ? n.getAttribute(dom) : n.textContent]
+      })
+      assert.ok(rows.length >= 1, attr + ' 通道有节点在取词面上')
+      assert.deepEqual(rows.filter((r) => !String(r[1] || '').trim()).map((r) => r[0]), [], '英文态 ' + attr + ' 无空文案')
+      assert.deepEqual(rows.filter((r) => r[1] !== shWin.UI_TEXT[r[0]].en).map((r) => r[0]), [], '英文态 ' + attr + ' 逐字取英文列')
+    }
     shClick(shTab('All'))
     assert.deepEqual(cjkResidue(shDoc), [], '「全部」视图零残留（表头、折叠行、行 aria-label）')
     shClick(shTab('gamma'))

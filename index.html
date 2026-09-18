@@ -808,9 +808,9 @@ function tf(key, vars) {
 function applyStaticCopy() {
   document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN')
   document.title = t('doc.title')
-  ;[['[data-i18n]', 'textContent', null], ['[data-i18n-title]', null, 'title'],
-    ['[data-i18n-placeholder]', null, 'placeholder'], ['[data-i18n-aria]', null, 'aria-label']].forEach(function (row) {
-    Array.prototype.forEach.call(document.querySelectorAll(row[0]), function (n) {
+  ;[['data-i18n', 'textContent', null], ['data-i18n-title', null, 'title'],
+    ['data-i18n-placeholder', null, 'placeholder'], ['data-i18n-aria', null, 'aria-label']].forEach(function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll('[' + row[0] + ']'), function (n) {
       var text = t(n.getAttribute(row[0]))
       if (row[1]) n[row[1]] = text
       else n.setAttribute(row[2], text)

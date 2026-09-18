@@ -19,17 +19,21 @@ Technically it's a **zero-dependency** local Node service (Node built-ins only) 
   - "Export snapshot" in the top bar drops the latest inventory as a timestamped JSON file (an archive to keep or to feed another agent) — it is an **inventory archive**, not a full backup: ticket bodies are lazy-loaded and not included;
   - opt-in desktop notifications (off by default): ticket closed, fog count changed, stage advanced — with backlogged changes aggregated into one notice when you return; keep it running in the background and still know what moved.
 
-The UI and the skill catalog are currently Chinese; the parts of tracked files that matter for the rules (`## Destination` headings, `Status:` values) are English already, and artifact bodies in any language don't affect the verdicts.
+The UI is bilingual — Chinese by default, and the top-bar button switches the whole board to English (the choice is remembered per browser; a browser that prefers English starts in English). The skill catalog ships in both languages too. The parts of tracked files that matter for the rules (`## Destination` headings, `Status:` values) are English already, and artifact bodies in any language don't affect the verdicts.
 
 ## Screenshots
 
+All three are the English UI, running against this repository's own `.scratch/`.
+
 Main view (light, paper theme) — the four-stage chain, the next-step prompt card, and the ticket table:
 
-![flowdeck main view, light paper theme](docs/screenshots/main-view-light.png)
+![flowdeck main view, light paper theme, English UI](docs/screenshots-en/main-view-light.png)
 
 | Dark theme | All-efforts overview |
 |---|---|
-| ![dark theme](docs/screenshots/main-view-dark.png) | ![all-efforts overview](docs/screenshots/all-efforts.png) |
+| ![flowdeck dark theme, English UI](docs/screenshots-en/main-view-dark.png) | ![all-efforts overview, English UI](docs/screenshots-en/all-efforts.png) |
+
+Ticket titles inside the shots are still Chinese: those are the tracked artifacts' own text, which the board displays verbatim in any language.
 
 ## Quick start
 
@@ -161,7 +165,8 @@ Push-verified: `.github/workflows/ci.yml` runs `npm run lint` + `npm run verify`
 | `index.html` | the browser UI (single file, no build; polls at the config interval, skips repainting when the data signature is unchanged and restores scroll when it does; light spec rendering with an expand-to-modal reader reused for ticket bodies; six-way triage chip filter and the git sidecar row; an "all" overview across efforts (in-progress by recency, done collapsed by default, preferences per browser); fog+frontier badges with a jump panel; a cross-root projects overview; snapshot export; opt-in desktop notifications; empty-state one-click starters; per-stage skill shortcuts; root switching with the recent-roots dropdown; a settings modal for pollMs/host/port/token and theme switching; a top-bar 中/英 button switches the whole shell — copy, guide words, notifications, error wording and the skills catalog — with the choice remembered per browser; business styles consume only one layer of `--fd-*` aliases) |
 | `docs/skill-intros/` | the skills catalog: one Chinese write-up per skill (frontmatter feeds `/api/skills`), README is the overview; static material for the UI modal, and the single source of the catalog's shape (which docs, category, order) |
 | `docs/skill-intros-en/` | English mirror of the catalog: same file names, only title/summary/body translated, served when `/api/skills*` gets `?lang=en` |
-| `docs/screenshots/` | the README demo screenshots (light / dark / all-efforts overview) |
+| `docs/screenshots/` | Chinese-UI demo screenshots used by README.zh-CN.md (light / dark / all-efforts overview) |
+| `docs/screenshots-en/` | English-UI demo screenshots used by this README (same three views, same 1440×900) |
 | `verify-standalone.mjs` | the standalone verification script |
 
 ## Deliberately out of scope
