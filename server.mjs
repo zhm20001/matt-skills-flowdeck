@@ -27,7 +27,8 @@
  *   GET  /api/skills[?lang=en]  技能介绍文档清单（docs/skill-intros/*.md 的 frontmatter，按分类与 order 排序；
  *                     lang=en 只换 title/summary 为同名英文镜像篇（docs/skill-intros-en/），缺镜像的条目加 noEnglish，
  *                     分类/顺序/开发中一律仍以中文目录为准；不带 lang = 响应逐字节不变）
- *   GET  /api/skills/<名字>[?lang=en]  单篇技能介绍原文（Markdown；名字限字母数字与连字符，只读 docs/skill-intros/；
+ *   GET  /api/skills/<名字>[?lang=en]  单篇技能介绍原文（Markdown；名字限字母数字与连字符，中文原文只读
+ *                     docs/skill-intros/、英文镜像只读 docs/skill-intros-en/，两个目录都定死，无路径穿越面；
  *                     lang=en 先取同名英文镜像篇，缺篇回退中文原文）
  *   POST /api/config  改配置并持久化到 config.json：root（热切换+收录常用目录）、pollMs（下一拍生效）、
  *                     token（立即接管校验；空串=清除）、host/port（写盘，重启后生效）（要求带 X-FlowDeck 头，防跨站写）
@@ -737,7 +738,8 @@ function handleApiSkills(reqUrl, res) {
     .catch((e) => sendErr(res, 500, 'skills.list-failed', '盘点技能文档失败：' + String((e && e.message) || e)))
 }
 
-/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skill-intros/，无路径穿越面）。
+/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单；中文原文限 docs/skill-intros/、镜像限
+ *  docs/skill-intros-en/，两个目录都定死，无路径穿越面）。
  *  ?lang=en 先取同名英文镜像篇；镜像缺篇（未译 / 读不出）回退中文原文——清单里那条同时带
  *  noEnglish，界面据此在正文上方挂「此篇暂无英文」标注，用户看到的语言与标注一致。 */
 async function handleApiSkillDoc(reqUrl, res, url) {
@@ -748,7 +750,9 @@ async function handleApiSkillDoc(reqUrl, res, url) {
   } catch {
     name = ''
   }
-  // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，只读 docs/skill-intros/。
+  // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，中文原文出不了
+  // docs/skill-intros/。镜像侧（readEnglishSkill）走同一份白名单，没有第二层——白名单里已经没有
+  // 点与分隔符可用。
   const zhFile = nodePath.resolve(SKILLS_DOCS_DIR, name + '.md')
   if (!name || !SKILL_NAME_RE.test(name) || !zhFile.startsWith(SKILLS_DOCS_DIR + nodePath.sep)) {
     sendErr(res, 404, 'skills.no-doc', '没有这个技能文档：' + name)

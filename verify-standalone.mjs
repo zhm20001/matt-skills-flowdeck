@@ -3026,6 +3026,7 @@ async function runScenarios(tmp) {
     const zhDoc = zhCase.d.window.document
     assert.deepEqual(stageNames(zhDoc), ZH_NAMES)
     assert.deepEqual(stageNames(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.title), '中文态链格阶段名应为服务端下发原文')
+    assert.deepEqual(stageSubs(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.subtitle), '中文态链格副题也应为服务端下发原文（词表的 zh 列含副题，两边漂移即红）')
     assert.equal(zhDoc.getElementById('langBtn').textContent, 'EN', '中文态按钮给的是切过去的那个语言')
     // 判不中默认中文（现状不劣化）
     const frCase = langDom(39334, ['fr-FR', 'fr'], null)

@@ -280,7 +280,7 @@
     </div>
     <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
     <button id="themeBtn" data-i18n-title="theme.btn.title" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
-    <button id="langBtn" title="切换界面语言：中文 / EN（记忆在本浏览器里）">EN</button>
+    <button id="langBtn" data-i18n-title="lang.btn.title" title="切换界面语言为英文（记忆在本浏览器里）">EN</button>
     <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
     <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
     <button id="snapshotBtn" data-i18n="snapshot.btn.label" data-i18n-title="snapshot.btn.title" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
@@ -2122,13 +2122,13 @@ function renderMarkdown(text, box) {
     var fence = /^\s*(```|~~~)/.exec(line)
     if (fence) {
       // 围栏代码块：开合标记之间的内容原样进 <pre><code>（textContent 直塞，不走行内语法）
-      var codeText = []
+      var fenceLines = []
       i++
-      while (i < lines.length && lines[i].trim().indexOf(fence[1]) !== 0) { codeText.push(lines[i]); i++ }
+      while (i < lines.length && lines[i].trim().indexOf(fence[1]) !== 0) { fenceLines.push(lines[i]); i++ }
       if (i < lines.length) i++
       var pre = document.createElement('pre')
       var codeEl = document.createElement('code')
-      codeEl.textContent = codeText.join('\n')
+      codeEl.textContent = fenceLines.join('\n')
       pre.appendChild(codeEl)
       box.appendChild(pre)
       continue
