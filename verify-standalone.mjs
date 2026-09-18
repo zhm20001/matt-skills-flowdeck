@@ -43,6 +43,12 @@
  *  26. 界面语言（english-ui 01） → 初始语言按浏览器语言判定（en-* 英文、判不中默认中文）；顶栏按钮即时
  *                                中英互换且零请求；偏好存 localStorage 并优先于浏览器语言；链格阶段名的
  *                                中文列与服务端 flowchain 下发原文逐字钉死（词表不长第二套中文真相）。
+ *  27. 界面外壳英文化（票 02）   → 英文态整页扫不到中文（jsdom 逐视图，含 title/aria-label/placeholder）；
+ *                                指引词、桌面通知、报错措辞三处人话都随语言，未知 code 回退服务端原文；
+ *                                中文态逐字节零回归（词表 zh 列与改动前拼装结果全等）。
+ *  28. 技能介绍英文（票 03）     → /api/skills 与单篇认 ?lang（不带参数逐字节不变、英文只换 title/summary
+ *                                与正文，骨架仍以中文目录为单一真相）；36 篇同名镜像逐篇对齐；
+ *                                弹窗按语言取篇、缺镜像回退中文并挂标注。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -990,6 +996,115 @@ async function runScenarios(tmp) {
     await new Promise((r) => skillsServer.server.close(r))
   }
   ok('技能文档接口：清单完整有序（总览最前、分类聚合）、单篇取原文 Markdown；未知/穿越/畸形转义一律 404')
+
+  // ── 技能介绍英文（english-ui 票 03）：两条只读端点认 ?lang；不带参数的响应逐字节不变 ──
+  const ZH_DOCS = nodePath.join(HERE, 'docs', 'skill-intros')
+  const EN_DOCS = nodePath.join(HERE, 'docs', 'skill-intros-en')
+  /** 取中文篇 frontmatter 的某一格（测试自己读盘，与镜像对账用，不复用服务端解析器）。 */
+  function fmField(raw, key) {
+    const m = new RegExp('^' + key + ':[ \\t]*(.+)$', 'm').exec(raw.slice(4, raw.indexOf('\n---', 3)))
+    return m ? m[1].trim() : ''
+  }
+  const langServer = await startServer({ root: tmp, port: 0 })
+  try {
+    const body = async (u) => (await fetch(langServer.url + u)).text()
+    const zhListRaw = await body('/api/skills')
+    const zhDocRaw = await body('/api/skills/tdd')
+    // 缺省路径红线：只有 'en' 分叉，空值与不认识的语言都必须回到与不带参数同一串字节。
+    for (const u of ['/api/skills?lang=', '/api/skills?lang=zh', '/api/skills?lang=fr', '/api/skills?lang=ENGLISH']) {
+      assert.equal(await body(u), zhListRaw, '清单：不带参数与非法 lang 的响应逐字节一致（' + u + '）')
+    }
+    assert.equal(await body('/api/skills/tdd?lang=zh'), zhDocRaw, '单篇：lang=zh 与不带参数同字节')
+    assert.equal(await body('/api/skills/tdd?lang=fr'), zhDocRaw, '单篇：非法 lang 同字节')
+    assert.equal(zhDocRaw, await fs.readFile(nodePath.join(ZH_DOCS, 'tdd.md'), 'utf8'), '单篇中文态 = 磁盘中文原文逐字节')
+    const zhList = JSON.parse(zhListRaw).skills
+    assert.equal(zhList.some((s) => 'noEnglish' in s), false, '不带参数的清单一条 noEnglish 都不打')
+    for (const s of zhList) {
+      const raw = await fs.readFile(nodePath.join(ZH_DOCS, s.name + '.md'), 'utf8')
+      assert.equal(s.title, fmField(raw, 'title'), s.name + '：中文清单的标题仍出自中文篇')
+    }
+    // 英文态：大小写与首尾空格宽容；骨架（篇目/次序/分类/顺序/开发中标）一格不动，只换 title/summary。
+    const enList = (await (await fetch(langServer.url + '/api/skills?lang=%20EN ')).json()).skills
+    assert.deepEqual(enList.map((s) => s.name), zhList.map((s) => s.name), '英文清单的篇目与次序不变（总览仍排第一）')
+    assert.deepEqual(
+      enList.map((s) => [s.category, s.order, s.inProgress]),
+      zhList.map((s) => [s.category, s.order, s.inProgress]),
+      '分类/顺序/开发中标以中文目录为单一真相，英文只作镜像')
+    for (const s of enList) {
+      const raw = await fs.readFile(nodePath.join(EN_DOCS, s.name + '.md'), 'utf8')
+      assert.equal(s.title, fmField(raw, 'title'), s.name + '：英文清单的标题出自同名镜像篇')
+      assert.equal(s.noEnglish, undefined, s.name + '：镜像在位就不打 noEnglish')
+      assert.notEqual(s.title, (zhList.find((z) => z.name === s.name) || {}).title, s.name + '：英文标题与中文标题不同文')
+    }
+    const enDocRaw = await body('/api/skills/tdd?lang=en')
+    assert.equal(enDocRaw, await fs.readFile(nodePath.join(EN_DOCS, 'tdd.md'), 'utf8'), '英文单篇 = 同名镜像篇逐字节')
+    assert.match(enDocRaw, /^---\nname: tdd\n/, '英文篇同样带 frontmatter（清单与单篇共用一套结构）')
+    // 语言参数不越名字白名单：未知名字与穿越在英文态一样是 404，不会悄悄回落到某篇中文。
+    const en404 = await fetch(langServer.url + '/api/skills/no-such-skill-doc?lang=en')
+    assert.equal(en404.status, 404, '不存在的篇 ?lang=en 仍 404')
+    assert.equal((await (await fetch(langServer.url + '/api/skills/..%2F..%2Fserver.mjs?lang=en')).text()).indexOf('root:'), -1, '穿越加 lang 也读不到仓库文件')
+    assert.equal((await fetch(langServer.url + '/api/skills/%ZZ?lang=en')).status, 404, '畸形转义加 lang 仍 404')
+    // 缺篇回退的口径与磁盘同真相：今天 36/36 全译（票 03 要求），所以 noEnglish 一条都不该有；
+    // 谁日后加了中文篇没跟英文篇，这条就把他指回这里（回退本身的可见性钉在界面缝，见下方 jsdom 组）。
+    const missingEn = zhList.filter((s) => !existsSync(nodePath.join(EN_DOCS, s.name + '.md')))
+    assert.equal(enList.filter((s) => s.noEnglish).length, missingEn.length, 'noEnglish 条数 = 磁盘缺镜像条数')
+    assert.deepEqual(missingEn.map((s) => s.name), [], '每一篇中文介绍都有同名英文镜像')
+    assert.deepEqual(
+      (await fs.readdir(EN_DOCS)).filter((f) => f.endsWith('.md')).sort(),
+      (await fs.readdir(ZH_DOCS)).filter((f) => f.endsWith('.md')).sort(),
+      '英文目录不多不少正好那 36 篇（镜像不是第二套清单）')
+  } finally {
+    await new Promise((r) => langServer.server.close(r))
+  }
+  ok('技能介绍英文接口：?lang=en 换标题简介与单篇正文而骨架不动、大小写空格宽容；不带参数/非法 lang 的响应与磁盘中文原文逐字节一致；lang 不越名字白名单；中英目录同名一一对应')
+
+  // ── 英文镜像完整性（票 03）：36 篇镜像逐篇与中文原篇对齐，只翻该翻的、不夹带机器事实 ──
+  {
+    const pairs = (await fs.readdir(ZH_DOCS)).filter((f) => f.endsWith('.md')).sort()
+    assert.equal(pairs.length, 36, '中英各 36 篇（35 技能 + 总览）')
+    const drift = []
+    for (const f of pairs) {
+      const zhRaw = await fs.readFile(nodePath.join(ZH_DOCS, f), 'utf8')
+      const enRaw = await fs.readFile(nodePath.join(EN_DOCS, f), 'utf8')
+      const cut = (t) => { const e = t.indexOf('\n---', 3); return { fm: t.slice(3, e), body: t.slice(e + 4) } }
+      const zh = cut(zhRaw)
+      const en = cut(enRaw)
+      const keys = (s) => s.split('\n').map((l) => l.slice(0, l.indexOf(':'))).join(',')
+      if (keys(zh.fm) !== keys(en.fm)) drift.push(f + '：frontmatter 键序不同')
+      const zhFm = zh.fm.split('\n')
+      const enFm = en.fm.split('\n')
+      zhFm.forEach((line, i) => {
+        const key = line.slice(0, line.indexOf(':'))
+        // 只有 title/summary 是译文；其余（name/category/order/inProgress）原样照抄，镜像不带新元数据
+        if (key !== 'title' && key !== 'summary' && line !== enFm[i]) drift.push(f + '：' + key + ' 被改动')
+      })
+      if (!fmField(enRaw, 'title') || CJK_RE.test(fmField(enRaw, 'title'))) drift.push(f + '：title 空或含中文')
+      if (!fmField(enRaw, 'summary') || CJK_RE.test(fmField(enRaw, 'summary'))) drift.push(f + '：summary 空或含中文')
+      const h1 = (t) => (t.match(/^# .*$/m) || [''])[0]
+      if (h1(zh.body) !== h1(en.body)) drift.push(f + '：H1（技能名行）被改动')
+      if (CJK_RE.test(enRaw)) drift.push(f + '：正文残留中文')
+      const count = (s, re) => (s.match(re) || []).length
+      if (count(zh.body, /^## /gm) !== count(en.body, /^## /gm)) drift.push(f + '：二级标题数不同')
+      if (count(zh.body, /\[[^\]]+\]\([^)]+\)/g) !== count(en.body, /\[[^\]]+\]\([^)]+\)/g)) drift.push(f + '：链接数不同')
+      const targets = (t) => (t.match(/\]\([^)]+\)/g) || []).sort().join('|')
+      if (targets(zh.body) !== targets(en.body)) drift.push(f + '：链接目标被改动（内链要靠同名篇回退）')
+      if (f !== 'README.md') {
+        // 「什么时候用」的条数与正文段落数、加粗数一并钉住：译文不增删不合并
+        const sec = (t, head) => { const i = t.indexOf(head); return i < 0 ? '' : t.slice(i + head.length).split(/^\s*## /m)[0] }
+        const zhBullets = count(sec(zh.body, '## 什么时候用'), /^- /gm)
+        const enBullets = count(sec(en.body, '## When to use'), /^- /gm)
+        if (zhBullets !== enBullets || zhBullets === 0) drift.push(f + '：When to use 条数不等或取不到（' + zhBullets + ' vs ' + enBullets + '）')
+        const pre = (t) => t.slice(0, t.indexOf('\n## '))
+        if (count(pre(zh.body), /^\n/gm) !== count(pre(en.body), /^\n/gm)) drift.push(f + '：正文段落数不同')
+        if (count(pre(zh.body), /\*\*[^*]+\*\*/g) !== count(pre(en.body), /\*\*[^*]+\*\*/g)) drift.push(f + '：加粗小标题数不同')
+        // 「原文描述」是上游技能的英文原话：逐字节照抄，谁都不许顺手改一个引号
+        const quote = (t, head) => { const i = t.indexOf(head); return i < 0 ? null : t.slice(i).split('\n').filter((l) => l.startsWith('>')).join('\n') }
+        if (quote(zh.body, '## 原文描述') !== quote(en.body, '## Original description')) drift.push(f + '：原文描述引用不逐字节一致')
+      }
+    }
+    assert.deepEqual(drift, [], '36 篇镜像逐篇对齐（键序、原样字段、结构计数、内链目标、原文描述逐字节）')
+  }
+  ok('英文镜像完整性（文件级）：36 篇同名镜像的 frontmatter 键序与非译文字段原样、H1 与段落/条数/加粗/内链目标对齐、原文描述逐字节照抄、零中文残留')
 
   // ── 访问令牌：config.json 的 token 非空时，/api/* 无/错令牌 401，头与查询串携带皆可；静态壳不设防 ──
   const tokenCfgPath = nodePath.join(tmp, 'config-token.json')
@@ -2962,8 +3077,9 @@ async function runScenarios(tmp) {
       ],
     }
     /** 整页扫残留中文：文本节点 + title / aria-label / placeholder 三类属性 + 文档标题。
-        三处剪枝：#skillsDoc 是服务端 Markdown 正文（票 03 的范围）；script/style 的文本不是界面文案；
-        #langBtn 按「用目标语言写自己的目标语言名」自指（英文态就是「中文」二字，票 01 钉死的设计）。 */
+        两处剪枝：script/style 的文本不是界面文案；#langBtn 按「用目标语言写自己的目标语言名」自指
+        （英文态就是「中文」二字，票 01 钉死的设计）。技能正文自票 03 起进扫描面——英文态它读的就是
+        同名镜像篇，本夹具给的是英文正文，没有理由再豁免（缺镜像时的中文正文由按语言取篇那组钉住）。 */
     function cjkResidue(doc) {
       const hits = []
       const check = (where, v) => {
@@ -2974,7 +3090,7 @@ async function runScenarios(tmp) {
         acceptNode(n) {
           const p = n.parentNode
           if (!p || !p.closest) return 1
-          return p.closest('#skillsDoc, script, style, noscript, #langBtn') ? 2 : 1 // 2 = FILTER_REJECT：整棵子树不进扫描面
+          return p.closest('script, style, noscript, #langBtn') ? 2 : 1 // 2 = FILTER_REJECT：整棵子树不进扫描面
         },
       })
       for (let n = tw.nextNode(); n; n = tw.nextNode()) check('#text', n.nodeValue)
@@ -3053,18 +3169,26 @@ async function runScenarios(tmp) {
     await tick()
     assert.deepEqual(cjkResidue(shDoc), [], '项目总览弹窗零残留（含 no-scratch / unreadable 两类降级行）')
     shEsc()
+    // 规格阅读弹窗（头部标题与要素行随语言，正文是打开时刻的快照）
+    const specRead = Array.from(shDoc.querySelectorAll('#main button')).find((b) => b.textContent === 'Read full')
+    assert.ok(specRead, '英文态规格卡的阅读按钮出英文')
+    specRead.dispatchEvent(new shWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.deepEqual(cjkResidue(shDoc), [], '规格阅读弹窗零残留（标题行、要素标签）')
+    shEsc()
     // 票正文弹窗（标题、来源行、加载中）
     shDoc.querySelector('tr.ticket button').dispatchEvent(new shWin.Event('click', { bubbles: true }))
     await tick()
     await tick()
     assert.deepEqual(cjkResidue(shDoc), [], '票正文弹窗零残留（含「更新于」来源行）')
     shEsc()
-    // 技能包弹窗（分类名、计数行、开发中徽标；正文 Markdown 属票 03）
+    // 技能包弹窗（分类名、计数行、开发中徽标，英文态连正文一起扫——票 03 后镜像篇就是英文）
     shOpen('skillsBtn')
     await tick()
     await tick()
-    assert.deepEqual(cjkResidue(shDoc), [], '技能包弹窗外壳零残留（分类、计数、侧栏徽标；正文留给票 03）')
+    assert.deepEqual(cjkResidue(shDoc), [], '技能包弹窗零残留（分类、计数、侧栏徽标与 Markdown 正文）')
     assert.ok(shDoc.getElementById('skillsNav').textContent.indexOf('Engineering') >= 0, '分类名出英文')
+    assert.equal(shellCalls.filter((u) => u === '/api/skills?lang=en').length, 1, '开窗按英文取清单（正文同批进上面的残留扫描）')
     shEsc()
     // 空态页（工作约定 + 建骨架指令两段可复制文本）
     shellPayload = shellPayloadOf([], { scratchExists: false })
@@ -3075,7 +3199,7 @@ async function runScenarios(tmp) {
     assert.deepEqual(cjkResidue(shDoc), [], '空态页零残留（约定与骨架指令都出英文）')
     assert.deepEqual(jsErrorsShell, [])
     shellDom.window.close()
-    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/常用目录/设置/项目总览/票正文/技能外壳/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
+    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/常用目录/设置/项目总览/票正文/技能弹窗（含正文）/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
 
     // ── 英文态内容随语言（票 02）：一键复制、桌面通知、报错措辞三处人话都翻；未知 code 回落原文 ──
     const jsErrorsLang = []
@@ -3184,6 +3308,94 @@ async function runScenarios(tmp) {
     assert.deepEqual(jsErrorsLang, [])
     langDom2.window.close()
     ok('英文态内容随语言（jsdom）：票行/链格/下一步卡三处一键复制出英文（链格直取服务端英文列）、桌面通知随语言且阶段名同词表、报错按 code 措辞而未知 code 回退原文、401 补救指引也翻')
+
+    // ── 技能弹窗按语言取篇（票 03）：英文态两条请求都带 ?lang=en，中文态一个参数都不带；
+    //    镜像缺篇时清单打 noEnglish → 正文回退中文 + 挂英文标注，切语言重取清单、同篇两版各自缓存 ──
+    {
+      const SK_ZH_LIST = { skills: [
+        { name: 'grilling', category: 'engineering', order: 1, title: '拷问原语', summary: '访谈的地基', inProgress: false },
+        { name: 'wizard', category: 'in-progress', order: 2, title: '人工步骤向导', summary: '只有人能走的那几步', inProgress: true },
+      ] }
+      const SK_EN_LIST = { skills: [
+        { name: 'grilling', category: 'engineering', order: 1, title: 'The grilling primitive', summary: 'The ground under the interview', inProgress: false },
+        { name: 'wizard', category: 'in-progress', order: 2, title: '人工步骤向导', summary: '只有人能走的那几步', inProgress: true, noEnglish: true },
+      ] }
+      const SK_DOCS = {
+        'zh|grilling': '---\nname: grilling\ncategory: engineering\n---\n\n# grilling\n\n访谈的地基：设计树按轮推进。\n',
+        'en|grilling': '---\nname: grilling\ncategory: engineering\n---\n\n# grilling\n\nThe ground under the interview: a design tree in rounds.\n',
+        'zh|wizard': '---\nname: wizard\ncategory: in-progress\n---\n\n# wizard\n\n只有人能做的那几步。\n',
+        'en|wizard': '---\nname: wizard\ncategory: in-progress\n---\n\n# wizard\n\n只有人能做的那几步。\n', // 镜像缺篇：服务端回退的就是中文原文
+      }
+      const skCalls = []
+      const jsErrorsSk = []
+      const vcSk = new VirtualConsole()
+      vcSk.on('jsdomError', (e) => jsErrorsSk.push(String((e && e.message) || e)))
+      const skDom = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:39343/',
+        pretendToBeVisual: true,
+        virtualConsole: vcSk,
+        beforeParse(window) {
+          Object.defineProperty(window.navigator, 'languages', { value: ['en-US', 'en'], configurable: true })
+          window.fetch = (u) => {
+            const url = String(u)
+            skCalls.push(url)
+            if (url.indexOf('/api/state') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })
+            if (url === '/api/skills?lang=en') return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_EN_LIST)) })
+            if (url === '/api/skills') return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_ZH_LIST)) })
+            const m = /^\/api\/skills\/([^?]+)(\?lang=en)?$/.exec(url)
+            if (m) return Promise.resolve({ ok: true, status: 200, text: async () => SK_DOCS[(m[2] ? 'en|' : 'zh|') + decodeURIComponent(m[1])] })
+            return Promise.reject(new Error('技能语言用例不该请求别的接口：' + u))
+          }
+        },
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      const skDoc = skDom.window.document
+      const skWin = skDom.window
+      const skOpen = () => skDoc.getElementById('skillsBtn').dispatchEvent(new skWin.Event('click', { bubbles: true }))
+      const skNavItem = (name) => Array.from(skDoc.querySelectorAll('#skillsNav .item')).find((b) => b.querySelector('.en').textContent === name)
+      const skArt = () => skDoc.getElementById('skillsDoc')
+      const skCallsTo = (pred) => skCalls.filter(pred).length
+      skOpen()
+      await tick()
+      await tick()
+      assert.equal(skCallsTo((u) => u === '/api/skills?lang=en'), 1, '英文态开窗拉清单带 ?lang=en')
+      assert.equal(skCallsTo((u) => u === '/api/skills'), 0, '英文态不发无参数的清单请求')
+      assert.equal(skCallsTo((u) => u === '/api/skills/grilling?lang=en'), 1, '单篇也按语言取（默认总览篇）')
+      assert.ok(Array.from(skDoc.querySelectorAll('#skillsNav .item')).some((b) => b.querySelector('.nm').textContent.indexOf('The grilling primitive') === 0), '侧栏标题出自英文清单')
+      assert.match(skArt().textContent, /design tree in rounds/, '正文是英文镜像篇')
+      assert.ok(!CJK_RE.test(skArt().textContent), '有镜像的篇整屏正文零中文')
+      assert.equal(skArt().querySelector('.fallback'), null, '有镜像的篇不挂「暂无英文」标注')
+      skNavItem('wizard').dispatchEvent(new skWin.Event('click', { bubbles: true }))
+      await tick()
+      await tick()
+      assert.equal(skCallsTo((u) => u === '/api/skills/wizard?lang=en'), 1, '换篇仍带语言参数')
+      assert.ok(CJK_RE.test(skArt().querySelector('p').textContent), '缺镜像的篇回退中文原文')
+      const fb = skArt().querySelector('.fallback')
+      assert.ok(fb, '回退时正文上方挂标注')
+      assert.match(fb.textContent, /no English version yet/i, '标注说清「这篇暂无英文」')
+      assert.ok(!CJK_RE.test(fb.textContent), '标注本身随界面语言（英文态出英文）')
+      // 切中文：清单作废重取且不带任何参数（中文态请求与票 03 之前逐字节的红线就在这一格上）
+      skDoc.getElementById('langBtn').dispatchEvent(new skWin.Event('click', { bubbles: true }))
+      await tick()
+      await tick()
+      assert.equal(skCallsTo((u) => u === '/api/skills'), 1, '中文态开窗拉清单不带参数')
+      assert.deepEqual(skCalls.filter((u) => u.indexOf('/api/skills') === 0 && u.indexOf('?lang=zh') >= 0), [], '中文态不用 ?lang=zh 表达中文')
+      assert.match(skDoc.querySelector('#skillsNav .item .nm').textContent, /拷问原语|人工步骤向导/, '侧栏标题回到中文清单')
+      assert.match(skArt().querySelector('p').textContent, /只有人|那几步/, '正文延续正在看的那篇（切语言不换篇）')
+      assert.equal(skArt().querySelector('.fallback'), null, '中文态永不挂「暂无英文」标注')
+      // 切回英文：清单重取一次，正文命中同语言的缓存（不再发单篇请求）
+      const docCallsBefore = skCallsTo((u) => u.indexOf('/api/skills/') === 0)
+      skDoc.getElementById('langBtn').dispatchEvent(new skWin.Event('click', { bubbles: true }))
+      await tick()
+      await tick()
+      assert.equal(skCallsTo((u) => u === '/api/skills?lang=en'), 2, '清单按语言只有一份，切回来重取')
+      assert.equal(skCallsTo((u) => u.indexOf('/api/skills/') === 0), docCallsBefore, '单篇缓存键含语言：切回来的这一篇不重发')
+      assert.ok(skArt().querySelector('.fallback'), '缓存路径也照常挂标注')
+      assert.deepEqual(jsErrorsSk, [])
+      skDom.window.close()
+      ok('技能弹窗按语言取篇（jsdom）：英文态清单与单篇都带 ?lang=en、侧栏与正文出英文；中文态两类请求都不带参数且不挂标注；镜像缺篇回退中文原文并在正文上方挂英文标注；切语言重取清单而单篇按语言各自缓存')
+    }
 
     ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')
   }

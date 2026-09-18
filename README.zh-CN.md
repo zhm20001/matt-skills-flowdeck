@@ -77,6 +77,8 @@ config.json 被 git 忽略（`.gitignore`）：它会被服务在运行时改写
 
 网页右上角的**「技能包」按钮**会弹出一扇静态展示窗：Matt 技能包 35 个技能的分类清单与逐个介绍（是什么、什么时候用、怎么触发，末尾附原文描述）。素材是仓库里手写的 Markdown——`docs/skill-intros/` 下每个技能一篇，`docs/skill-intros/README.md` 是全景总览；服务端 `GET /api/skills` 出清单（读各篇 frontmatter，按分类排序）、`GET /api/skills/<名字>` 取单篇原文，界面内置的极简渲染器负责显示，文档改了刷新即生效。技能包源码不在本仓库，这里只收录介绍。
 
+界面切到英文时，这两条端点带上 `?lang=en`，改读 `docs/skill-intros-en/` 下的同名镜像篇（36 篇，一篇对一篇）。清单骨架——有哪些篇、哪一类、什么顺序、是否开发中——永远以中文目录为准，镜像只供标题、简介与正文；某篇缺镜像就仍显示中文，并在正文上方标注「此篇暂无英文」。不带 `lang`（或带除 `en` 外的任何值）时，两条端点的应答与从前逐字节一致。
+
 ## 它读什么文件（`.scratch/` 产物约定）
 
 一个 effort（一项工作）= `.scratch/<特性名>/` 目录，里面有下面三类产物中的一类或多类：
@@ -151,13 +153,14 @@ verify 覆盖：effort 识别、四场景链状态（含后向推定与「推定
 | `notify.mjs` | 盘点事件推导（纯函数，只引 flowchain.mjs 的阶段表）：前后两拍盘点的结构化 diff——票开关、迷雾数、链当前步、新 effort 各成人话事件，桌面通知的消费输入（index.html 有 ES5 镜像，两处注释互指钉住） |
 | `lib/parse.mjs` | 自带解析器（零依赖单遍结构解析，行为由 verify 夹具断言钉住） |
 | `scan.mjs` | 扫描追踪目录的 `.scratch/`，产出盘点数据（热路径并行盘点，标题与票同走自带解析器） |
-| `server.mjs` | HTTP 服务 + 命令行入口（`/`、`/tokens-*.css`、`/api/state`（含 `recentRoots` 与运行时 pollMs/host/port/tokenEnabled、每 effort 一条 git 旁证字段——最近提交或 null，~15 秒 TTL、不随指纹走）、`/api/health`、`/api/roots-overview` 项目总览（常用目录逐个只读盘点，按需单拍不进轮询、GET 不触碰排序）、`/api/issue` 单张票 Markdown 原文（懒加载，1MB 护栏同款）、`/api/skills` 技能介绍清单、`/api/skills/<名字>` 单篇原文、`POST /api/config` 换目录与改 pollMs/host/port/token（逐字段校验，令牌改动即时生效）、`POST /api/recent-roots` 删常用目录；请求先过 Host 校验防 DNS rebinding，POST 端点另有 X-FlowDeck 头防跨站写、超限应答 413；token 非空时 `/api/*` 要求访问令牌；轮询路径全异步 IO） |
+| `server.mjs` | HTTP 服务 + 命令行入口（`/`、`/tokens-*.css`、`/api/state`（含 `recentRoots` 与运行时 pollMs/host/port/tokenEnabled、每 effort 一条 git 旁证字段——最近提交或 null，~15 秒 TTL、不随指纹走）、`/api/health`、`/api/roots-overview` 项目总览（常用目录逐个只读盘点，按需单拍不进轮询、GET 不触碰排序）、`/api/issue` 单张票 Markdown 原文（懒加载，1MB 护栏同款）、`/api/skills` 技能介绍清单、`/api/skills/<名字>` 单篇原文（两条都认 `?lang=en`，改读 `docs/skill-intros-en/` 的同名镜像；不带参数响应逐字节不变）、`POST /api/config` 换目录与改 pollMs/host/port/token（逐字段校验，令牌改动即时生效）、`POST /api/recent-roots` 删常用目录；请求先过 Host 校验防 DNS rebinding，POST 端点另有 X-FlowDeck 头防跨站写、超限应答 413；token 非空时 `/api/*` 要求访问令牌；轮询路径全异步 IO） |
 | `eslint.config.mjs` | 最小 lint 配置（ESLint flat config，只兜真 bug 类漂移；lib/parse.mjs 豁免——行为由 verify 夹具钉住） |
 | `.github/workflows/ci.yml` | CI：push/PR 时 Node 18/22 跑 lint + verify |
 | `tokens-paper.css` | 「纸感信纸风」设计 tokens 的唯一权威；色值/字体栈只允许出现在 tokens 文件里 |
 | `tokens-github-dark.css` | 暗色主题 tokens：在 `data-theme="dark"` 下覆写同名 token，业务样式零改动整体换肤 |
-| `index.html` | 浏览器界面（单文件、无构建；轮询间隔读 config.json，数据签名没变就不重画主区、真重画时恢复滚动位置，长文档读得下去；规格卡片 Markdown 轻渲染，「展开阅读」进全宽弹窗，票表「查看」复用同一弹窗懒加载票原文、六档 triage chip 过滤、git 旁证行；切换条尾「全部」视图一屏纵览（进行中按最近活跃在前、完工默认折叠，偏好记本浏览器）、顶栏「迷雾总数 + 前沿票数」徽标点开前沿票清单直达所属 effort；「项目」按钮开跨常用目录只读总览、点行即切；「导出快照」把最近一拍 /api/state 的原始响应体原样落下载文件（`flowdeck-snapshot-<项目名>-<本地时间>.json`，不重新序列化）；桌面通知（默认关，设置里开启即申请权限、被拒回落提示；回前台积压聚合一条、通知点击切到涉及 effort，偏好只存本浏览器）；空态页「工作约定」旁有「建骨架指令」一键复制；链格旁技能入口打开技能包弹窗定位该篇；可在线换追踪目录，地址栏带常用目录下拉；右上角「设置」弹窗集中改 pollMs/host/port/令牌，可切换纸感亮色 ⇄ GitHub 暗色，选择记忆在本浏览器，「技能包」按钮弹出静态全景介绍；业务样式只消费一层 `--fd-*` 别名） |
-| `docs/skill-intros/` | Matt 技能包全景介绍：每技能一篇中文提炼（frontmatter 供 `/api/skills` 出清单），README 是总览；网页弹窗的静态素材 |
+| `index.html` | 浏览器界面（单文件、无构建；轮询间隔读 config.json，数据签名没变就不重画主区、真重画时恢复滚动位置，长文档读得下去；规格卡片 Markdown 轻渲染，「展开阅读」进全宽弹窗，票表「查看」复用同一弹窗懒加载票原文、六档 triage chip 过滤、git 旁证行；切换条尾「全部」视图一屏纵览（进行中按最近活跃在前、完工默认折叠，偏好记本浏览器）、顶栏「迷雾总数 + 前沿票数」徽标点开前沿票清单直达所属 effort；「项目」按钮开跨常用目录只读总览、点行即切；「导出快照」把最近一拍 /api/state 的原始响应体原样落下载文件（`flowdeck-snapshot-<项目名>-<本地时间>.json`，不重新序列化）；桌面通知（默认关，设置里开启即申请权限、被拒回落提示；回前台积压聚合一条、通知点击切到涉及 effort，偏好只存本浏览器）；空态页「工作约定」旁有「建骨架指令」一键复制；链格旁技能入口打开技能包弹窗定位该篇；可在线换追踪目录，地址栏带常用目录下拉；右上角「设置」弹窗集中改 pollMs/host/port/令牌，可切换纸感亮色 ⇄ GitHub 暗色，选择记忆在本浏览器，「技能包」按钮弹出静态全景介绍；顶栏「中/英」按钮整页换界面语言（文案、指引词、通知、报错措辞与技能介绍一起翻，选择记在本浏览器）；业务样式只消费一层 `--fd-*` 别名） |
+| `docs/skill-intros/` | Matt 技能包全景介绍：每技能一篇中文提炼（frontmatter 供 `/api/skills` 出清单），README 是总览；网页弹窗的静态素材，也是清单骨架（有哪些篇、分类、顺序）的唯一真相 |
+| `docs/skill-intros-en/` | 上述介绍的英文镜像：篇名一一对应，只译标题/简介/正文，`/api/skills*` 带 `?lang=en` 时读它 |
 | `docs/screenshots/` | README 演示截图（亮色 / 暗色 / 全部纵览） |
 | `verify-standalone.mjs` | 独立验证脚本 |
 

@@ -24,8 +24,11 @@
  *                     不进轮询载荷；GET 不触碰常用目录排序（收录/置顶只发生在真切换）
  *   GET  /api/issue?effort=<slug>&ticket=<票号>  单张票的 Markdown 原文（懒加载：点开才取，不进轮询载荷；
  *                     读侧 1MB 护栏与扫描同款；effort 或票号不存在回 404）
- *   GET  /api/skills  技能介绍文档清单（docs/skill-intros/*.md 的 frontmatter，按分类与 order 排序）
- *   GET  /api/skills/<名字>  单篇技能介绍原文（Markdown；名字限字母数字与连字符，只读 docs/skill-intros/）
+ *   GET  /api/skills[?lang=en]  技能介绍文档清单（docs/skill-intros/*.md 的 frontmatter，按分类与 order 排序；
+ *                     lang=en 只换 title/summary 为同名英文镜像篇（docs/skill-intros-en/），缺镜像的条目加 noEnglish，
+ *                     分类/顺序/开发中一律仍以中文目录为准；不带 lang = 响应逐字节不变）
+ *   GET  /api/skills/<名字>[?lang=en]  单篇技能介绍原文（Markdown；名字限字母数字与连字符，只读 docs/skill-intros/；
+ *                     lang=en 先取同名英文镜像篇，缺篇回退中文原文）
  *   POST /api/config  改配置并持久化到 config.json：root（热切换+收录常用目录）、pollMs（下一拍生效）、
  *                     token（立即接管校验；空串=清除）、host/port（写盘，重启后生效）（要求带 X-FlowDeck 头，防跨站写）
  *   POST /api/recent-roots  删一条常用目录并写回 config.json（防护同上；删未知条目幂等成功）
@@ -58,6 +61,10 @@ const DEFAULT_CONFIG_PATH = nodePath.join(HERE, 'config.json')
 const INDEX_HTML = nodePath.join(HERE, 'index.html')
 // 技能介绍文档目录（docs/skill-intros/，随仓库自包含）。只读这一目录下的 .md，没有路径穿越面。
 const SKILLS_DOCS_DIR = nodePath.join(HERE, 'docs', 'skill-intros')
+/* 英文镜像目录（english-ui 票 03）：与中文篇同名一一对应，只翻 title/summary 与正文。
+   中文目录是清单的唯一骨架——分类、顺序、开发中标一律以它为准，镜像不是第二套元数据；
+   镜像缺篇时清单打 noEnglish 标注、单篇回退中文原文。 */
+const SKILLS_DOCS_EN_DIR = nodePath.join(HERE, 'docs', 'skill-intros-en')
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const SKILL_CATEGORY_RANK = { overview: 0, engineering: 1, productivity: 2, misc: 3, 'in-progress': 4 }
 // 界面引用的静态资源白名单：只放行本目录里点名的文件，不做通用静态服务，也就没有路径穿越。
@@ -577,7 +584,13 @@ async function sendFile(res, filePath, type) {
   }
 }
 
-// ── 技能介绍文档（docs/skill-intros/）：/api/skills 清单 + /api/skills/<名字> 单篇 ──
+// ── 技能介绍文档（docs/skill-intros/ + 英文镜像 docs/skill-intros-en/）：清单与单篇，两端点认 ?lang ──
+
+/** 技能端点的语言参数：只认 'en'（首尾空格与大小写宽容），其余一律中文——包括不带参数。
+ *  「不带参数 = 现状响应」这条缺省路径是票 03 的红线，乱值不该另开第三条分支。 */
+function skillLang(reqUrl) {
+  return String(reqUrl.searchParams.get('lang') || '').trim().toLowerCase() === 'en' ? 'en' : 'zh'
+}
 
 /** 解析文档顶部的 frontmatter（--- 包围的 key: value 行）。缺块、坏行都宽容：清单字段逐个回落。 */
 function parseSkillFrontmatter(text) {
@@ -593,9 +606,36 @@ function parseSkillFrontmatter(text) {
   return meta
 }
 
+/** 英文镜像篇（english-ui 票 03）：「这篇有没有英文」的口径只此一处——同名文件读得出、
+ *  frontmatter 带 title 才算有。清单据此决定要不要打 noEnglish，单篇据此决定回不回退中文，
+ *  两处共用一个谓词，标注与实际所读的语言就不会打架（readIfExists 永不抛，坏篇只会 null）。 */
+async function readEnglishSkill(name) {
+  if (!SKILL_NAME_RE.test(name)) return null
+  const mirror = await readIfExists(nodePath.join(SKILLS_DOCS_EN_DIR, name + '.md'))
+  if (!mirror) return null
+  const meta = parseSkillFrontmatter(mirror.text)
+  return meta.title ? { text: mirror.text, meta } : null
+}
+
 /** 技能清单：读 docs/skill-intros/ 全部 .md 的 frontmatter，按分类（总览最前）与 order 排序。
- *  目录读不到（整体拷走时缺了文档）回落空清单，界面照常渲染空态。 */
-async function skillsList() {
+ *  目录读不到（整体拷走时缺了文档）回落空清单，界面照常渲染空态。
+ *  lang='en'（english-ui 票 03）：骨架仍是中文清单，只把 title/summary 换成同名镜像篇的两格；
+ *  镜像缺篇 → 保留中文两格并打 noEnglish，界面据此挂「此篇暂无英文」。
+ *  除 title/summary/noEnglish 之外的字段一律不读镜像——分类与顺序的单一真相在中文目录。 */
+async function skillsList(lang) {
+  const base = await skillsListZh()
+  if (lang !== 'en') return base
+  const out = []
+  for (const s of base) {
+    const mirror = await readEnglishSkill(s.name)
+    if (mirror) out.push({ ...s, title: mirror.meta.title, summary: mirror.meta.summary || s.summary })
+    else out.push({ ...s, noEnglish: true })
+  }
+  return out
+}
+
+/** 中文清单（现状口径）：docs/skill-intros/ 逐篇读 frontmatter 成条目。不带语言参数的响应就出自这里。 */
+async function skillsListZh() {
   let files
   try {
     files = await readdir(SKILLS_DOCS_DIR)
@@ -690,15 +730,17 @@ async function handleApiIssue(ctx, reqUrl, res) {
   res.end(file.text)
 }
 
-/** GET /api/skills：技能介绍文档清单。 */
-function handleApiSkills(res) {
-  skillsList()
+/** GET /api/skills[?lang=en]：技能介绍文档清单。不带 lang（或 lang 非 'en'）＝ 现状响应，逐字节不变。 */
+function handleApiSkills(reqUrl, res) {
+  skillsList(skillLang(reqUrl))
     .then((skills) => sendJson(res, 200, { skills }))
     .catch((e) => sendErr(res, 500, 'skills.list-failed', '盘点技能文档失败：' + String((e && e.message) || e)))
 }
 
-/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skill-intros/，无路径穿越面）。 */
-function handleApiSkillDoc(res, url) {
+/** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单，只读 docs/skill-intros/，无路径穿越面）。
+ *  ?lang=en 先取同名英文镜像篇；镜像缺篇（未译 / 读不出）回退中文原文——清单里那条同时带
+ *  noEnglish，界面据此在正文上方挂「此篇暂无英文」标注，用户看到的语言与标注一致。 */
+async function handleApiSkillDoc(reqUrl, res, url) {
   // 畸形百分号转义（%ZZ）decode 会抛 URIError：按名字不合法处理，404，不炸进程。
   let name = url.slice('/api/skills/'.length)
   try {
@@ -707,12 +749,20 @@ function handleApiSkillDoc(res, url) {
     name = ''
   }
   // 名字白名单（字母数字与连字符）已挡掉路径分隔符与点；resolve 前缀再兜一层底，只读 docs/skill-intros/。
-  const file = nodePath.resolve(SKILLS_DOCS_DIR, name + '.md')
-  if (!name || !SKILL_NAME_RE.test(name) || !file.startsWith(SKILLS_DOCS_DIR + nodePath.sep)) {
+  const zhFile = nodePath.resolve(SKILLS_DOCS_DIR, name + '.md')
+  if (!name || !SKILL_NAME_RE.test(name) || !zhFile.startsWith(SKILLS_DOCS_DIR + nodePath.sep)) {
     sendErr(res, 404, 'skills.no-doc', '没有这个技能文档：' + name)
     return
   }
-  sendFile(res, file, 'text/markdown; charset=utf-8')
+  if (skillLang(reqUrl) === 'en') {
+    const mirror = await readEnglishSkill(name)
+    if (mirror) {
+      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' })
+      res.end(mirror.text)
+      return
+    }
+  }
+  sendFile(res, zhFile, 'text/markdown; charset=utf-8')
 }
 
 /** GET /api/roots-overview：项目总览（票 03）——常用目录 + 当前追踪目录逐个只读盘点。
@@ -926,8 +976,8 @@ export async function startServer(opts = {}) {
     if (url === '/api/health') return handleApiHealth(ctx, res)
     if (url === '/api/roots-overview') return handleApiRootsOverview(ctx, res).catch((e) => sendErr(res, 500, 'roots.failed', String((e && e.message) || e)))
     if (url === '/api/issue') return handleApiIssue(ctx, reqUrl, res).catch((e) => sendErr(res, 500, 'issue.failed', String((e && e.message) || e)))
-    if (url === '/api/skills') return handleApiSkills(res)
-    if (url.startsWith('/api/skills/')) return handleApiSkillDoc(res, url)
+    if (url === '/api/skills') return handleApiSkills(reqUrl, res)
+    if (url.startsWith('/api/skills/')) return handleApiSkillDoc(reqUrl, res, url)
     if (url === '/' || url === '/index.html') return sendFile(res, INDEX_HTML, 'text/html; charset=utf-8')
     const asset = STATIC_FILES[url]
     if (asset) return sendFile(res, asset[0], asset[1])

@@ -28,6 +28,10 @@ _Avoid_: 错误、非法票、坏票
 `docs/skill-intros/` 下每个技能一篇的中文提炼介绍（含全景总览 README），frontmatter 供服务端出清单、正文末尾附原文描述。是静态展示素材：网页「技能包」弹窗与该目录本身都直接读它。
 _Avoid_: 使用手册、教程、技能包源码
 
+**英文镜像篇（English mirror doc）**:
+`docs/skill-intros-en/` 下与中文篇同名的一比一译文。只译 `title`/`summary` 两格与正文，分类、顺序、开发中标一律以中文目录为准——镜像不是第二套元数据。缺篇时清单打 `noEnglish`、正文回退中文原文并挂标注。
+_Avoid_: 英文版清单、第二套 frontmatter
+
 **技能包（skill pack）**:
 本仓库收录其全景介绍的 Matt 技能包——一组 AI 编程技能（每技能一份 SKILL.md）的集合。源头在本仓库之外；仓库里只有介绍文档（`docs/skill-intros/`），没有技能实现本身。
 _Avoid_: 技能库、插件、本仓库的功能清单

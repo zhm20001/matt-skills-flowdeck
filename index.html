@@ -238,6 +238,7 @@
   .md th { color: var(--fd-ink-muted); font-weight: 600; background: var(--fd-chip); }
   .md hr { border: none; border-top: 1px solid var(--fd-rule-soft); margin: 14px 0; }
   .md .loading { color: var(--fd-ink-muted); font-size: 12px; }
+  .md .fallback { margin: 0 0 12px; padding: 6px 10px; border: 1px dashed var(--fd-rule); border-radius: var(--fd-radius-btn); color: var(--fd-ink-muted); font-size: 11.5px; }
   @media (max-width: 720px) {
     .modal { padding: 0; }
     .modal .box { width: 100%; height: 100vh; border-radius: 0; border-left: 0; border-right: 0; }
@@ -707,7 +708,7 @@ var UI_TEXT = {
   'skill.cat.productivity': { zh: '效率与协作', en: 'Productivity' },
   'skill.cat.misc': { zh: '专项工具', en: 'Specialised tools' },
   'skill.cat.in-progress': { zh: '开发中', en: 'In progress' },
-  'skills.count': { zh: '{n} 篇介绍 · 来源 docs/skill-intros/', en: '{n} docs · from docs/skill-intros/' },
+  'skills.count': { zh: '{n} 篇介绍 · 来源 docs/skill-intros/', en: '{n} docs · inventory: docs/skill-intros/' },
   'skills.missing': { zh: '技能文档缺失（docs/skill-intros/ 没有内容）', en: 'No skill docs (docs/skill-intros/ is empty)' },
   'skills.dev-chip': { zh: '开发中', en: 'In progress' },
   'skills.doc-loading': { zh: '加载中…', en: 'Loading…' },
@@ -715,6 +716,9 @@ var UI_TEXT = {
   'skills.doc-failed': { zh: '这篇介绍加载失败：{msg}', en: 'This intro failed to load: {msg}' },
   'skills.list-failed': { zh: '技能清单加载失败：{msg}', en: 'The skill list failed to load: {msg}' },
   'skills.link.title': { zh: '在弹窗里打开这篇介绍', en: 'Open this intro in the dialog' },
+  /* 英文态才出现的标注（服务端只在 ?lang=en 的清单里打 noEnglish）：镜像缺篇时正文回退中文原文，
+     标注说明为什么这一屏还是中文。中文态永不渲染它，zh 列只为词表完整。 */
+  'skills.no-en': { zh: '此篇暂无英文介绍，下面显示的是中文原文', en: 'This doc has no English version yet — showing the Chinese original' },
 
   // 项目总览弹窗
   'ov.meta': { zh: '{n} 个目录 · 打开时盘点', en: '{n} directories · scanned on open' },
@@ -1915,7 +1919,7 @@ function applyLang() {
   applyPollModeUI()
   if (rootMenuState.open) renderRootMenu()
   if (frontierState.open) renderFrontierPanel()
-  if (skillsModalCtl.isOpen()) renderSkillsNav()
+  syncSkillsLang() // 清单按语言取，切语言要作废重取（开窗时当场重画，关窗时留到下次开）
   if (rootsModalCtl.isOpen() && lastRoots) renderRootsRows(lastRoots)
   if (readModalCtl.isOpen() && readModalHead) renderReadHead()
   if (settingsModalCtl.isOpen()) renderSettingsDynamic()
@@ -2033,8 +2037,11 @@ function makeModal(el) {
 /* ── 技能包弹窗：docs/skill-intros/ 全景介绍的静态展示 ──
    文档是仓库里手写的 Markdown（每篇 frontmatter 供服务端 /api/skills 出清单），
    界面只负责取来渲染。渲染器只覆盖文档用到的语法（标题/列表/引用/粗体/行内码/链接），
-   行内容全部经 textContent 组装进安全 DOM，不走 innerHTML。 */
-var skillsState = { list: null, current: null, cache: {} }
+   行内容全部经 textContent 组装进安全 DOM，不走 innerHTML。
+   语言（english-ui 票 03）：清单与单篇都按当前语言取——英文态多带 ?lang=en 命中同名英文镜像
+   篇，中文态一个参数都不加（请求与票 03 之前逐字节一致）。单篇缓存键含语言，来回切语言不重发；
+   清单是单份的（listLang 记它是哪一版），语言换了就作废重取。 */
+var skillsState = { list: null, listLang: null, current: null, cache: {} }
 var skillsModalCtl = makeModal(document.getElementById('skillsModal'))
 
 /** 行内语法：**粗体**、`代码`、*斜体*、词边界 _斜体_、[文字](链接)。链接指向同目录 .md 的在弹窗内跳转，其余新开标签页。 */
@@ -2229,23 +2236,45 @@ function renderSkillsNav() {
   })
 }
 
+/** 技能端点的语言参数：中文态出空串——URL 与票 03 之前逐字节一致，服务端缺省即中文。
+ *  取的是调用方传进来的语言（请求发出那一刻的语言），不读实时 lang，免得响应回来后自证错版。 */
+function skillsLangQuery(l) { return l === 'en' ? '?lang=en' : '' }
+
+/** 镜像缺篇的标注（票 03）：英文态 + 清单给这篇打了 noEnglish 才挂，挂在正文上方。
+ *  中文态与有镜像时一个节点都不加——服务端回退了什么，界面就说什么，两者同源于 noEnglish 这一格。 */
+function markSkillFallback(box, name) {
+  if (lang !== 'en') return
+  var list = skillsState.list || []
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].name !== name) continue
+    if (list[i].noEnglish) box.insertBefore(el('div', 'fallback', t('skills.no-en')), box.firstChild)
+    return
+  }
+}
+
 function loadSkillDoc(name) {
   var box = document.getElementById('skillsDoc')
-  var cached = skillsState.cache[name]
+  // 缓存键含语言：同一篇的中英两版各自留着，来回切语言不重发请求。
+  var key = lang + '|' + name
+  var atLang = lang
+  var cached = skillsState.cache[key]
   if (cached !== undefined) {
     renderMarkdown(cached, box)
+    markSkillFallback(box, name)
     box.scrollTop = 0
     return
   }
   box.textContent = ''
   box.appendChild(el('div', 'loading', t('skills.doc-loading')))
-  apiFetch('/api/skills/' + encodeURIComponent(name), { text: true }).then(function (res) {
+  apiFetch('/api/skills/' + encodeURIComponent(name) + skillsLangQuery(atLang), { text: true }).then(function (res) {
     if (!res.ok) throw new Error(res.errorText)
     return res.data // text 模式：data 即文档原文
   }).then(function (text) {
-    skillsState.cache[name] = text
+    if (atLang !== lang) return // 途中换了语言：这一版正文按旧语言取的，不落地也不渲染，下一次取按新语言重发
+    skillsState.cache[key] = text
     if (!skillsModalCtl.isOpen()) return
     renderMarkdown(text, box)
+    markSkillFallback(box, name)
     box.scrollTop = 0
   }).catch(function (e) {
     if (!skillsModalCtl.isOpen()) return
@@ -2260,6 +2289,38 @@ function openSkillDoc(name) {
   loadSkillDoc(name)
 }
 
+/** 拉清单（按当前语言）：回来后记住它是哪一版语言，再定位要看的那篇
+ *  （技能联动入口的 focusName 优先，其次延续正在看的这篇，最后默认总览）。 */
+function loadSkillList(focusName) {
+  var atLang = lang
+  var box = document.getElementById('skillsDoc')
+  box.textContent = ''
+  box.appendChild(el('div', 'loading', t('skills.list-loading')))
+  apiFetch('/api/skills' + skillsLangQuery(atLang)).then(function (res) {
+    if (!res.ok) throw new Error(res.errorText)
+    return (res.data && res.data.skills) || []
+  }).then(function (list) {
+    if (atLang !== lang) { loadSkillList(focusName); return } // 途中换了语言：作废这一版，按新语言重发
+    skillsState.list = list
+    skillsState.listLang = atLang
+    renderSkillsNav()
+    openSkillDoc(focusName || skillsState.current || (list.length ? list[0].name : ''))
+  }).catch(function (e) {
+    showErr(tf('skills.list-failed', { msg: e && e.message ? e.message : e }))
+    skillsModalCtl.close()
+  })
+}
+
+/* 语言切换后技能内容对账（票 03）：清单只有一份、按语言取，语言换了就作废。
+   弹窗开着时当场重拉重画——用户正看着这一屏，静默留旧语言是可见的错；关着时只作废，下次开窗懒加载。
+   侧栏不在这里重画：重拉的那一拍回来自己会 renderSkillsNav 一次。 */
+function syncSkillsLang() {
+  if (skillsState.listLang === lang) return
+  skillsState.list = null
+  skillsState.listLang = null
+  if (skillsModalCtl.isOpen()) loadSkillList()
+}
+
 function openSkillsModal(focusName) {
   if (skillsModalCtl.isOpen()) {
     // 已开窗：直接定位到要看的篇（技能联动入口的形态；普通入口不带名字则不动）
@@ -2268,17 +2329,8 @@ function openSkillsModal(focusName) {
   }
   skillsModalCtl.open() // 六件套（显隐/焦点/Esc/遮罩/滚动锁/圈禁）归工厂
   if (skillsState.list === null) {
-    // 内容逻辑留在这里：清单懒加载，只在第一次打开时拉一次；回来后优先定位 focusName（技能联动），否则默认总览
-    document.getElementById('skillsDoc').appendChild(el('div', 'loading', t('skills.list-loading')))
-    apiFetch('/api/skills').then(function (res) {
-      if (!res.ok) throw new Error(res.errorText)
-      skillsState.list = (res.data && res.data.skills) || []
-      renderSkillsNav()
-      openSkillDoc(focusName || (skillsState.list.length ? skillsState.list[0].name : ''))
-    }).catch(function (e) {
-      showErr(tf('skills.list-failed', { msg: e && e.message ? e.message : e }))
-      skillsModalCtl.close()
-    })
+    // 内容逻辑留在这里：清单懒加载，只在第一次打开（或换语言作废后）拉一次
+    loadSkillList(focusName)
   } else if (focusName) {
     openSkillDoc(focusName)
   }
