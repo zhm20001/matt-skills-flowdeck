@@ -40,6 +40,9 @@
  *                                错误横幅 role=alert；焦点圈禁：弹窗内 Tab 循环不外逃。
  *  25. 测试补盲（票 08）          → Comments 夹具本地断言常驻；
  *                                幽灵夹具直测（目录伪装票文件走「打不开→丢弃」兜底、map.md 目录不算 effort）。
+ *  26. 界面语言（english-ui 01） → 初始语言按浏览器语言判定（en-* 英文、判不中默认中文）；顶栏按钮即时
+ *                                中英互换且零请求；偏好存 localStorage 并优先于浏览器语言；链格阶段名的
+ *                                中文列与服务端 flowchain 下发原文逐字钉死（词表不长第二套中文真相）。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -1286,6 +1289,18 @@ async function runScenarios(tmp) {
     const { VirtualConsole } = await import('jsdom')
     const html = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
     const tick = () => new Promise((r) => setTimeout(r, 40))
+    /* 界面夹具工厂：界面初始语言按浏览器语言判定，而 jsdom 的 navigator.languages 默认就是
+       ['en-US','en']——既有中文态用例经此钉成中文浏览器，否则它们悄悄测的就不再是中文界面。
+       要英文态（或别的浏览器语言）的用例在自家 beforeParse 里覆写 languages，后跑者胜。 */
+    function uiDom(opts) {
+      const inner = opts.beforeParse
+      return new JSDOM(html, Object.assign({}, opts, {
+        beforeParse(window) {
+          Object.defineProperty(window.navigator, 'languages', { value: ['zh-CN', 'zh'], configurable: true })
+          if (inner) inner(window)
+        },
+      }))
+    }
     const absTmp = nodePath.resolve(tmp)
     // 盘点载荷：真实扫描数据 + 常用目录（当前目录在列表里，另有一条存在的、两条失效的）
     let statePayload = {
@@ -1305,7 +1320,7 @@ async function runScenarios(tmp) {
     const vc = new VirtualConsole()
     vc.on('jsdomError', (e) => jsErrors.push(String((e && e.message) || e)))
     const calls = []
-    const dom = new JSDOM(html, {
+    const dom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39311/',
       pretendToBeVisual: true,
@@ -1483,7 +1498,7 @@ async function runScenarios(tmp) {
     const vc2 = new VirtualConsole()
     vc2.on('jsdomError', (e) => jsErrors2.push(String((e && e.message) || e)))
     const unexpectedWrites = []
-    const emptyDom = new JSDOM(html, {
+    const emptyDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39312/',
       pretendToBeVisual: true,
@@ -1514,7 +1529,7 @@ async function runScenarios(tmp) {
     const vc3 = new VirtualConsole()
     vc3.on('jsdomError', (e) => jsErrors3.push(String((e && e.message) || e)))
     const tokenCalls = []
-    const tokenDom = new JSDOM(html, {
+    const tokenDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39313/?token=t-123',
       pretendToBeVisual: true,
@@ -1546,7 +1561,7 @@ async function runScenarios(tmp) {
     vc304.on('jsdomError', (e) => jsErrors304.push(String((e && e.message) || e)))
     let etagCalls304 = 0
     const etagHeaderBox = { get: (k) => (k === 'ETag' ? '"etag-304-test"' : null) }
-    const etagDom = new JSDOM(html, {
+    const etagDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39316/',
       pretendToBeVisual: true,
@@ -1580,7 +1595,7 @@ async function runScenarios(tmp) {
     const jsErrors401 = []
     const vc401 = new VirtualConsole()
     vc401.on('jsdomError', (e) => jsErrors401.push(String((e && e.message) || e)))
-    const unauthDom = new JSDOM(html, {
+    const unauthDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39317/',
       pretendToBeVisual: true,
@@ -1617,7 +1632,7 @@ async function runScenarios(tmp) {
     vcMode.on('jsdomError', (e) => jsErrorsMode.push(String((e && e.message) || e)))
     let modePayload = { ...ws, root: '/tmp/fd-mode', pollMs: 1000, pollMode: 'manual', configPath: '/tmp/config.json', recentRoots: [] }
     const modeCalls = { state: 0, post: 0 }
-    const modeDom = new JSDOM(html, {
+    const modeDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39318/',
       pretendToBeVisual: true,
@@ -1668,7 +1683,7 @@ async function runScenarios(tmp) {
     vcObs.on('jsdomError', (e) => jsErrorsObs.push(String((e && e.message) || e)))
     let obsPayload = { ...ws, root: '/tmp/fd-obs', pollMs: 1000, pollMode: 'observe', configPath: '/tmp/config.json', recentRoots: [] }
     const obsCalls = { state: 0 }
-    const obsDom = new JSDOM(html, {
+    const obsDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39319/',
       pretendToBeVisual: true,
@@ -1712,7 +1727,7 @@ async function runScenarios(tmp) {
     a11yPayload.efforts.find((e) => e.slug === 'idea-b').tickets[0].formatWarnings = [
       { kind: 'unrecognizedField', line: '*Status:* done', message: '有一行像是字段行但没读懂（原文：*Status:* done）' },
     ]
-    const a11yDom = new JSDOM(html, {
+    const a11yDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39320/',
       pretendToBeVisual: true,
@@ -1851,7 +1866,7 @@ async function runScenarios(tmp) {
     }
     let issueStubText = ['# 查证票', 'Status: ready-for-agent', 'Type: task', '', '正文第一段。', '', '## Comments', '', '### alice—2026-09-16T10:30:00Z', '', '评论正文。'].join('\n')
     const fxCopies = []
-    const fxDom = new JSDOM(html, {
+    const fxDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39321/',
       pretendToBeVisual: true,
@@ -1967,7 +1982,7 @@ async function runScenarios(tmp) {
     const jsErrorsAll = []
     const vcAll = new VirtualConsole()
     vcAll.on('jsdomError', (e) => jsErrorsAll.push(String((e && e.message) || e)))
-    const allDom = new JSDOM(html, {
+    const allDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39322/',
       pretendToBeVisual: true,
@@ -2037,7 +2052,7 @@ async function runScenarios(tmp) {
     const jsErrorsAll2 = []
     const vcAll2 = new VirtualConsole()
     vcAll2.on('jsdomError', (e) => jsErrorsAll2.push(String((e && e.message) || e)))
-    const allDom2 = new JSDOM(html, {
+    const allDom2 = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39323/',
       pretendToBeVisual: true,
@@ -2071,7 +2086,7 @@ async function runScenarios(tmp) {
         { path: '/tmp/fd-ov-bad', name: 'fd-ov-bad', current: false, status: 'unreadable' },
       ],
     }
-    const ovDom = new JSDOM(html, {
+    const ovDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39324/',
       pretendToBeVisual: true,
@@ -2137,7 +2152,7 @@ async function runScenarios(tmp) {
       'writing-beats': '---\nname: writing-beats\ncategory: in-progress\n---\n\n# writing-beats\n\n节拍正文。\n',
     }
     const skillCalls = []
-    const skillsDom = new JSDOM(html, {
+    const skillsDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39314/',
       pretendToBeVisual: true,
@@ -2214,7 +2229,7 @@ async function runScenarios(tmp) {
     stablePayload.efforts.find((e) => e.slug === 'idea-b').spec.content = mdSpec
     // 生效语义契约的可覆写桩：默认按 host/port=restart、其余 immediate；用例可换成未知值验证前端稳健性
     let appliedOverride = null
-    const stableDom = new JSDOM(html, {
+    const stableDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39315/',
       pretendToBeVisual: true,
@@ -2432,7 +2447,7 @@ async function runScenarios(tmp) {
     }
     const nfyStateCalls = []
     let nfyFocus = 0
-    const notifyDom = new JSDOM(html, {
+    const notifyDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39330/',
       pretendToBeVisual: true,
@@ -2588,7 +2603,7 @@ async function runScenarios(tmp) {
     const miscDownloads = []
     const miscAnchorClicks = []
     let miscRevoked = 0
-    const miscDom = new JSDOM(html, {
+    const miscDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39331/',
       pretendToBeVisual: true,
@@ -2664,7 +2679,7 @@ async function runScenarios(tmp) {
     const vcS = new VirtualConsole()
     vcS.on('jsdomError', (e) => jsErrorsS.push(String((e && e.message) || e)))
     const scaffoldCopies = []
-    const scaffoldDom = new JSDOM(html, {
+    const scaffoldDom = uiDom({
       runScripts: 'dangerously',
       url: 'http://127.0.0.1:39332/',
       pretendToBeVisual: true,
@@ -2701,6 +2716,90 @@ async function runScenarios(tmp) {
     scaffoldDom.window.close()
     ok('建骨架指令（jsdom）：空态页第二段在位（map.md 相对路径 + Destination/Not yet specified + 预期盘点变化），一键复制、与工作约定互不串台')
 
+    // ── 语言切换细线（english-ui 票 01）：初始语言按浏览器语言判定 · 顶栏按钮即时中英互换 · 偏好落本浏览器 ──
+    const langPayload = { ...ws, root: '/tmp/fd-lang', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] }
+    const ZH_NAMES = ['Grill 拷问', 'To-Spec 规格', 'To-Tickets 拆票', 'Implement 实现']
+    const EN_NAMES = ['Grill', 'To-Spec', 'To-Tickets', 'Implement']
+    const EN_SUBS = ['Idea → map.md', 'Understanding → spec.md', 'Spec → issues/ tickets', 'Ticket by ticket → all closed']
+    const langCalls = []
+    /** 起一版界面：browserTags = 浏览器偏好语言列表，stored = 本浏览器已记的界面语言（null = 没记过）。
+        每个实例换端口——localStorage 按源分家，端口不同即互不串台。 */
+    function langDom(port, browserTags, stored) {
+      const errs = []
+      const vcL = new VirtualConsole()
+      vcL.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
+      const d = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:' + port + '/',
+        pretendToBeVisual: true,
+        virtualConsole: vcL,
+        beforeParse(window) {
+          if (browserTags) Object.defineProperty(window.navigator, 'languages', { value: browserTags, configurable: true })
+          if (stored) window.localStorage.setItem('flowdeck-lang', stored)
+          window.fetch = (u) => {
+            langCalls.push(String(u))
+            if (String(u).indexOf('/api/state') >= 0) {
+              return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload)) })
+            }
+            return Promise.reject(new Error('语言用例不该请求别的接口：' + u))
+          }
+        },
+      })
+      return { d, errs }
+    }
+    const settle = async () => { await new Promise((r) => setTimeout(r, 150)) }
+    const stageNames = (doc) => Array.from(doc.querySelectorAll('.stage .name')).map((n) => n.textContent)
+    const stageSubs = (doc) => Array.from(doc.querySelectorAll('.stage .tiny')).map((n) => n.textContent)
+
+    // 中文浏览器 + 没记过偏好 → 中文界面；阶段名的中文列就是服务端下发原文（词表不长第二套中文真相）
+    const zhCase = langDom(39333, ['zh-CN', 'zh'], null)
+    await settle()
+    const zhDoc = zhCase.d.window.document
+    assert.deepEqual(stageNames(zhDoc), ZH_NAMES)
+    assert.deepEqual(stageNames(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.title), '中文态链格阶段名应为服务端下发原文')
+    assert.equal(zhDoc.getElementById('langBtn').textContent, 'EN', '中文态按钮给的是切过去的那个语言')
+    // 判不中默认中文（现状不劣化）
+    const frCase = langDom(39334, ['fr-FR', 'fr'], null)
+    await settle()
+    assert.deepEqual(stageNames(frCase.d.window.document), ZH_NAMES, '非英文系浏览器判不中 → 默认中文')
+    // 英文系浏览器、没记过偏好 → 英文界面
+    const enCase = langDom(39335, ['en-GB', 'en'], null)
+    await settle()
+    const enDoc = enCase.d.window.document
+    assert.deepEqual(stageNames(enDoc), EN_NAMES, '英文系浏览器首开即英文')
+    assert.deepEqual(stageSubs(enDoc), EN_SUBS)
+    assert.equal(enDoc.getElementById('langBtn').textContent, '中文')
+    assert.ok(enDoc.querySelectorAll('.stage')[0].getAttribute('aria-label').indexOf('Grill·') === 0, '兜底层 aria-label 与展示同语言')
+    // 点一下：即时互换，不发请求
+    const callsBeforeToggle = langCalls.length
+    enDoc.getElementById('langBtn').dispatchEvent(new enCase.d.window.Event('click', { bubbles: true }))
+    assert.deepEqual(stageNames(enDoc), ZH_NAMES, '英文态点按钮回中文')
+    assert.equal(enCase.d.window.localStorage.getItem('flowdeck-lang'), 'zh', '显式选择记进本浏览器')
+    zhDoc.getElementById('langBtn').dispatchEvent(new zhCase.d.window.Event('click', { bubbles: true }))
+    assert.deepEqual(stageNames(zhDoc), EN_NAMES, '中文态点按钮切英文')
+    assert.deepEqual(Array.from(zhDoc.querySelectorAll('.stage .tiny')).map((n) => n.textContent), EN_SUBS, '副标题同格一起翻')
+    assert.equal(zhDoc.getElementById('langBtn').textContent, '中文', '按钮文案跟着当前语言走')
+    assert.equal(langCalls.length, callsBeforeToggle, '切换零请求：不重盘点、不刷页面')
+    assert.deepEqual(zhCase.errs, [])
+    assert.deepEqual(enCase.errs, [])
+    zhCase.d.window.close()
+    frCase.d.window.close()
+    enCase.d.window.close()
+    ok('语言切换（jsdom）：初始语言按浏览器语言判定（en-* 英文、判不中默认中文）、顶栏按钮即时中英互换且零请求、选择记进 localStorage')
+
+    // 重开页面（新实例带着本浏览器记忆）：偏好优先于浏览器语言
+    const keepEn = langDom(39336, ['zh-CN', 'zh'], 'en')
+    await settle()
+    assert.deepEqual(stageNames(keepEn.d.window.document), EN_NAMES, '中文浏览器 + 记过英文 → 仍是英文')
+    assert.ok(keepEn.d.window.document.querySelectorAll('.stage')[0].getAttribute('aria-label').indexOf('Grill·') === 0)
+    const keepZh = langDom(39337, ['en-US', 'en'], 'zh')
+    await settle()
+    assert.deepEqual(stageNames(keepZh.d.window.document), ZH_NAMES, '英文浏览器 + 记过中文 → 尊重所选')
+    assert.equal(keepEn.errs.length, 0)
+    assert.equal(keepZh.errs.length, 0)
+    keepEn.d.window.close()
+    keepZh.d.window.close()
+    ok('语言持久化（jsdom）：语言偏好存浏览器侧、优先于浏览器语言，重开页面保持所选')
 
     ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')
   }

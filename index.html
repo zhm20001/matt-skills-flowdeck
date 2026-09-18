@@ -279,6 +279,7 @@
     </div>
     <button id="rootsBtn" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
     <button id="themeBtn" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
+    <button id="langBtn" title="切换界面语言：中文 / EN（记忆在本浏览器里）">EN</button>
     <button id="switchBtn" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
     <button id="refreshBtn">立即刷新</button>
     <button id="snapshotBtn" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
@@ -432,6 +433,54 @@ function lsFlag(key, dflt) {
 function setLsFlag(key, on) {
   try { localStorage.setItem(key, on ? '1' : '0') } catch (e) {}
 }
+
+/* ── 界面语言 + 双语词表 ──
+   语言偏好只存本浏览器（localStorage，沿主题键命名法），绝不进 config.json——
+   「界面偏好留浏览器侧」的既有边界。初始值：记过就照办，没记过按浏览器偏好语言列表判定
+   （en-* 起头取英文），判不中默认中文（现状不劣化）。
+   词表是界面人话的单一来源：键 → { zh, en }，渲染层一律按键取词。首批收链格四阶段名，
+   其英文列与 flowchain.mjs 的 FLOW_STAGES（title/subtitle 的服务端单一表）同物同名——
+   中文列与那边逐字对齐（verify 钉死），改那边必须同步这里。 */
+var LANG_KEY = 'flowdeck-lang'
+var UI_TEXT = {
+  'stage.grill.title': { zh: 'Grill 拷问', en: 'Grill' },
+  'stage.grill.subtitle': { zh: '想法 → 地图 map.md', en: 'Idea → map.md' },
+  'stage.spec.title': { zh: 'To-Spec 规格', en: 'To-Spec' },
+  'stage.spec.subtitle': { zh: '理解 → 规格 spec.md', en: 'Understanding → spec.md' },
+  'stage.tickets.title': { zh: 'To-Tickets 拆票', en: 'To-Tickets' },
+  'stage.tickets.subtitle': { zh: '规格 → 票 issues/', en: 'Spec → issues/ tickets' },
+  'stage.implement.title': { zh: 'Implement 实现', en: 'Implement' },
+  'stage.implement.subtitle': { zh: '逐票实现 → 全部关闭', en: 'Ticket by ticket → all closed' },
+  'lang.btn.label': { zh: 'EN', en: '中文' },
+  'lang.btn.title': { zh: '切换界面语言为英文（记忆在本浏览器里）', en: 'Switch the interface language to Chinese (remembered in this browser)' },
+}
+
+/** 按键取词（当前语言列）。 */
+function t(key) {
+  var e = UI_TEXT[key]
+  if (!e) return ''
+  return lang === 'en' ? e.en : e.zh
+}
+
+/** 浏览器偏好语言里有没有英文系（en / en-US / en-GB…）。 */
+function browserWantsEnglish() {
+  var list = []
+  try {
+    list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || '']
+  } catch (e) {}
+  for (var i = 0; i < list.length; i++) if (/^en\b/i.test(String(list[i]))) return true
+  return false
+}
+
+function readLang() {
+  try { return localStorage.getItem(LANG_KEY) } catch (e) { return null }
+}
+
+var lang = (function () {
+  var v = readLang()
+  if (v === 'en' || v === 'zh') return v
+  return browserWantsEnglish() ? 'en' : 'zh'
+})()
 
 /* 访问令牌（服务端 config.json 的 token 非空时启用）：
    地址带 ?token=… 打开 → 收下、记忆到 localStorage、把地址栏抹干净（刷新/分享不带令牌）；
@@ -654,8 +703,10 @@ function renderChain(eff) {
     dot.setAttribute('aria-hidden', 'true') // 指引点是装饰（状态色已进链格 aria-label），不给读屏添噪音
     head.appendChild(dot)
     var names = el('div')
-    names.appendChild(el('div', 'name', s.title))
-    names.appendChild(el('div', 'tiny', s.subtitle))
+    // 阶段名走词表按键取词；词表没这个 id（服务端多了新阶段而界面没跟上）时回落服务端原文，不空着
+    var stageName = t('stage.' + s.id + '.title') || s.title
+    names.appendChild(el('div', 'name', stageName))
+    names.appendChild(el('div', 'tiny', t('stage.' + s.id + '.subtitle') || s.subtitle))
     head.appendChild(names)
     var statusLabel = s.status === 'done' ? '完成' : s.status === 'current' ? '当前' : '待命'
     head.appendChild(el('span', 'chip', statusLabel))
@@ -685,7 +736,7 @@ function renderChain(eff) {
     // 键盘层 + 兜底层：链格可 Tab 停留、Enter/Space 与点按同路复制本格指引词；
     // title 是鼠标福利，aria-label 同载状态、推定含义与指引全文（不再只藏在悬停里）。
     st.title = '点一下复制这段阶段指引词\n' + s.hint
-    st.setAttribute('aria-label', s.title + '·' + statusLabel + (s.inferLabel ? '·' + s.inferLabel + '：' + INFER_NOTE : '') + '。' + s.hint)
+    st.setAttribute('aria-label', stageName + '·' + statusLabel + (s.inferLabel ? '·' + s.inferLabel + '：' + INFER_NOTE : '') + '。' + s.hint)
     clickable(st, function () { copyText(s.copyText) })
     chain.appendChild(st)
   })
@@ -1464,6 +1515,21 @@ document.getElementById('themeBtn').addEventListener('click', function () {
   applyThemeButton()
 })
 applyThemeButton()
+
+/* 界面语言（english-ui 票 01）：顶栏按钮中/英显式互切——改语言态、记进本浏览器、就地重渲染，
+   不刷新页面也不重发盘点请求（切换是纯界面行为，数据一个字没变）。 */
+function applyLangButton() {
+  var b = document.getElementById('langBtn')
+  b.textContent = t('lang.btn.label')
+  b.title = t('lang.btn.title')
+}
+document.getElementById('langBtn').addEventListener('click', function () {
+  lang = lang === 'en' ? 'zh' : 'en'
+  try { localStorage.setItem(LANG_KEY, lang) } catch (e) {}
+  applyLangButton()
+  render()
+})
+applyLangButton()
 
 document.getElementById('refreshBtn').addEventListener('click', function () { refresh(true) })
 document.getElementById('switchBtn').addEventListener('click', switchRoot)
