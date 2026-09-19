@@ -92,6 +92,10 @@
   .sub { color: var(--fd-ink-muted); font-size: 12px; }
   header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 16px; }
   header .spacer { flex: 1; }
+  /* 状态组（迷雾/手动徽章 + 路径·刷新行）与控件组（路径选框 + 按钮排）各包成整体：
+     英文等更宽的文案不再把 #meta 单个挤下第一行、落到路径选框旁边——要么整组在第一行，要么整组换行 */
+  header .head-status, header .head-controls { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+  header .head-controls { flex-basis: 100%; }
 
   .banner { border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 10px 14px; margin-bottom: 14px; display: none; }
   .banner.err { display: block; border-color: var(--fd-bad); background: var(--fd-bad-soft); color: var(--fd-bad); }
@@ -267,25 +271,29 @@
       <div class="sub" data-i18n="head.sub">追踪 .scratch/ 产物 · grill → to-spec → to-tickets → implement · 适配任意 Agent</div>
     </div>
     <div class="spacer"></div>
-    <div class="frontierbox">
-      <button id="frontierBadge" class="chip" hidden data-i18n-title="frontier.badge.title" title="全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单"></button>
-      <div id="frontierPanel" class="menu" hidden></div>
+    <div class="head-status">
+      <div class="frontierbox">
+        <button id="frontierBadge" class="chip" hidden data-i18n-title="frontier.badge.title" title="全局迷雾总数 + 前沿票数：还剩多少没定、现在能干什么一眼可见。点开列各 effort 的前沿票清单"></button>
+        <div id="frontierPanel" class="menu" hidden></div>
+      </div>
+      <span id="manualBadge" class="chip" hidden data-i18n-title="manual.badge.title" title="惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新"></span>
+      <div class="sub" id="meta"></div>
     </div>
-    <span id="manualBadge" class="chip" hidden data-i18n-title="manual.badge.title" title="惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新"></span>
-    <div class="sub" id="meta"></div>
-    <div class="rootbox">
+    <div class="head-controls">
+      <div class="rootbox">
       <input id="rootInput" data-i18n-title="root.input.title" data-i18n-placeholder="root.input.placeholder" title="要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json" placeholder="粘贴要追踪的项目目录路径">
       <button id="rootMenuBtn" data-i18n-title="rootmenu.btn.title" data-i18n-aria="rootmenu.btn.aria" title="浏览常用目录：网页上切换过的目录自动收录，点一条立即切回" aria-label="展开常用目录下拉">▾</button>
       <div id="rootMenu" class="menu" hidden></div>
     </div>
-    <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
-    <button id="themeBtn" data-i18n-title="theme.btn.title" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
-    <button id="langBtn" data-i18n-title="lang.btn.title" title="切换界面语言为英文（记忆在本浏览器里）">EN</button>
-    <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
-    <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
-    <button id="snapshotBtn" data-i18n="snapshot.btn.label" data-i18n-title="snapshot.btn.title" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
-    <button id="settingsBtn" data-i18n="settings.btn.label" data-i18n-title="settings.btn.title" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
-    <button id="skillsBtn" data-i18n="skills.btn.label" data-i18n-title="skills.btn.title" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）">技能包</button>
+      <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
+      <button id="themeBtn" data-i18n-title="theme.btn.title" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
+      <button id="langBtn" data-i18n-title="lang.btn.title" title="切换界面语言为英文（记忆在本浏览器里）">EN</button>
+      <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
+      <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
+      <button id="snapshotBtn" data-i18n="snapshot.btn.label" data-i18n-title="snapshot.btn.title" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
+      <button id="settingsBtn" data-i18n="settings.btn.label" data-i18n-title="settings.btn.title" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
+      <button id="skillsBtn" data-i18n="skills.btn.label" data-i18n-title="skills.btn.title" title="Matt 技能包全景介绍：35 个技能的分类、用途与触发方式（静态文档，存于 docs/skill-intros/）">技能包</button>
+    </div>
   </header>
 
   <div class="banner" id="err" role="alert"></div>
@@ -439,19 +447,12 @@ function setLsFlag(key, on) {
    语言偏好只存本浏览器（localStorage，沿主题键命名法），绝不进 config.json——
    「界面偏好留浏览器侧」的既有边界。初始值：记过就照办，没记过按浏览器偏好语言列表判定
    （en-* 起头取英文），判不中默认中文（现状不劣化）。
-   词表是界面人话的单一来源：键 → { zh, en }，渲染层一律按键取词。首批收链格四阶段名，
-   其英文列与 flowchain.mjs 的 FLOW_STAGES（title/subtitle 的服务端单一表）同物同名——
-   中文列与那边逐字对齐（verify 钉死），改那边必须同步这里。 */
+   词表是界面人话的单一来源：键 → { zh, en }，渲染层一律按键取词。
+   链格四阶段名/副题不在此表（双轴评审收口）：它们的单一来源是 flowchain.mjs 的 FLOW_STAGES
+   （中英两列同表），随 /api/state 的 stageNames 与每个 chain.stages 的 en 列下发，
+   界面用 guideText()/stageNameById() 按当前语言取列——表里抄一份就是第二真相。 */
 var LANG_KEY = 'flowdeck-lang'
 var UI_TEXT = {
-  'stage.grill.title': { zh: 'Grill 拷问', en: 'Grill' },
-  'stage.grill.subtitle': { zh: '想法 → 地图 map.md', en: 'Idea → map.md' },
-  'stage.spec.title': { zh: 'To-Spec 规格', en: 'To-Spec' },
-  'stage.spec.subtitle': { zh: '理解 → 规格 spec.md', en: 'Understanding → spec.md' },
-  'stage.tickets.title': { zh: 'To-Tickets 拆票', en: 'To-Tickets' },
-  'stage.tickets.subtitle': { zh: '规格 → 票 issues/', en: 'Spec → issues/ tickets' },
-  'stage.implement.title': { zh: 'Implement 实现', en: 'Implement' },
-  'stage.implement.subtitle': { zh: '逐票实现 → 全部关闭', en: 'Ticket by ticket → all closed' },
   'lang.btn.label': { zh: 'EN', en: '中文' },
   'lang.btn.title': { zh: '切换界面语言为英文（记忆在本浏览器里）', en: 'Switch the interface language to Chinese (remembered in this browser)' },
 
