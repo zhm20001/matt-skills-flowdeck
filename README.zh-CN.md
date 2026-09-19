@@ -79,7 +79,7 @@ config.json 被 git 忽略（`.gitignore`）：它会被服务在运行时改写
 
 网页右上角的**「技能包」按钮**会弹出一扇静态展示窗：Matt 技能包 35 个技能的分类清单与逐个介绍（是什么、什么时候用、怎么触发，末尾附原文描述）。素材是仓库里手写的 Markdown——`docs/skill-intros/` 下每个技能一篇，`docs/skill-intros/README.md` 是全景总览；服务端 `GET /api/skills` 出清单（读各篇 frontmatter，按分类排序）、`GET /api/skills/<名字>` 取单篇原文，界面内置的极简渲染器负责显示，文档改了刷新即生效。技能包源码不在本仓库，这里只收录介绍。
 
-界面切到英文时，这两条端点带上 `?lang=en`，改读 `docs/skill-intros-en/` 下的同名镜像篇（36 篇，一篇对一篇）。清单骨架——有哪些篇、哪一类、什么顺序、是否开发中——永远以中文目录为准，镜像只供标题、简介与正文；某篇缺镜像就仍显示中文，并在正文上方标注「此篇暂无英文」。不带 `lang`（或带除 `en` 外的任何值）时，两条端点的应答与从前逐字节一致。
+界面切到英文时，这两条端点带上 `?lang=en`，改读 `docs/skill-intros-en/` 下的同名镜像篇（36 篇，一篇对一篇）。清单骨架——有哪些篇、哪一类、什么顺序、是否开发中——永远以中文目录为准，镜像只供标题、简介与正文；某篇缺镜像就仍显示中文，实际所服务的语言随 `X-FlowDeck-Doc-Lang` 响应头自报，界面据头在正文上方标注「此篇暂无英文」。不带 `lang`（或带除 `en` 外的任何值）时，两条端点的应答体与从前逐字节一致——这条逐字节红线钉的是成功体；JSON 错误应答另带稳定的 `code` 字段（有意为之，界面按 code 措辞）。
 
 ## 它读什么文件（`.scratch/` 产物约定）
 
@@ -155,7 +155,7 @@ verify 覆盖：effort 识别、四场景链状态（含后向推定与「推定
 | `notify.mjs` | 盘点事件推导（纯函数，只引 flowchain.mjs 的阶段表）：前后两拍盘点的结构化 diff——票开关、迷雾数、链当前步、新 effort 各成人话事件，桌面通知的消费输入（index.html 有 ES5 镜像，两处注释互指钉住） |
 | `lib/parse.mjs` | 自带解析器（零依赖单遍结构解析，行为由 verify 夹具断言钉住） |
 | `scan.mjs` | 扫描追踪目录的 `.scratch/`，产出盘点数据（热路径并行盘点，标题与票同走自带解析器） |
-| `server.mjs` | HTTP 服务 + 命令行入口（`/`、`/tokens-*.css`、`/api/state`（含 `recentRoots` 与运行时 pollMs/host/port/tokenEnabled、每 effort 一条 git 旁证字段——最近提交或 null，~15 秒 TTL、不随指纹走）、`/api/health`、`/api/roots-overview` 项目总览（常用目录逐个只读盘点，按需单拍不进轮询、GET 不触碰排序）、`/api/issue` 单张票 Markdown 原文（懒加载，1MB 护栏同款）、`/api/skills` 技能介绍清单、`/api/skills/<名字>` 单篇原文（两条都认 `?lang=en`，改读 `docs/skill-intros-en/` 的同名镜像；不带参数响应逐字节不变）、`POST /api/config` 换目录与改 pollMs/host/port/token（逐字段校验，令牌改动即时生效）、`POST /api/recent-roots` 删常用目录；请求先过 Host 校验防 DNS rebinding，POST 端点另有 X-FlowDeck 头防跨站写、超限应答 413；token 非空时 `/api/*` 要求访问令牌；轮询路径全异步 IO） |
+| `server.mjs` | HTTP 服务 + 命令行入口（`/`、`/tokens-*.css`、`/api/state`（含 `recentRoots` 与运行时 pollMs/host/port/tokenEnabled、随载荷下发的 `stageNames` 四阶段名表（中英两列，flowchain.mjs 单一表的直通车）、每 effort 一条 git 旁证字段——最近提交或 null，~15 秒 TTL、不随指纹走）、`/api/health`、`/api/roots-overview` 项目总览（常用目录逐个只读盘点，按需单拍不进轮询、GET 不触碰排序）、`/api/issue` 单张票 Markdown 原文（懒加载，1MB 护栏同款）、`/api/skills` 技能介绍清单、`/api/skills/<名字>` 单篇原文（两条都认 `?lang=en`，改读 `docs/skill-intros-en/` 的同名镜像；不带参数响应体逐字节不变，单篇以 `X-FlowDeck-Doc-Lang` 头自报所服务的语言）、`POST /api/config` 换目录与改 pollMs/host/port/token（逐字段校验，令牌改动即时生效）、`POST /api/recent-roots` 删常用目录；请求先过 Host 校验防 DNS rebinding，POST 端点另有 X-FlowDeck 头防跨站写、超限应答 413；token 非空时 `/api/*` 要求访问令牌；轮询路径全异步 IO） |
 | `eslint.config.mjs` | 最小 lint 配置（ESLint flat config，只兜真 bug 类漂移；lib/parse.mjs 豁免——行为由 verify 夹具钉住） |
 | `.github/workflows/ci.yml` | CI：push/PR 时 Node 18/22 跑 lint + verify |
 | `tokens-paper.css` | 「纸感信纸风」设计 tokens 的唯一权威；色值/字体栈只允许出现在 tokens 文件里 |

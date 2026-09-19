@@ -398,7 +398,7 @@ async function runScenarios(tmp) {
   ok('Comments 夹具（本地断言）：作者—日期 / 中文作者全角破折号 / 半角连字符 / 无日期裸名 / 非ISO日期 / 多条收段 / --- 截断 / 空正文——八分支钉死')
 
   // ── 流程链是纯函数：同一输入两次推导结果一致（无隐藏状态）──
-  const { deriveChain } = await import('./flowchain.mjs')
+  const { deriveChain, FLOW_STAGES } = await import('./flowchain.mjs')
   const r1 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
   const r2 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
   assert.deepEqual(r1, r2)
@@ -511,7 +511,16 @@ async function runScenarios(tmp) {
   enCols(enClosed)
   assert.match(enClosed.stages[3].en.hint, /all .*closed|全部关闭/i)
   assert.match(enClosed.stages[3].en.evidence, /1 ticket|all/i, '全关时的证据英文列')
-  ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
+  // 阶段名/副题同在派生载荷里下发（双轴评审收口）：zh 列 = FLOW_STAGES 单一表，en 列 = titleEn/subtitleEn
+  assert.deepEqual(
+    enTickets.stages.map((s) => [s.title, s.subtitle]),
+    FLOW_STAGES.map((f) => [f.title, f.subtitle]),
+    '载荷里的阶段名/副题 zh 列 = FLOW_STAGES 单一表（界面不再自抄第二份）')
+  assert.deepEqual(
+    enTickets.stages.map((s) => [s.en.title, s.en.subtitle]),
+    FLOW_STAGES.map((f) => [f.titleEn, f.subtitleEn]),
+    '载荷里的阶段名/副题 en 列 = FLOW_STAGES 英文列')
+  ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、阶段名/副题也随载荷按语言下发、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
 
   // ── 静态壳取词绑定（english-ui 票 02，票 04 实拍补的洞）：markup 的 data-i18n* 键不许悬空，
   //    写死的中文默认态不许与词表漂移。悬空键把标签擦成空白，而「零中文残留」照样通过——所以这一组
@@ -1073,6 +1082,11 @@ async function runScenarios(tmp) {
     const enDocRaw = await body('/api/skills/tdd?lang=en')
     assert.equal(enDocRaw, await fs.readFile(nodePath.join(EN_DOCS, 'tdd.md'), 'utf8'), '英文单篇 = 同名镜像篇逐字节')
     assert.match(enDocRaw, /^---\nname: tdd\n/, '英文篇同样带 frontmatter（清单与单篇共用一套结构）')
+    // 语言自报头（双轴评审收口）：界面挂「暂无英文」标注以实际响应为准——英文请求撞缺镜像时头是
+    // zh，标注跟着每一次响应走，不再依赖清单快照里会过期的 noEnglish。真回退没法在整仓 36/36
+    // 全译的现状下从磁盘触发，回退路径的可见性钉在上方 jsdom 缝（stub 按 SK_SERVED 回 zh 头）。
+    assert.equal((await fetch(langServer.url + '/api/skills/tdd?lang=en')).headers.get('x-flowdeck-doc-lang'), 'en', '英文镜像命中：X-FlowDeck-Doc-Lang 自报 en')
+    assert.equal((await fetch(langServer.url + '/api/skills/tdd')).headers.get('x-flowdeck-doc-lang'), 'zh', '中文缺省：X-FlowDeck-Doc-Lang 自报 zh')
     // 语言参数不越名字白名单：未知名字与穿越在英文态一样是 404，不会悄悄回落到某篇中文。
     const en404 = await fetch(langServer.url + '/api/skills/no-such-skill-doc?lang=en')
     assert.equal(en404.status, 404, '不存在的篇 ?lang=en 仍 404')
@@ -1436,7 +1450,9 @@ async function runScenarios(tmp) {
       return JSON.parse(r.data)
     }
     const cGet = async (path) => JSON.parse(await (await fetch(CU + path, { headers: cAuth })).text())
-    /** code 是稳定契约形状，error 仍是原人话（界面按 code 措辞、日志读 error）。 */
+    /** code 是稳定契约形状，error 仍是原人话（界面按 code 措辞、日志读 error）。
+     *  逐字节红线的豁免面（双轴评审收口写明）：技能端点「不带 lang 响应逐字节不变」钉的是成功体；
+     *  JSON 错误应答自票 02 起有意带 code——本组整组钉住这个形状，豁免不是漂移。 */
     const coded = (label, body, code) => {
       assert.equal(body.code, code, label + ' 应带稳定 code：' + JSON.stringify(body))
       assert.match(String(body.code), /^[a-z]+\.[a-z-]+$/, 'code 命名法：域.名字')
@@ -1467,6 +1483,13 @@ async function runScenarios(tmp) {
     assert.match(missDoc.headers.get('content-type') || '', /text\/plain/, '缺篇目仍是纯文本 404（sendFile 通道）')
     // 成功应答不带 code（code 是错误通道的字段，不污染正常载荷）
     assert.equal((await cGet('/api/state')).code, undefined, '成功响应不带 code')
+    // 阶段名表随载荷下发（双轴评审收口）：zh 列 = FLOW_STAGES title/subtitle，en 列 = titleEn/subtitleEn
+    const stNames = (await cGet('/api/state')).stageNames
+    assert.deepEqual(stNames.map((s) => s.id), ['grill', 'spec', 'tickets', 'implement'], 'stageNames 四阶段齐、次序即链序')
+    assert.deepEqual(stNames.map((s) => s.title), FLOW_STAGES.map((f) => f.title), 'stageNames zh 列 = FLOW_STAGES 单一表')
+    assert.deepEqual(stNames.map((s) => s.subtitle), FLOW_STAGES.map((f) => f.subtitle), 'stageNames 副题 zh 列同源')
+    assert.deepEqual(stNames.map((s) => s.en.title), FLOW_STAGES.map((f) => f.titleEn), 'stageNames en 列 = FLOW_STAGES 英文列')
+    assert.deepEqual(stNames.map((s) => s.en.subtitle), FLOW_STAGES.map((f) => f.subtitleEn), 'stageNames 副题 en 列同源')
     // 未知路径走纯文本通道，不参与 code 契约（界面不消费，见 server.mjs 分发层）
     const plain404 = await fetch(CU + '/api/nope-unknown', { headers: cAuth })
     assert.match(plain404.headers.get('content-type') || '', /text\/plain/, '未知路径仍是纯文本')
@@ -1570,10 +1593,29 @@ async function runScenarios(tmp) {
         },
       }))
     }
+    /** fetch 桩的路由器（双轴评审收口：语言/壳/内容几处夹具的同形手写桩收成一处）：
+        routes = 有序 [ [匹配串, 应答器(url, opts)] ]，String(url).indexOf(匹配串) 命中即交应答器——
+        更具体的路由放前面（'/api/skills/' 要在 '/api/skills' 之前）；全不中即 reject，
+        界面不该请求别的接口。onCall 想记请求就传。 */
+    function fetchRouter(routes, label, onCall) {
+      return (u, opts) => {
+        const url = String(u)
+        if (onCall) onCall(url, opts)
+        for (const [match, reply] of routes) {
+          if (url.indexOf(match) >= 0) return reply(url, opts)
+        }
+        return Promise.reject(new Error(label + '：' + u))
+      }
+    }
+    /** 桩应答的响应头：apiFetch 读 X-FlowDeck-Doc-Lang 决定「暂无英文」标注、读 ETag 复验。 */
+    const docHeaders = (docLang) => ({ get: (k) => (String(k).toLowerCase() === 'x-flowdeck-doc-lang' ? docLang : '') })
+    /** 服务端阶段名表的夹具镜像（server.mjs STAGE_NAMES 同构）：随 /api/state 下发，
+        界面的通知与项目总览阶段名从这里取——测试自己用 FLOW_STAGES 拼，不抄字面量。 */
+    const STAGE_TABLE = FLOW_STAGES.map((f) => ({ id: f.id, title: f.title, subtitle: f.subtitle, en: { title: f.titleEn, subtitle: f.subtitleEn } }))
     const absTmp = nodePath.resolve(tmp)
     // 盘点载荷：真实扫描数据 + 常用目录（当前目录在列表里，另有一条存在的、两条失效的）
     let statePayload = {
-      ...ws, pollMs: 5000, configPath: '/tmp/config.json', root: absTmp,
+      ...ws, pollMs: 5000, configPath: '/tmp/config.json', root: absTmp, stageNames: STAGE_TABLE,
       recentRoots: [
         { path: absTmp, exists: true },
         { path: '/tmp/fd-proj-alpha', exists: true },
@@ -2986,7 +3028,7 @@ async function runScenarios(tmp) {
     ok('建骨架指令（jsdom）：空态页第二段在位（map.md 相对路径 + Destination/Not yet specified + 预期盘点变化），一键复制、与工作约定互不串台')
 
     // ── 语言切换细线（english-ui 票 01）：初始语言按浏览器语言判定 · 顶栏按钮即时中英互换 · 偏好落本浏览器 ──
-    const langPayload = { ...ws, root: '/tmp/fd-lang', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] }
+    const langPayload = { ...ws, root: '/tmp/fd-lang', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [], stageNames: STAGE_TABLE }
     const ZH_NAMES = ['Grill 拷问', 'To-Spec 规格', 'To-Tickets 拆票', 'Implement 实现']
     const EN_NAMES = ['Grill', 'To-Spec', 'To-Tickets', 'Implement']
     const EN_SUBS = ['Idea → map.md', 'Understanding → spec.md', 'Spec → issues/ tickets', 'Ticket by ticket → all closed']
@@ -3005,13 +3047,9 @@ async function runScenarios(tmp) {
         beforeParse(window) {
           if (browserTags) Object.defineProperty(window.navigator, 'languages', { value: browserTags, configurable: true })
           if (stored) window.localStorage.setItem('flowdeck-lang', stored)
-          window.fetch = (u) => {
-            langCalls.push(String(u))
-            if (String(u).indexOf('/api/state') >= 0) {
-              return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload)) })
-            }
-            return Promise.reject(new Error('语言用例不该请求别的接口：' + u))
-          }
+          window.fetch = fetchRouter([
+            ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload)) })],
+          ], '语言用例不该请求别的接口', (url) => { langCalls.push(url) })
         },
       })
       return { d, errs }
@@ -3020,13 +3058,13 @@ async function runScenarios(tmp) {
     const stageNames = (doc) => Array.from(doc.querySelectorAll('.stage .name')).map((n) => n.textContent)
     const stageSubs = (doc) => Array.from(doc.querySelectorAll('.stage .tiny')).map((n) => n.textContent)
 
-    // 中文浏览器 + 没记过偏好 → 中文界面；阶段名的中文列就是服务端下发原文（词表不长第二套中文真相）
+    // 中文浏览器 + 没记过偏好 → 中文界面；阶段名的中文列就是服务端下发原文（界面直接读载荷列，词表不长第二套中文真相）
     const zhCase = langDom(39333, ['zh-CN', 'zh'], null)
     await settle()
     const zhDoc = zhCase.d.window.document
     assert.deepEqual(stageNames(zhDoc), ZH_NAMES)
     assert.deepEqual(stageNames(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.title), '中文态链格阶段名应为服务端下发原文')
-    assert.deepEqual(stageSubs(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.subtitle), '中文态链格副题也应为服务端下发原文（词表的 zh 列含副题，两边漂移即红）')
+    assert.deepEqual(stageSubs(zhDoc), langPayload.efforts[0].chain.stages.map((s) => s.subtitle), '中文态链格副题也应为服务端下发原文（副题与阶段名同走载荷列，漂移即红）')
     assert.equal(zhDoc.getElementById('langBtn').textContent, 'EN', '中文态按钮给的是切过去的那个语言')
     // 判不中默认中文（现状不劣化）
     const frCase = langDom(39334, ['fr-FR', 'fr'], null)
@@ -3071,6 +3109,12 @@ async function runScenarios(tmp) {
     keepZh.d.window.close()
     ok('语言持久化（jsdom）：语言偏好存浏览器侧、优先于浏览器语言，重开页面保持所选')
 
+    // ── 阶段名单一来源（双轴评审收口）：界面词表不再抄四阶段名/副题，取词全走载荷下发列 ──
+    assert.deepEqual(
+      Object.keys(SHELL_TEXT).filter((k) => /^stage\.(grill|spec|tickets|implement)\./.test(k)), [],
+      '四个阶段名/副题不再进界面词表（单一来源在 FLOW_STAGES，经 stageNames 与 chain.stages.en 下发）')
+    ok('阶段名单一来源（jsdom）：界面词表撤四阶段名/副题的第二份拷贝，链格/全部视图/通知/项目总览取词全走载荷下发列')
+
     // ── 英文态整页无残留（english-ui 票 02）：真跑界面，逐视图扫中文残留 ──
     /** 界面夹具用的英文用户数据：票标题、地图小节、规格正文全 ASCII——判据字段名（Status /
         Blocked by / Destination）本就是英文，剩余中文只可能来自界面文案或服务端指引词。 */
@@ -3095,6 +3139,7 @@ async function runScenarios(tmp) {
       root: '/tmp/fd-shell-en', rootName: 'fd-shell-en', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
       pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config-shell.json',
       recentRoots: [{ path: '/tmp/fd-shell-en', exists: true }, { path: '/tmp/fd-gone-en', exists: false }],
+      stageNames: STAGE_TABLE,
       efforts,
     }, over || {})
     const shellRoots = {
@@ -3153,16 +3198,13 @@ async function runScenarios(tmp) {
       virtualConsole: vcShell,
       beforeParse(window) {
         Object.defineProperty(window.navigator, 'languages', { value: ['en-US', 'en'], configurable: true })
-        window.fetch = (u) => {
-          const url = String(u)
-          shellCalls.push(url)
-          if (url.indexOf('/api/state') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellPayload)) })
-          if (url.indexOf('/api/roots-overview') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellRoots)) })
-          if (url.indexOf('/api/skills/') === 0) return Promise.resolve({ ok: true, text: async () => '# Grilling\n\nStress-test the plan until nothing is left vague.\n' })
-          if (url.indexOf('/api/skills') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellSkills)) })
-          if (url.indexOf('/api/issue') === 0) return Promise.resolve({ ok: true, text: async () => '# Ticket 01\n\nStatus: ready-for-agent\n\nDo the indexing core.\n' })
-          return Promise.reject(new Error('英文界面用例不该请求别的接口：' + u))
-        }
+        window.fetch = fetchRouter([
+          ['/api/skills/', () => Promise.resolve({ ok: true, headers: docHeaders('en'), text: async () => '# Grilling\n\nStress-test the plan until nothing is left vague.\n' })],
+          ['/api/skills', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellSkills)) })],
+          ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellPayload)) })],
+          ['/api/roots-overview', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(shellRoots)) })],
+          ['/api/issue', () => Promise.resolve({ ok: true, headers: docHeaders('en'), text: async () => '# Ticket 01\n\nStatus: ready-for-agent\n\nDo the indexing core.\n' })],
+        ], '英文界面用例不该请求别的接口', (url) => { shellCalls.push(url) })
       },
     })
     await settle()
@@ -3214,6 +3256,7 @@ async function runScenarios(tmp) {
     shOpen('rootsBtn')
     await tick()
     await tick()
+    assert.ok(shDoc.getElementById('rootsBody').textContent.indexOf('Implement') >= 0, '总览行的链阶段出英文（stageNames 单一表下发）')
     assert.deepEqual(cjkResidue(shDoc), [], '项目总览弹窗零残留（含 no-scratch / unreadable 两类降级行）')
     shEsc()
     // 规格阅读弹窗（头部标题与要素行随语言，正文是打开时刻的快照）
@@ -3279,18 +3322,17 @@ async function runScenarios(tmp) {
         window.localStorage.setItem('flowdeck-notify', '1')
         // 页面上先有令牌再遇 401：横幅「不回显令牌值」这条只有在真带着令牌时才是断言，否则永真
         window.localStorage.setItem('flowdeck-token', 'tok-secret-9f3')
-        window.fetch = (u, opts) => {
-          const url = String(u)
-          if (url.indexOf('/api/state') === 0) {
-            if (langState401) return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: '需要有效的访问令牌', code: 'auth.token-required' }) })
-            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload2)) })
-          }
-          if (url.indexOf('/api/config') === 0 && opts && opts.method === 'POST') {
+        window.fetch = fetchRouter([
+          ['/api/config', (u, opts) => {
+            if (!(opts && opts.method === 'POST')) return Promise.reject(new Error('语言内容用例不该请求别的接口：' + u))
             if (langCfgReply) return Promise.resolve({ ok: false, status: 400, json: async () => langCfgReply })
             return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: '/tmp/fd-shell-en', applied: { root: 'immediate' } }) })
-          }
-          return Promise.reject(new Error('语言内容用例不该请求别的接口：' + u))
-        }
+          }],
+          ['/api/state', () => {
+            if (langState401) return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: '需要有效的访问令牌', code: 'auth.token-required' }) })
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(langPayload2)) })
+          }],
+        ], '语言内容用例不该请求别的接口')
       },
     })
     await settle()
@@ -3322,10 +3364,11 @@ async function runScenarios(tmp) {
     assert.ok(closedNote, '关票出一条英文桌面通知：' + JSON.stringify(langNotes.map((n) => n.body)))
     assert.ok(!CJK_RE.test(closedNote.body), '通知正文零中文：' + closedNote.body)
     assert.ok(!CJK_RE.test(closedNote.title), '通知标题零中文：' + closedNote.title)
-    // 阶段推进的通知文案用阶段名的英文列（词表与通知同一来源，不再各自抄一份）
+    // 阶段推进的通知文案用阶段名的英文列（阶段名单一来源：随载荷下发的 stageNames，不再各自抄一份）
     const stageNote = langNotes.find((n) => /stage/i.test(String(n.body)))
     assert.ok(stageNote, '关票后四阶段完成 → 阶段推进也有通知：' + JSON.stringify(langNotes.map((n) => n.body)))
     assert.ok(!/Grill 拷问|To-Spec 规格|四阶段完成/.test(stageNote.body), '通知里的阶段名与「完成」用英文说法：' + stageNote.body)
+    assert.match(stageNote.body, /Implement/, '推进通知的阶段名出英文（stageNameById 读 stageNames 表）')
     // 服务端报错按 code 措辞
     const rootInput = lgDoc.getElementById('rootInput')
     langCfgReply = { error: '这个目录不存在或不是目录：/tmp/xyz', code: 'config.root-missing' }
@@ -3357,7 +3400,8 @@ async function runScenarios(tmp) {
     ok('英文态内容随语言（jsdom）：票行/链格/下一步卡三处一键复制出英文（链格直取服务端英文列）、桌面通知随语言且阶段名同词表、报错按 code 措辞而未知 code 回退原文、401 补救指引也翻')
 
     // ── 技能弹窗按语言取篇（票 03）：英文态两条请求都带 ?lang=en，中文态一个参数都不带；
-    //    镜像缺篇时清单打 noEnglish → 正文回退中文 + 挂英文标注，切语言重取清单、同篇两版各自缓存 ──
+    //    镜像缺篇时服务端回退中文并在 X-FlowDeck-Doc-Lang 自报 zh → 正文回退 + 挂英文标注，
+    //    切语言重取清单、同篇两版各自缓存 ──
     {
       const SK_ZH_LIST = { skills: [
         { name: 'grilling', category: 'engineering', order: 1, title: '拷问原语', summary: '访谈的地基', inProgress: false },
@@ -3373,6 +3417,8 @@ async function runScenarios(tmp) {
         'zh|wizard': '---\nname: wizard\ncategory: in-progress\n---\n\n# wizard\n\n只有人能做的那几步。\n',
         'en|wizard': '---\nname: wizard\ncategory: in-progress\n---\n\n# wizard\n\n只有人能做的那几步。\n', // 镜像缺篇：服务端回退的就是中文原文
       }
+      // 英文请求实际所服务的语言（双轴评审收口：标注以响应头为准，清单快照的 noEnglish 会过期）——wizard 缺镜像回退中文
+      const SK_SERVED = { grilling: 'en', wizard: 'zh' }
       const skCalls = []
       const jsErrorsSk = []
       const vcSk = new VirtualConsole()
@@ -3384,16 +3430,18 @@ async function runScenarios(tmp) {
         virtualConsole: vcSk,
         beforeParse(window) {
           Object.defineProperty(window.navigator, 'languages', { value: ['en-US', 'en'], configurable: true })
-          window.fetch = (u) => {
-            const url = String(u)
-            skCalls.push(url)
-            if (url.indexOf('/api/state') === 0) return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })
-            if (url === '/api/skills?lang=en') return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_EN_LIST)) })
-            if (url === '/api/skills') return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_ZH_LIST)) })
-            const m = /^\/api\/skills\/([^?]+)(\?lang=en)?$/.exec(url)
-            if (m) return Promise.resolve({ ok: true, status: 200, text: async () => SK_DOCS[(m[2] ? 'en|' : 'zh|') + decodeURIComponent(m[1])] })
-            return Promise.reject(new Error('技能语言用例不该请求别的接口：' + u))
-          }
+          window.fetch = fetchRouter([
+            ['/api/skills?lang=en', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_EN_LIST)) })],
+            ['/api/skills/', (u) => {
+              const m = /^\/api\/skills\/([^?]+)(\?lang=en)?$/.exec(u)
+              if (!m) return Promise.reject(new Error('技能语言用例不该请求别的接口：' + u))
+              const name = decodeURIComponent(m[1])
+              const served = m[2] ? SK_SERVED[name] : 'zh'
+              return Promise.resolve({ ok: true, status: 200, headers: docHeaders(served), text: async () => SK_DOCS[(m[2] ? 'en|' : 'zh|') + name] })
+            }],
+            ['/api/skills', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(SK_ZH_LIST)) })],
+            ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })],
+          ], '技能语言用例不该请求别的接口', (url) => { skCalls.push(url) })
         },
       })
       await new Promise((r) => setTimeout(r, 150))
@@ -3441,7 +3489,7 @@ async function runScenarios(tmp) {
       assert.ok(skArt().querySelector('.fallback'), '缓存路径也照常挂标注')
       assert.deepEqual(jsErrorsSk, [])
       skDom.window.close()
-      ok('技能弹窗按语言取篇（jsdom）：英文态清单与单篇都带 ?lang=en、侧栏与正文出英文；中文态两类请求都不带参数且不挂标注；镜像缺篇回退中文原文并在正文上方挂英文标注；切语言重取清单而单篇按语言各自缓存')
+      ok('技能弹窗按语言取篇（jsdom）：英文态清单与单篇都带 ?lang=en、侧栏与正文出英文；中文态两类请求都不带参数且不挂标注；镜像缺篇回退中文原文（响应头 X-FlowDeck-Doc-Lang 自报 zh）并在正文上方挂英文标注、缓存路径同挂；切语言重取清单而单篇按语言各自缓存')
     }
 
     ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')

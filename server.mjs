@@ -14,6 +14,7 @@
  *   GET  /            界面（本目录的 index.html）
  *   GET  /tokens-*.css  界面的主题 tokens（tokens-paper / tokens-github-dark，白名单放行）
  *   GET  /api/state   当前追踪目录的完整盘点（JSON，含 pollMs / pollMode / host / port / tokenEnabled / configPath / recentRoots 常用目录、
+ *                     stageNames 四阶段人话名表（flowchain.mjs FLOW_STAGES 的直通车，链格/通知/项目总览共用）、
  *                     每 effort 一条 git 旁证字段——最近提交或 null，~15s TTL、不随指纹走）。
  *                     双层短路：磁盘没变的那一拍由服务端指纹短路（不重扫不重传，复用上一拍 JSON；
  *                     git 旁证例外——提交不动文件 mtime，指纹命中拍仍按 TTL 重查，见 gitForEfforts）；
@@ -29,7 +30,8 @@
  *                     分类/顺序/开发中一律仍以中文目录为准；不带 lang = 响应逐字节不变）
  *   GET  /api/skills/<名字>[?lang=en]  单篇技能介绍原文（Markdown；名字限字母数字与连字符，中文原文只读
  *                     docs/skill-intros/、英文镜像只读 docs/skill-intros-en/，两个目录都定死，无路径穿越面；
- *                     lang=en 先取同名英文镜像篇，缺篇回退中文原文）
+ *                     lang=en 先取同名英文镜像篇，缺篇回退中文原文；实际所服务的语言随
+ *                     X-FlowDeck-Doc-Lang 头下发，界面据此挂「暂无英文」标注）
  *   POST /api/config  改配置并持久化到 config.json：root（热切换+收录常用目录）、pollMs（下一拍生效）、
  *                     token（立即接管校验；空串=清除）、host/port（写盘，重启后生效）（要求带 X-FlowDeck 头，防跨站写）
  *   POST /api/recent-roots  删一条常用目录并写回 config.json（防护同上；删未知条目幂等成功）
@@ -54,6 +56,7 @@ import { readFileSync, writeFileSync, statSync } from 'node:fs'
 import { execFile as execFileCb } from 'node:child_process'
 import { promisify } from 'node:util'
 import { scanWorkspace, readIfExists, TICKET_FILE } from './scan.mjs'
+import { FLOW_STAGES } from './flowchain.mjs'
 
 const execFile = promisify(execFileCb)
 
@@ -297,7 +300,10 @@ function sendJson(res, code, data) {
 /** JSON 错误应答的统一出口（english-ui 票 02）：两个字段各司其职——
  *  error 是人话原文（日志读它，界面在 code 不认识时回退读它），code 是稳定契约键
  *  （小写 `域.名字`，换措辞不换 code，界面按 code + 当前语言自己组句）。
- *  纯文本通道（sendFile 的 404、未知路径）不在此列：界面不消费其正文。 */
+ *  纯文本通道（sendFile 的 404、未知路径）不在此列：界面不消费其正文。
+ *  逐字节红线的适用面（双轴评审收口写明）：技能端点「不带 lang 响应逐字节不变」钉的是成功体——
+ *  JSON 错误应答从本票起就带 code 字段，这是有意的豁免（界面按 code 措辞靠它），
+ *  verify 的 code 契约组钉住这一形状。 */
 function sendErr(res, status, code, error) {
   sendJson(res, status, { error, code })
 }
@@ -474,10 +480,18 @@ async function gitForEfforts(root, efforts) {
   return out
 }
 
-/** /api/state 应答条目的组装：盘点 + 配置载荷 + 每 effort 附 git 旁证字段。 */
+/** 阶段名表随载荷下发（english-ui 双轴评审收口）：链格/通知/项目总览的阶段人话都从这里取，
+ *  界面不再自抄第二份中文（此前抄在界面词表里，同名两处只能靠漂移断言兜着）。
+ *  zh 列逐字节 = FLOW_STAGES 的 title/subtitle，en 列 = titleEn/subtitleEn——
+ *  阶段名的单一来源在 flowchain.mjs 一张表，这里只是搬运工。 */
+const STAGE_NAMES = FLOW_STAGES.map((f) => ({
+  id: f.id, title: f.title, subtitle: f.subtitle, en: { title: f.titleEn, subtitle: f.subtitleEn },
+}))
+
+/** /api/state 应答条目的组装：盘点 + 阶段名表 + 配置载荷 + 每 effort 附 git 旁证字段。 */
 function stateBody(state, cfg, runtime, exists, git) {
   const efforts = state.efforts.map((e) => ({ ...e, git: git[e.slug] || null }))
-  return JSON.stringify({ ...state, efforts, ...configPart(cfg, runtime, exists), configPath: cfg.configPath })
+  return JSON.stringify({ ...state, stageNames: STAGE_NAMES, efforts, ...configPart(cfg, runtime, exists), configPath: cfg.configPath })
 }
 
 /** 取 /api/state 应答条目：先算指纹（用上一拍的 cfg 出存在性向量——config.json 的 stat
@@ -572,10 +586,10 @@ function guardPostJson(req, res, onJson) {
   req.on('error', () => {})
 }
 
-async function sendFile(res, filePath, type) {
+async function sendFile(res, filePath, type, extraHeaders) {
   try {
     const body = await readFile(filePath)
-    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' })
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', ...extraHeaders })
     res.end(body)
   } catch (e) {
     // 文档缺了就是缺了（404）；其余错误（权限等）照旧 500 交代原因。
@@ -608,8 +622,9 @@ function parseSkillFrontmatter(text) {
 }
 
 /** 英文镜像篇（english-ui 票 03）：「这篇有没有英文」的口径只此一处——同名文件读得出、
- *  frontmatter 带 title 才算有。清单据此决定要不要打 noEnglish，单篇据此决定回不回退中文，
- *  两处共用一个谓词，标注与实际所读的语言就不会打架（readIfExists 永不抛，坏篇只会 null）。 */
+ *  frontmatter 带 title 才算有。清单据此决定要不要打 noEnglish（展示格），单篇据此决定
+ *  回不回退中文（回退与否经 X-FlowDeck-Doc-Lang 头告知界面），两处共用一个谓词。
+ *  （readIfExists 永不抛，坏篇只会 null。） */
 async function readEnglishSkill(name) {
   if (!SKILL_NAME_RE.test(name)) return null
   const mirror = await readIfExists(nodePath.join(SKILLS_DOCS_EN_DIR, name + '.md'))
@@ -621,7 +636,8 @@ async function readEnglishSkill(name) {
 /** 技能清单：读 docs/skill-intros/ 全部 .md 的 frontmatter，按分类（总览最前）与 order 排序。
  *  目录读不到（整体拷走时缺了文档）回落空清单，界面照常渲染空态。
  *  lang='en'（english-ui 票 03）：骨架仍是中文清单，只把 title/summary 换成同名镜像篇的两格；
- *  镜像缺篇 → 保留中文两格并打 noEnglish，界面据此挂「此篇暂无英文」。
+ *  镜像缺篇 → 保留中文两格并打 noEnglish（侧栏与导出可见的展示格；单篇正文的标注以
+ *  X-FlowDeck-Doc-Lang 响应头为准——清单快照会过期，头不会）。
  *  除 title/summary/noEnglish 之外的字段一律不读镜像——分类与顺序的单一真相在中文目录。 */
 async function skillsList(lang) {
   const base = await skillsListZh()
@@ -740,8 +756,10 @@ function handleApiSkills(reqUrl, res) {
 
 /** GET /api/skills/<名字>：单篇技能介绍原文（名字白名单；中文原文限 docs/skill-intros/、镜像限
  *  docs/skill-intros-en/，两个目录都定死，无路径穿越面）。
- *  ?lang=en 先取同名英文镜像篇；镜像缺篇（未译 / 读不出）回退中文原文——清单里那条同时带
- *  noEnglish，界面据此在正文上方挂「此篇暂无英文」标注，用户看到的语言与标注一致。 */
+ *  ?lang=en 先取同名英文镜像篇；镜像缺篇（未译 / 读不出）回退中文原文。
+ *  实际所服务的语言随 X-FlowDeck-Doc-Lang 头下发（english-ui 双轴评审收口）：英文请求命中镜像 = en，
+ *  其余（中文请求、缺篇回退）= zh。界面据此挂「此篇暂无英文」标注——标注以实际响应为准，
+ *  清单快照里的 noEnglish 会过期（拉清单之后镜像才缺/补），拿它当标注源会无声错版。 */
 async function handleApiSkillDoc(reqUrl, res, url) {
   // 畸形百分号转义（%ZZ）decode 会抛 URIError：按名字不合法处理，404，不炸进程。
   let name = url.slice('/api/skills/'.length)
@@ -761,12 +779,12 @@ async function handleApiSkillDoc(reqUrl, res, url) {
   if (skillLang(reqUrl) === 'en') {
     const mirror = await readEnglishSkill(name)
     if (mirror) {
-      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' })
+      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store', 'X-FlowDeck-Doc-Lang': 'en' })
       res.end(mirror.text)
       return
     }
   }
-  sendFile(res, zhFile, 'text/markdown; charset=utf-8')
+  sendFile(res, zhFile, 'text/markdown; charset=utf-8', { 'X-FlowDeck-Doc-Lang': 'zh' })
 }
 
 /** GET /api/roots-overview：项目总览（票 03）——常用目录 + 当前追踪目录逐个只读盘点。

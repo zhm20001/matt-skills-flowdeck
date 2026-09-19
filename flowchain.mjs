@@ -15,13 +15,16 @@
  */
 
 /** 四个固定阶段的展示信息（id 是稳定键，title/subtitle 供界面直接展示）。
+ *  阶段名与副题的中英两列都在这张表里（english-ui 双轴评审收口：此前英文列放在界面词表、
+ *  中文列在这里，同名两处靠漂移断言兜着——单一表加语言维度才是规格要的「不长第三份硬编码面」；
+ *  表随 /api/state 的 stageNames 直通车下发，界面按键消费，不再自抄）。
  *  skills 是该阶段的对应技能（票 05 技能联动）：与指引词同源同漂移——硬编码在这里，
  *  指引卡「查看技能介绍」按它打开技能包弹窗定位该篇（docs/skill-intros/ 已核有这五篇介绍）。 */
 export const FLOW_STAGES = [
-  { id: 'grill',     title: 'Grill 拷问',    subtitle: '想法 → 地图 map.md',     skills: ['grilling', 'wayfinder'] },
-  { id: 'spec',      title: 'To-Spec 规格',  subtitle: '理解 → 规格 spec.md',    skills: ['to-spec'] },
-  { id: 'tickets',   title: 'To-Tickets 拆票', subtitle: '规格 → 票 issues/',    skills: ['to-tickets'] },
-  { id: 'implement', title: 'Implement 实现', subtitle: '逐票实现 → 全部关闭',   skills: ['implement'] },
+  { id: 'grill',     title: 'Grill 拷问',      titleEn: 'Grill',      subtitle: '想法 → 地图 map.md', subtitleEn: 'Idea → map.md',                 skills: ['grilling', 'wayfinder'] },
+  { id: 'spec',      title: 'To-Spec 规格',    titleEn: 'To-Spec',    subtitle: '理解 → 规格 spec.md', subtitleEn: 'Understanding → spec.md',      skills: ['to-spec'] },
+  { id: 'tickets',   title: 'To-Tickets 拆票', titleEn: 'To-Tickets', subtitle: '规格 → 票 issues/',  subtitleEn: 'Spec → issues/ tickets',        skills: ['to-tickets'] },
+  { id: 'implement', title: 'Implement 实现',  titleEn: 'Implement',  subtitle: '逐票实现 → 全部关闭', subtitleEn: 'Ticket by ticket → all closed', skills: ['implement'] },
 ]
 
 /** 阶段状态 → 中文标签（界面直接用）。 */
@@ -67,7 +70,8 @@ export function isFrontierTicket(ticket, closedSet) {
  *   stages 每项：{ id, title, subtitle, status: 'done'|'current'|'pending', evidence, hint, copyText,
  *                  inferred（完成是否来自后向推定）, inferLabel（推定标注文案，实证完成为空串）,
  *                  skills（本阶段的对应技能名，技能联动用）,
- *                  en: { evidence, hint, copyText, inferLabel }（同一分支的英文列，界面按语言取用） }。
+ *                  en: { title, subtitle, evidence, hint, copyText, inferLabel }
+ *                    （同一分支的英文列，界面按语言取用；title/subtitle 出自 FLOW_STAGES 的 titleEn/subtitleEn） }。
  *   evidence 是「为什么判成这个状态」的人读证据；hint 是走到这步时下一步该干什么；
  *   copyText 是可直接粘给任意 Agent 的完整指示词。
  *   两列同支（bi 叶子）：判据分支只走一遍，中文列逐字节冻结、英文列随行加出——
@@ -198,8 +202,8 @@ export function deriveChain(input = {}) {
   const implHint = !ticketsDone
     ? bi('还没有票可实现（先把前面的阶段走完）。', 'No tickets to implement yet (finish the earlier stages first).')
     : implementDone
-      ? bi(`${where}的票已全部关闭，四个阶段完成。可以收尾归档，或开下一个 effort。`,
-        `All tickets under ${whereEn} are closed — the four stages are done. Wrap it up and archive, or open the next effort.`)
+      ? bi(`${where}的票已全部关闭，四个阶段完成。可以收尾，或开下一个 effort。`,
+        `All tickets under ${whereEn} are closed — the four stages are done. Wrap it up, or open the next effort.`)
       : bi(
         `${where} 有 ${tickets.length} 张票、已关 ${closed} 张。请从 Blocked by 为空的票开始逐张实现，每完成一张就把该票文件里的 Status 行改为 resolved。` +
           (blocked > 0 ? ` 当前有 ${blocked} 张票被依赖阻塞，先做它们所依赖的票。` : ''),
@@ -230,7 +234,7 @@ export function deriveChain(input = {}) {
       // copyText = 指引原文，界面提供「点一下复制」，用户粘给任意 Agent 都能接上。
       // 英文列同源同构：一键复制按当前语言取哪一列，那一列的 copyText 就是那一列的 hint。
       copyText: s.hint,
-      en: { ...s.en, copyText: s.en.hint },
+      en: { ...s.en, title: def.titleEn, subtitle: def.subtitleEn, copyText: s.en.hint },
     }
   })
 

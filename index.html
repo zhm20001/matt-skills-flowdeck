@@ -522,7 +522,7 @@ var UI_TEXT = {
   'set.token.on': { zh: '已启用——输入新值可替换', en: 'Enabled — type a new value to replace it' },
   'set.token.off': { zh: '留空 = 不启用', en: 'Leave empty to disable' },
   'set.token.hint-on': { zh: '非空时 /api/* 的每个请求都要携带令牌（X-FlowDeck-Token 头或 ?token=）。输入新值保存即替换。', en: 'While it is set, every /api/* request must carry it (X-FlowDeck-Token header or ?token=). Type a new value and save to replace it.' },
-  'set.token.hint-off': { zh: '设一个共享口令：0.0.0.0 局域网暴露时挡住同网段未授权访问；本机 127.0.0.1 用法可留空。', en: 'A shared passphrase: it blocks unauthorised devices on the LAN when bound to 0.0.0.0; leave empty for local 127.0.0.1 use.' },
+  'set.token.hint-off': { zh: '设一个访问令牌：0.0.0.0 局域网暴露时挡住同网段未授权访问；本机 127.0.0.1 用法可留空。', en: 'An access token: it blocks unauthorised devices on the LAN when bound to 0.0.0.0; leave empty for local 127.0.0.1 use.' },
   'set.token.clear.label': { zh: '清除令牌…', en: 'Clear token…' },
   'set.token.clear.hint': { zh: '清除 = 关闭鉴权：/api/* 不再要求令牌（局域网暴露时同网段任何设备都可访问）。', en: 'Clearing disables auth: /api/* stops requiring a token (any device on the LAN can then read it).' },
   'set.token.cleared': { zh: '已标记清除：保存后令牌置空（关闭鉴权）。', en: 'Clearance marked: saving empties the token (auth off).' },
@@ -591,7 +591,7 @@ var UI_TEXT = {
   'next.label.done': { zh: '全部完成', en: 'All done' },
   'next.done-text': { zh: '四个阶段全部完成：地图、规格、票、实现都齐了。', en: 'All four stages are done: map, spec, tickets and implementation.' },
   'next.copy': { zh: '复制指引词', en: 'Copy the prompt' },
-  'next.done-copy': { zh: '「{title}」的四个流程阶段已全部完成，请帮我收尾归档。', en: 'All four stages of {title} are complete — help me wrap it up and archive it.' },
+  'next.done-copy': { zh: '「{title}」的四个流程阶段已全部完成，请帮我收尾，或规划下一个 effort。', en: 'All four stages of {title} are complete — help me wrap it up, or plan the next effort.' },
   'chain.progress': { zh: '阶段进度 {progress}% · 票 {closed}/{tickets} 已关闭', en: 'Stage progress {progress}% · tickets {closed}/{tickets} closed' },
   'chain.blocked': { zh: ' · {blocked} 张被阻塞', en: ' · {blocked} blocked' },
   'git.line': { zh: '旁证 · 最近提交 {hash} · {when} · {subject}', en: 'Side evidence · last commit {hash} · {when} · {subject}' },
@@ -717,8 +717,9 @@ var UI_TEXT = {
   'skills.doc-failed': { zh: '这篇介绍加载失败：{msg}', en: 'This intro failed to load: {msg}' },
   'skills.list-failed': { zh: '技能清单加载失败：{msg}', en: 'The skill list failed to load: {msg}' },
   'skills.link.title': { zh: '在弹窗里打开这篇介绍', en: 'Open this intro in the dialog' },
-  /* 英文态才出现的标注（服务端只在 ?lang=en 的清单里打 noEnglish）：镜像缺篇时正文回退中文原文，
-     标注说明为什么这一屏还是中文。中文态永不渲染它，zh 列只为词表完整。 */
+  /* 英文态才出现的标注：依据是单篇响应的 X-FlowDeck-Doc-Lang 头——英文请求而服务端实际
+     回了中文（缺镜像回退）才挂，挂在正文上方，说明为什么这一屏还是中文。
+     中文态永不渲染它，zh 列只为词表完整。 */
   'skills.no-en': { zh: '此篇暂无英文介绍，下面显示的是中文原文', en: 'This doc has no English version yet — showing the Chinese original' },
 
   // 项目总览弹窗
@@ -896,6 +897,8 @@ function apiFetch(path, opts) {
   if (o.body !== undefined) { init.method = 'POST'; init.body = o.body }
   return fetch(path, init).then(function (r) {
     var etag = r.headers && r.headers.get ? r.headers.get('ETag') : ''
+    // 单篇技能端点的语言自报（实际所服务的语言）：英文请求撞上缺镜像回退时是 'zh'，标注以它为准
+    var docLang = r.headers && r.headers.get ? (r.headers.get('X-FlowDeck-Doc-Lang') || '') : ''
     if (r.status === 401) return { ok: false, status: 401, data: null, errorText: codeText('auth.token-required', t('hint.token')), etag: etag }
     if (r.status === 304) return { ok: false, status: 304, data: null, errorText: '', etag: etag }
     // rawBody 通道：自己读原文再 JSON.parse，保证 data 与 raw 出自同一份响应体
@@ -914,7 +917,7 @@ function apiFetch(path, opts) {
     var read = o.text ? r.text() : r.json()
     return read.then(function (data) {
       if (!r.ok) return { ok: false, status: r.status, data: data, errorText: errText(data, r.status), etag: etag }
-      return { ok: true, status: r.status, data: data, errorText: '', etag: etag }
+      return { ok: true, status: r.status, data: data, errorText: '', etag: etag, docLang: docLang }
     }, function () {
       return { ok: r.ok, status: r.status, data: null, errorText: errText(null, r.status), etag: etag }
     })
@@ -1083,10 +1086,11 @@ function renderChain(eff) {
     dot.setAttribute('aria-hidden', 'true') // 指引点是装饰（状态色已进链格 aria-label），不给读屏添噪音
     head.appendChild(dot)
     var names = el('div')
-    // 阶段名走词表按键取词；词表没这个 id（服务端多了新阶段而界面没跟上）时回落服务端原文，不空着
-    var stageName = t('stage.' + s.id + '.title') || s.title
+    // 阶段名/副题与指引词同走 guideText 按语言取列：单一来源是服务端 FLOW_STAGES（随载荷下发），
+    // 缺英文列（旧载荷）回落中文列，不空着
+    var stageName = guideText(s, 'title')
     names.appendChild(el('div', 'name', stageName))
-    names.appendChild(el('div', 'tiny', t('stage.' + s.id + '.subtitle') || s.subtitle))
+    names.appendChild(el('div', 'tiny', guideText(s, 'subtitle')))
     head.appendChild(names)
     var statusLabel = t('status.' + s.status)
     head.appendChild(el('span', 'chip', statusLabel))
@@ -1448,7 +1452,7 @@ function effortRow(e) {
   var lets = el('span', 'stagelets')
   e.chain.stages.forEach(function (s) {
     var d = el('span', 'stagelet ' + s.status)
-    d.title = tf('all.cell.title', { stage: t('stage.' + s.id + '.title') || s.title, status: t('status.' + s.status) })
+    d.title = tf('all.cell.title', { stage: guideText(s, 'title'), status: t('status.' + s.status) })
     d.setAttribute('aria-hidden', 'true') // 缩影格是装饰，状态色之外的信息进整行 aria-label
     lets.appendChild(d)
   })
@@ -1569,10 +1573,10 @@ function notifyOn() {
    latestAt / git 旁证 / generatedAt）不进比较面；换目录两拍不可比，root 不同零事件。 */
 var NOTIFY_STAGE_RANK = { grill: 0, spec: 1, tickets: 2, implement: 3 }
 
-/* 通知里的人话一律按当前语言查词表（票 02）：阶段名与链格共用 stage.<id>.title 同一列，
+/* 通知里的人话一律按当前语言取列（票 02）：阶段名经 stageNameById 读服务端单一表的下发列，
    不再另抄一份标签表——两处同源才不会漂移。 */
 function notifyEffortName(slug) { return slug === '__root' ? t('notify.root-name') : slug }
-function notifyStageLabel(id) { return id ? (t('stage.' + id + '.title') || id) : t('notify.stage-complete') }
+function notifyStageLabel(id) { return id ? (stageNameById(id) || id) : t('notify.stage-complete') }
 function notifyStageRank(id) {
   if (!id) return 4
   return Object.prototype.hasOwnProperty.call(NOTIFY_STAGE_RANK, id) ? NOTIFY_STAGE_RANK[id] : -1
@@ -2241,27 +2245,24 @@ function renderSkillsNav() {
  *  取的是调用方传进来的语言（请求发出那一刻的语言），不读实时 lang，免得响应回来后自证错版。 */
 function skillsLangQuery(l) { return l === 'en' ? '?lang=en' : '' }
 
-/** 镜像缺篇的标注（票 03）：英文态 + 清单给这篇打了 noEnglish 才挂，挂在正文上方。
- *  中文态与有镜像时一个节点都不加——服务端回退了什么，界面就说什么，两者同源于 noEnglish 这一格。 */
-function markSkillFallback(box, name) {
-  if (lang !== 'en') return
-  var list = skillsState.list || []
-  for (var i = 0; i < list.length; i++) {
-    if (list[i].name !== name) continue
-    if (list[i].noEnglish) box.insertBefore(el('div', 'fallback', t('skills.no-en')), box.firstChild)
-    return
-  }
+/** 镜像缺篇的标注（票 03；双轴评审收口改源）：挂在正文上方，依据是单篇响应的 X-FlowDeck-Doc-Lang
+ *  头——英文请求而服务端实际回了中文（缺镜像回退）才挂。清单快照里的 noEnglish 会过期
+ *  （拉清单之后镜像才缺/补），拿它当标注源会无声错版；标注跟着每次响应走就没有这个缝。 */
+function markSkillFallback(box, servedZh) {
+  if (lang !== 'en' || !servedZh) return
+  box.insertBefore(el('div', 'fallback', t('skills.no-en')), box.firstChild)
 }
 
 function loadSkillDoc(name) {
   var box = document.getElementById('skillsDoc')
-  // 缓存键含语言：同一篇的中英两版各自留着，来回切语言不重发请求。
+  // 缓存键含语言：同一篇的中英两版各自留着，来回切语言不重发请求；缓存值带上当时的
+  // 回退事实（响应头说的），命中缓存路径的标注与网络路径同源。
   var key = lang + '|' + name
   var atLang = lang
   var cached = skillsState.cache[key]
   if (cached !== undefined) {
-    renderMarkdown(cached, box)
-    markSkillFallback(box, name)
+    renderMarkdown(cached.text, box)
+    markSkillFallback(box, cached.servedZh)
     box.scrollTop = 0
     return
   }
@@ -2269,13 +2270,14 @@ function loadSkillDoc(name) {
   box.appendChild(el('div', 'loading', t('skills.doc-loading')))
   apiFetch('/api/skills/' + encodeURIComponent(name) + skillsLangQuery(atLang), { text: true }).then(function (res) {
     if (!res.ok) throw new Error(res.errorText)
-    return res.data // text 模式：data 即文档原文
-  }).then(function (text) {
+    return res // text 模式：data 即文档原文，docLang 是服务端自报的语言
+  }).then(function (res) {
     if (atLang !== lang) return // 途中换了语言：这一版正文按旧语言取的，不落地也不渲染，下一次取按新语言重发
-    skillsState.cache[key] = text
+    var entry = { text: res.data, servedZh: atLang === 'en' && res.docLang === 'zh' }
+    skillsState.cache[key] = entry
     if (!skillsModalCtl.isOpen()) return
-    renderMarkdown(text, box)
-    markSkillFallback(box, name)
+    renderMarkdown(entry.text, box)
+    markSkillFallback(box, entry.servedZh)
     box.scrollTop = 0
   }).catch(function (e) {
     if (!skillsModalCtl.isOpen()) return
@@ -2434,11 +2436,28 @@ function openIssueModal(eff, tk) {
 var rootsModalCtl = makeModal(document.getElementById('rootsModal'))
 var lastRoots = null // 最近一次盘点结果：换语言时原位重画，不重发请求
 
-/** 总览行「链阶段」列的取词：done 走总览专列，其余与链格同用 stage.<id>.title（一处词表）。
+/** 总览行「链阶段」列的取词：done 走总览专列，其余经 stageNameById 读服务端阶段名表（一处来源）。
     认不出的阶段出空串，由调用方按落点各自兜底（单元格「无产物目录」/ aria「链阶段未知」）。 */
+/** 阶段名按 id 取（双轴评审收口）：读 /api/state 随载荷下发的 stageNames——服务端 FLOW_STAGES
+ *  单一表的直通车，链格/通知/项目总览三处共用；载荷没有这张表（旧快照）时回落查各 effort
+ *  链上的阶段对象，再认不出就原样返回 id，由调用方各自兜底。 */
+function stageNameById(id) {
+  var names = state && state.stageNames
+  for (var i = 0; names && i < names.length; i++) {
+    if (names[i].id === id) return guideText(names[i], 'title')
+  }
+  var efforts = (state && state.efforts) || []
+  for (var j = 0; j < efforts.length; j++) {
+    var stages = (efforts[j].chain && efforts[j].chain.stages) || []
+    for (var k = 0; k < stages.length; k++) {
+      if (stages[k].id === id) return guideText(stages[k], 'title')
+    }
+  }
+  return ''
+}
 function overviewStageLabel(stage) {
   if (stage === 'done') return t('ov.stage-done')
-  return t('stage.' + stage + '.title')
+  return stageNameById(stage)
 }
 
 function renderRootsRows(roots) {
