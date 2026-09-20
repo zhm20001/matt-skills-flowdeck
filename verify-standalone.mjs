@@ -12,7 +12,7 @@
  *   6. 无产物的目录/普通文件     → 不算 effort；
  *   7. 票字段解析               → Status / Type / Blocked by / 进度 全部读对；
  *   8. 流程链是纯函数           → 同一输入两次推导结果一致；
- *   9. HTTP 基础               → /api/state、/、404、端口被占自动 +1；
+ *   9. HTTP 基础               → /api/state、/、styles/ 的 CSS 白名单可服务、404、端口被占自动 +1；
  *  10. 配置                    → 缺文件用默认；config.json 的 root/pollMs 生效；
  *  11. 换目录 API              → POST /api/config 热切换并写盘；非法输入被拒且不碰配置；
  *  12. resolveRoot             → 空=当前目录、~=主目录、相对=按本目录解析；
@@ -672,9 +672,19 @@ async function runScenarios(tmp) {
     const html = await page.text()
     assert.match(html, /AI 编程流程板/)
 
+    // 运行时 CSS 集中在 styles/（ADR-0003）：白名单里点名的每个文件都能被 HTTP 服务出来
+    for (const css of ['/styles/app.css', '/styles/tokens-paper.css', '/styles/tokens-github-dark.css']) {
+      const asset = await fetch(first.url + css)
+      assert.equal(asset.status, 200, css + ' 经白名单可服务')
+      assert.match(asset.headers.get('content-type') || '', /^text\/css/, css + ' 以 text/css 服务')
+      assert.ok((await asset.text()).length > 0, css + ' 非空')
+    }
+    const offList = await fetch(first.url + '/styles/nope.css')
+    assert.equal(offList.status, 404, 'styles/ 里没点名的文件不放行（白名单而非目录服务）')
+
     const missing = await fetch(first.url + '/nope')
     assert.equal(missing.status, 404)
-    ok('HTTP：/api/state 返回完整盘点，/ 返回界面，未知路径 404')
+    ok('HTTP：/api/state 返回完整盘点，/ 返回界面，styles/ 的 CSS 经白名单可服务（未点名 404），未知路径 404')
 
     // 端口被占 → 自动 +1
     const base = first.port

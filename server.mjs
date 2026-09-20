@@ -12,7 +12,7 @@
  *
  * 路由：
  *   GET  /            界面（本目录的 index.html）
- *   GET  /tokens-*.css  界面的主题 tokens（tokens-paper / tokens-github-dark，白名单放行）
+ *   GET  /styles/*.css  界面的运行时 CSS（app.css + 各主题 tokens，白名单放行）
  *   GET  /api/state   当前追踪目录的完整盘点（JSON，含 pollMs / pollMode / host / port / tokenEnabled / configPath / recentRoots 常用目录、
  *                     stageNames 四阶段人话名表（flowchain.mjs FLOW_STAGES 的直通车，链格/通知/项目总览共用）、
  *                     每 effort 一条 git 旁证字段——最近提交或 null，~15s TTL、不随指纹走）。
@@ -71,10 +71,11 @@ const SKILLS_DOCS_DIR = nodePath.join(HERE, 'docs', 'skill-intros')
 const SKILLS_DOCS_EN_DIR = nodePath.join(HERE, 'docs', 'skill-intros-en')
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const SKILL_CATEGORY_RANK = { overview: 0, engineering: 1, productivity: 2, misc: 3, 'in-progress': 4 }
-// 界面引用的静态资源白名单：只放行本目录里点名的文件，不做通用静态服务，也就没有路径穿越。
+// 界面引用的静态资源白名单：只放行 styles/ 里点名的文件，不做通用静态服务，也就没有路径穿越。
 const STATIC_FILES = {
-  '/tokens-paper.css': [nodePath.join(HERE, 'tokens-paper.css'), 'text/css; charset=utf-8'],
-  '/tokens-github-dark.css': [nodePath.join(HERE, 'tokens-github-dark.css'), 'text/css; charset=utf-8'],
+  '/styles/app.css': [nodePath.join(HERE, 'styles', 'app.css'), 'text/css; charset=utf-8'],
+  '/styles/tokens-paper.css': [nodePath.join(HERE, 'styles', 'tokens-paper.css'), 'text/css; charset=utf-8'],
+  '/styles/tokens-github-dark.css': [nodePath.join(HERE, 'styles', 'tokens-github-dark.css'), 'text/css; charset=utf-8'],
 }
 
 const DEFAULT_CONFIG = { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '' }
