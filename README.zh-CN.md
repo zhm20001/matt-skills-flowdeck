@@ -28,13 +28,17 @@
 
 下面是中文态的三张实拍（英文态的三张在 [英文 README](README.md#screenshots)，图存 `docs/screenshots-en/`）。
 
-主视图（纸感亮色）——流程链四格、下一步指引卡、票表：
+主视图（默认冷白主题）——顶栏、流程链四格、下一步指引卡与票表：
 
-![流程板主视图 · 纸感亮色](docs/screenshots/main-view-light.png)
+![流程板主视图 · 冷白主题](docs/screenshots/main-view-white-01.png)
 
-| 暗色主题 | 全部 effort 纵览 |
-|---|---|
-| ![暗色主题](docs/screenshots/main-view-dark.png) | ![全部纵览](docs/screenshots/all-efforts.png) |
+票表尾部，与并排的地图（map.md）/ 规格（spec.md）卡片：
+
+![地图与规格卡片](docs/screenshots/main-view-white-02.png)
+
+同一块板换到 GitHub 暗主题——顶栏下拉一换即整体换肤，布局不动：
+
+![暗色主题](docs/screenshots/main-view-dark.png)
 
 ## 快速开始
 
@@ -167,8 +171,8 @@ verify 覆盖：effort 识别、四场景链状态（含后向推定与「推定
 | `index.html` | 浏览器界面（单文件、无构建；轮询间隔读 config.json，数据签名没变就不重画主区、真重画时恢复滚动位置，长文档读得下去；规格卡片 Markdown 轻渲染，「展开阅读」进全宽弹窗，票表「查看」复用同一弹窗懒加载票原文、六档 triage chip 过滤、git 旁证行；切换条尾「全部」视图一屏纵览（进行中按最近活跃在前、完工默认折叠，偏好记本浏览器）、顶栏「迷雾总数 + 前沿票数」徽标点开前沿票清单直达所属 effort；「项目」按钮开跨常用目录只读总览、点行即切；「导出快照」把最近一拍 /api/state 的原始响应体原样落下载文件（`flowdeck-snapshot-<项目名>-<本地时间>.json`，不重新序列化）；桌面通知（默认关，设置里开启即申请权限、被拒回落提示；回前台积压聚合一条、通知点击切到涉及 effort，偏好只存本浏览器）；空态页「工作约定」旁有「建骨架指令」一键复制；链格旁技能入口打开技能包弹窗定位该篇；可在线换追踪目录，地址栏带常用目录下拉；右上角「设置」弹窗集中改 pollMs/host/port/令牌，其「外观」区另调界面缩放档（小/中/大/特大，即时生效、只存本浏览器），顶栏三选下拉在冷白 / 暖纸 / GitHub 暗三套平级主题间切换（默认冷白、写死在 `<html>` 标记上，选择记忆在本浏览器，旧「亮色」偏好自动迁到冷白），「技能包」按钮弹出静态全景介绍；顶栏「中/英」按钮整页换界面语言（文案、指引词、通知、报错措辞与技能介绍一起翻，选择记在本浏览器）；业务样式只消费一层 `--fd-*` 别名） |
 | `docs/skill-intros/` | Matt 技能包全景介绍：每技能一篇中文提炼（frontmatter 供 `/api/skills` 出清单），README 是总览；网页弹窗的静态素材，也是清单骨架（有哪些篇、分类、顺序）的唯一真相 |
 | `docs/skill-intros-en/` | 上述介绍的英文镜像：篇名一一对应，只译标题/简介/正文，`/api/skills*` 带 `?lang=en` 时读它 |
-| `docs/screenshots/` | 本 README 用的中文态演示截图（亮色 / 暗色 / 全部纵览） |
-| `docs/screenshots-en/` | 英文 README 用的英文态演示截图（同三张视角、同 1440×900） |
+| `docs/screenshots/` | 本 README 用的中文态演示截图（冷白主视图两张 + 暗色一张，1631×832） |
+| `docs/screenshots-en/` | 英文 README 用的英文态演示截图（同三张视角、同 1631×832） |
 | `verify-standalone.mjs` | 独立验证脚本 |
 
 ## 现在没做的（有意留白）

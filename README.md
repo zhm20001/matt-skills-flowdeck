@@ -27,13 +27,17 @@ The board **scales with the viewport**: on a wide screen the type size, the spac
 
 All three are the English UI, running against this repository's own `.scratch/`.
 
-Main view (light, paper theme) — the four-stage chain, the next-step prompt card, and the ticket table:
+Main view, cold-white default theme — the top bar, the four-stage chain, the next-step prompt card and the ticket table:
 
-![flowdeck main view, light paper theme, English UI](docs/screenshots-en/main-view-light.png)
+![flowdeck main view, cold white theme, English UI](docs/screenshots-en/main-view-white-01.png)
 
-| Dark theme | All-efforts overview |
-|---|---|
-| ![flowdeck dark theme, English UI](docs/screenshots-en/main-view-dark.png) | ![all-efforts overview, English UI](docs/screenshots-en/all-efforts.png) |
+The ticket table's tail, with the map and spec cards side by side:
+
+![flowdeck map and spec cards, English UI](docs/screenshots-en/main-view-white-02.png)
+
+The same board in the GitHub-dark theme — one top-bar dropdown switch, layout untouched:
+
+![flowdeck dark theme, English UI](docs/screenshots-en/main-view-dark.png)
 
 Ticket titles inside the shots are still Chinese: those are the tracked artifacts' own text, which the board displays verbatim in any language.
 
@@ -169,8 +173,8 @@ Push-verified: `.github/workflows/ci.yml` runs `npm run lint` + `npm run verify`
 | `index.html` | the browser UI (single file, no build; polls at the config interval, skips repainting when the data signature is unchanged and restores scroll when it does; light spec rendering with an expand-to-modal reader reused for ticket bodies; six-way triage chip filter and the git sidecar row; an "all" overview across efforts (in-progress by recency, done collapsed by default, preferences per browser); fog+frontier badges with a jump panel; a cross-root projects overview; snapshot export; opt-in desktop notifications; empty-state one-click starters; per-stage skill shortcuts; root switching with the recent-roots dropdown; a settings modal for pollMs/host/port/token (plus an Appearance section holding the UI-scale step — small/medium/large/extra-large, applied instantly, browser-local); a top-bar dropdown switching between the three peer themes — cold white (the default, hard-coded on the `<html>` markup), warm paper and GitHub dark — remembered per browser, with the legacy "light" preference migrated to cold; a top-bar 中/英 button switches the whole shell — copy, guide words, notifications, error wording and the skills catalog — with the choice remembered per browser; business styles consume only one layer of `--fd-*` aliases) |
 | `docs/skill-intros/` | the skills catalog: one Chinese write-up per skill (frontmatter feeds `/api/skills`), README is the overview; static material for the UI modal, and the single source of the catalog's shape (which docs, category, order) |
 | `docs/skill-intros-en/` | English mirror of the catalog: same file names, only title/summary/body translated, served when `/api/skills*` gets `?lang=en` |
-| `docs/screenshots/` | Chinese-UI demo screenshots used by README.zh-CN.md (light / dark / all-efforts overview) |
-| `docs/screenshots-en/` | English-UI demo screenshots used by this README (same three views, same 1440×900) |
+| `docs/screenshots/` | Chinese-UI demo screenshots used by README.zh-CN.md (two cold-white main-view shots + one dark, 1631×832) |
+| `docs/screenshots-en/` | English-UI demo screenshots used by this README (same three views, same 1631×832) |
 | `verify-standalone.mjs` | the standalone verification script |
 
 ## Deliberately out of scope
