@@ -58,6 +58,10 @@
  *  31. 流式缩放基座（ui-appearance 03）→ 根字号 = --fluid-base × --ui-scale 的接线在案、主容器
  *                                clamp(1080px, 92vw, 1600px)、字号与间距声明零 px（rem 化）、
  *                                组件定宽/圆角留 px；像素尺寸不断言（jsdom 无布局能力）。
+ *  32. 界面缩放档（ui-appearance 04）→ 四档倍率只住在 CSS（sm/md/lg/xl = 0.9/1/1.125/1.25），与设置
+ *                                「外观」区的 <option> 值域同集；head 防闪读数排在样式表之前；jsdom 里
+ *                                切档落对 data-ui-scale 并写 flowdeck-ui-scale、缺省不写属性即中档、
+ *                                重开尊重记忆、野值回落中档。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -3180,7 +3184,7 @@ async function runScenarios(tmp) {
       await new Promise((r) => themeServer.server.close(r))
     }
     // 界面级钉（jsdom）：下拉切换落对 data-theme 并写 flowdeck-theme；重开尊重记忆；legacy 'light' 迁移到冷白
-    function themeDom(port, stored) {
+    function themeDom(port, stored, storedScale) {
       const errs = []
       const vcT = new VirtualConsole()
       vcT.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
@@ -3191,9 +3195,10 @@ async function runScenarios(tmp) {
         virtualConsole: vcT,
         beforeParse(window) {
           if (stored) window.localStorage.setItem('flowdeck-theme', stored)
+          if (storedScale) window.localStorage.setItem('flowdeck-ui-scale', storedScale)
           window.fetch = fetchRouter([
             ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })],
-          ], '主题用例不该请求别的接口')
+          ], '主题/缩放用例不该请求别的接口')
         },
       })
       return { d, errs }
@@ -3229,6 +3234,54 @@ async function runScenarios(tmp) {
       c.d.window.close()
     }
     ok('三主题（jsdom + 文件级）：冷白默认住在标记上、顶栏三选下拉切换落对 data-theme 并写 flowdeck-theme、重开尊重记忆、legacy「light」迁移到冷白；三套 token 字面平级、语义槽位对齐、冷白保留自身朱红且经白名单可服务')
+
+    // ── 界面缩放档（ui-appearance 票 04）：倍率数值只住 CSS，控件只设标记属性 + 记本浏览器偏好 ──
+    // 文件级钉：档位值域两处必须同集——CSS 多一档是「有倍率没入口」，<option> 多一档是「选了没倍率」
+    const scaleCss = await fs.readFile(nodePath.join(HERE, 'styles', 'app.css'), 'utf8')
+    const cssTiers = [...scaleCss.matchAll(/:root\[data-ui-scale="(\w+)"\] \{ --ui-scale: ([\d.]+); \}/g)]
+      .map((m) => [m[1], m[2]])
+    assert.deepEqual(cssTiers, [['sm', '0.9'], ['md', '1'], ['lg', '1.125'], ['xl', '1.25']], '四档倍率住在 CSS（JS 不碰数值）')
+    const scaleBox = deckHtml.match(/<select id="setScale">([\s\S]*?)<\/select>/)
+    assert.ok(scaleBox, '设置弹窗「外观」区有缩放控件')
+    assert.deepEqual([...scaleBox[1].matchAll(/value="(\w+)"/g)].map((m) => m[1]), cssTiers.map(([k]) => k), '档位值域 CSS 与控件同集')
+    assert.ok(deckHtml.indexOf("'flowdeck-ui-scale'") < deckHtml.indexOf('<link rel="stylesheet" href="styles/app.css">'),
+      'head 防闪脚本读档排在样式表之前（先定档再绘制）')
+    // 界面级钉（jsdom）：切档落对 data-ui-scale 并写 flowdeck-ui-scale；缺省不写属性即中档；重开尊重记忆；野值回落中档
+    const scaleAttr = (c) => c.d.window.document.documentElement.getAttribute('data-ui-scale')
+    const scaleValue = (c) => c.d.window.document.getElementById('setScale').value
+    const pickScale = (c, v) => {
+      const sel = c.d.window.document.getElementById('setScale')
+      sel.value = v
+      sel.dispatchEvent(new c.d.window.Event('change'))
+    }
+    const untouched = themeDom(39356, null, null)
+    await settle()
+    assert.equal(scaleAttr(untouched), null, '没记过偏好 → 不写属性（CSS 缺省 --ui-scale: 1 即中档）')
+    assert.equal(scaleValue(untouched), 'md', '控件选中态落中档')
+    pickScale(untouched, 'xl')
+    assert.equal(scaleAttr(untouched), 'xl', '选特大 → data-ui-scale 即时落值')
+    assert.equal(untouched.d.window.localStorage.getItem('flowdeck-ui-scale'), 'xl', '选择写进 flowdeck-ui-scale')
+    pickScale(untouched, 'sm')
+    assert.equal(scaleAttr(untouched), 'sm', '再选小档即换，不是一次性控件')
+    assert.equal(untouched.d.window.localStorage.getItem('flowdeck-ui-scale'), 'sm')
+    assert.deepEqual(untouched.errs, [])
+    untouched.d.window.close()
+    for (let i = 0; i < cssTiers.length; i++) {
+      const [tier] = cssTiers[i]
+      const c = themeDom(39357 + i, null, tier)
+      await settle()
+      assert.equal(scaleAttr(c), tier, '记过 ' + tier + ' → 绘制前就设好 data-ui-scale')
+      assert.equal(scaleValue(c), tier, '控件选中态随记忆')
+      assert.deepEqual(c.errs, [])
+      c.d.window.close()
+    }
+    const junkScale = themeDom(39361, null, 'huge')
+    await settle()
+    assert.equal(scaleAttr(junkScale), null, '认不出的档位不写属性')
+    assert.equal(scaleValue(junkScale), 'md', '野值落回中档（跟主题一样不猜用户想要什么）')
+    assert.deepEqual(junkScale.errs, [])
+    junkScale.d.window.close()
+    ok('界面缩放档（jsdom + 文件级）：四档倍率只住 CSS 且与「外观」区控件值域同集、切档即时落 data-ui-scale 并写 flowdeck-ui-scale、缺省不写属性即中档、重开绘制前定档、野值回落中档')
 
     // ── 阶段名单一来源（双轴评审收口）：界面词表不再抄四阶段名/副题，取词全走载荷下发列 ──
     assert.deepEqual(

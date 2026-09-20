@@ -5,13 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI 编程流程板</title>
 <script>
-/* 主题在首帧前定好：标记上的 data-theme="cold"（styles/tokens-cold.css）是无 JS 也命中的默认，
-   记忆过主题则绘制前覆写；旧二态 'light' 迁移到 cold（视为无明确偏好、落新默认），'dark' 保留。 */
+/* 外观两键在首帧前定好（主题 + 缩放档），免得绘制完再换一屏闪动。
+   主题：标记上的 data-theme="cold"（styles/tokens-cold.css）是无 JS 也命中的默认，
+   记忆过主题则绘制前覆写；旧二态 'light' 迁移到 cold（视为无明确偏好、落新默认），'dark' 保留。
+   缩放档：不写属性即中档（styles/app.css 里 --ui-scale 缺省 1），所以无 JS/无存储天然落默认。
+   两个 try 各自独立——一个键读崩不连带另一个。 */
 (function () {
   try {
     var v = localStorage.getItem('flowdeck-theme')
     if (v === 'light') v = 'cold'
     if (v === 'cold' || v === 'paper' || v === 'dark') document.documentElement.setAttribute('data-theme', v)
+  } catch (e) {}
+  try {
+    var s = localStorage.getItem('flowdeck-ui-scale')
+    if (s === 'sm' || s === 'md' || s === 'lg' || s === 'xl') document.documentElement.setAttribute('data-ui-scale', s)
   } catch (e) {}
 })()
 </script>
@@ -134,6 +141,17 @@
           <label data-i18n="set.config.label">配置文件</label>
           <div class="hint" id="setConfigPath"></div>
         </div>
+        <div class="fcat" data-i18n="settings.appearance">外观</div>
+        <div class="frow">
+          <label for="setScale" data-i18n="settings.uiScale">界面缩放</label>
+          <select id="setScale">
+            <option value="sm" data-i18n="scale.sm">小</option>
+            <option value="md" data-i18n="scale.md">中</option>
+            <option value="lg" data-i18n="scale.lg">大</option>
+            <option value="xl" data-i18n="scale.xl">特大</option>
+          </select>
+          <div class="hint" data-i18n="settings.uiScale.hint">小 / 中 / 大 / 特大四档，字号与间距一起整体缩放，切换即时生效。默认「中」，即改造前的尺寸；偏好只存本浏览器，不进 config.json。</div>
+        </div>
         <div class="factions">
           <button id="settingsSave" class="primary" data-i18n="set.save.label">保存</button>
           <span class="hint" id="setSaveHint"></span>
@@ -189,6 +207,7 @@ var lastEtag = ''       // 最近一次 /api/state 200 响应的 ETag：下一�
 var renderSig = ''      // 最近一次主区渲染的数据签名：轮询数据没变就不重画（不打扰阅读与滚动）
 var lastSnapshot = ''   // 最近一次 /api/state 200 响应的原始响应体：导出快照的源（原样落盘，不重新序列化）
 var THEME_KEY = 'flowdeck-theme'
+var SCALE_KEY = 'flowdeck-ui-scale'   // 界面缩放档 sm/md/lg/xl，缺省 md（head 防闪脚本同名同值域）
 var TOKEN_KEY = 'flowdeck-token'
 var apiToken = ''
 
@@ -293,6 +312,13 @@ var UI_TEXT = {
   'set.config.label': { zh: '配置文件', en: 'Config file' },
   'set.config.path': { zh: '{path}（也可手改，下一拍生效）', en: '{path} (hand-editing works too, next scan picks it up)' },
   'set.config.unknown': { zh: '（未知）', en: '(unknown)' },
+  'settings.appearance': { zh: '外观', en: 'Appearance' },
+  'settings.uiScale': { zh: '界面缩放', en: 'UI scale' },
+  'settings.uiScale.hint': { zh: '小 / 中 / 大 / 特大四档，字号与间距/留白一起整体缩放，切换即时生效。默认「中」，即改造前的尺寸；偏好只存本浏览器，不进 config.json。', en: 'Four steps — small / medium / large / extra-large — growing type size and spacing together, applied on the spot. Medium (the default) is the pre-refactor size; the choice lives in this browser only, never in config.json.' },
+  'scale.sm': { zh: '小', en: 'Small' },
+  'scale.md': { zh: '中', en: 'Medium' },
+  'scale.lg': { zh: '大', en: 'Large' },
+  'scale.xl': { zh: '特大', en: 'Extra large' },
   'set.save.label': { zh: '保存', en: 'Save' },
   'set.field.pollMs': { zh: '轮询间隔', en: 'poll interval' },
   'set.field.pollMode': { zh: '轮询模式', en: 'poll mode' },
@@ -1670,6 +1696,24 @@ document.getElementById('themeSelect').addEventListener('change', function () {
   try { localStorage.setItem(THEME_KEY, v) } catch (e) {}
 })
 applyThemeSelect()
+
+/* 界面缩放档（ui-appearance 票 04）：与主题同构——倍率数值住在 styles/app.css 的
+   :root[data-ui-scale=<档>]，JS 只设 <html> 标记属性并记本浏览器偏好；不写属性即中档
+   （--ui-scale 缺省 1）。即时生效，不进设置弹窗的保存补丁：那格只写 config.json，缩放只属于本浏览器。 */
+function currentUiScale() {
+  var v = document.documentElement.getAttribute('data-ui-scale')
+  return (v === 'sm' || v === 'lg' || v === 'xl') ? v : 'md'
+}
+function applyScaleSelect() {
+  document.getElementById('setScale').value = currentUiScale()
+}
+document.getElementById('setScale').addEventListener('change', function () {
+  var v = this.value
+  if (v !== 'sm' && v !== 'lg' && v !== 'xl') v = 'md'
+  document.documentElement.setAttribute('data-ui-scale', v)
+  try { localStorage.setItem(SCALE_KEY, v) } catch (e) {}
+})
+applyScaleSelect()
 
 function applyLangButton() {
   var b = document.getElementById('langBtn')

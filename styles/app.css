@@ -54,6 +54,13 @@
   }
   html { font-size: calc(var(--fluid-base) * var(--ui-scale)); }
 
+  /* 缩放档：`<html data-ui-scale>` 覆写倍率，与 data-theme 同构——倍率数值只住在这里，
+     JS 与设置弹窗只负责设属性/记忆（键 flowdeck-ui-scale，缺省 md 即不写属性）。 */
+  :root[data-ui-scale="sm"] { --ui-scale: 0.9; }
+  :root[data-ui-scale="md"] { --ui-scale: 1; }
+  :root[data-ui-scale="lg"] { --ui-scale: 1.125; }
+  :root[data-ui-scale="xl"] { --ui-scale: 1.25; }
+
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--fd-desk); color: var(--fd-ink-body); font: 1.4rem/1.6 var(--fd-font-sans); }
   /* 信纸：整块纸面放在深一号的桌面上。
@@ -254,13 +261,18 @@
   }
 
   /* ── 设置弹窗：窄盒表单（label 列 + 控件列，说明占控件列第二行） ── */
-  .modal .box.settings-box { width: 560px; height: auto; }
-  .frow { display: grid; grid-template-columns: 140px 1fr; gap: 0.3rem 1.2rem; align-items: center; padding: 0.9rem 0; border-bottom: 1px solid var(--fd-rule-soft); }
+  /* 设置盒随内容长，但封顶在视口内：不封顶时行高一多（特大档 + 外观区）「保存」就被顶到屏幕外，
+     而 .modal article 本就有 overflow:auto —— 上限一到即变内部滚动，按钮永远够得着 */
+  .modal .box.settings-box { width: 560px; height: auto; max-height: min(86vh, 720px); }
+  /* 标签列宽走 rem 而非 px：这一列的存在只为装住标签文字，特大档下钉死 140px 会把中文标签挤成两行 */
+  .frow { display: grid; grid-template-columns: 14rem 1fr; gap: 0.3rem 1.2rem; align-items: center; padding: 0.9rem 0; border-bottom: 1px solid var(--fd-rule-soft); }
   .frow label { color: var(--fd-ink-muted); font-size: 1.25rem; text-align: right; }
   .frow input { width: 100%; }
   .frow input[type="checkbox"] { width: auto; justify-self: start; }
   .frow .hint { grid-column: 2; color: var(--fd-ink-muted); font-size: 1.2rem; }
   .factions { display: flex; align-items: center; gap: 1.2rem; padding: 1.4rem 0 0; }
   .factions .hint { color: var(--fd-bad); font-size: 1.2rem; }
+  /* 设置弹窗分区标题：与技能侧栏 .cat 同一字号档，上方一道分隔线收住上一组 */
+  .fcat { margin: 1.8rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--fd-rule); color: var(--fd-ink-muted); font-size: 1.1rem; font-weight: 600; letter-spacing: 0.04em; }
 
   footer { margin-top: 2.4rem; color: var(--fd-ink-muted); font-size: 1.2rem; text-align: center; }
