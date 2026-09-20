@@ -52,6 +52,9 @@
  *  29. 静态壳取词通道（票 04）   → markup 的 data-i18n* 键都在词表里、三条属性通道的中文默认态与词表
  *                                逐字一致；英文态四条通道都取得到词且取的是英文列（空白页面骗得过
  *                                「零中文残留」，骗不过这一组）。
+ *  30. 三主题并列（ui-appearance 02）→ 冷白默认住在标记上；顶栏三选下拉切换落对 data-theme 并写
+ *                                flowdeck-theme；重开尊重记忆；legacy 'light' 迁移到冷白；三套 token
+ *                                字面平级（无 :root 基底）、语义槽位对齐；冷白经白名单可服务。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -3118,6 +3121,87 @@ async function runScenarios(tmp) {
     keepEn.d.window.close()
     keepZh.d.window.close()
     ok('语言持久化（jsdom）：语言偏好存浏览器侧、优先于浏览器语言，重开页面保持所选')
+
+    // ── 三主题并列（ui-appearance 票 02）：默认冷白住在标记上，顶栏三选下拉，legacy 迁移，白名单可服务 ──
+    // 文件级钉：三套 token 字面平级（各自 :root[data-theme=<名>]，无充当无条件 base 的主题），
+    // 冷白保留自身色值（朱红 #b1413e，不对齐暖纸的 #b0413e）
+    assert.match(deckHtml, /<html[^>]*data-theme="cold"/, '默认冷白是静态标记属性（无 JS / 存储抛错也命中）')
+    const coldCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-cold.css'), 'utf8')
+    const paperCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-paper.css'), 'utf8')
+    const darkCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-github-dark.css'), 'utf8')
+    assert.match(coldCss, /:root\[data-theme="cold"\] \{/)
+    assert.match(paperCss, /:root\[data-theme="paper"\] \{/)
+    assert.match(darkCss, /:root\[data-theme="dark"\] \{/)
+    assert.ok(!/^:root \{/m.test(coldCss) && !/^:root \{/m.test(paperCss) && !/^:root \{/m.test(darkCss), '没有任何主题充当无条件 :root 基底')
+    assert.match(coldCss, /--accent: #b1413e/, '冷白保留自身朱红（不对齐暖纸）')
+    assert.match(paperCss, /--accent: #b0413e/)
+    // 语义一一对齐：冷白与暖纸定义的 token 名完全同集，暗色是其超集（多出的全是 GitHub 专属槽位，业务侧 var(name, 回落) 消费）
+    const tokenNames = (css) => [...css.matchAll(/^\s+(--[\w-]+):/gm)].map((m) => m[1]).sort()
+    assert.deepEqual(tokenNames(coldCss), tokenNames(paperCss), '冷白与暖纸的 token 名同集（光源语义对齐）')
+    assert.deepEqual(
+      tokenNames(darkCss).filter((n) => !tokenNames(coldCss).includes(n)),
+      ['--btn-primary', '--btn-primary-hover', '--fog-ink', '--key-ink', '--mark-bg', '--mark-ink'],
+      '暗色只多出 GitHub 专属槽位')
+    // 冷白 token 经白名单可被 HTTP 服务
+    const themeServer = await startServer({ root: tmp, port: 0 })
+    try {
+      const coldRes = await fetch(themeServer.url + '/styles/tokens-cold.css')
+      assert.equal(coldRes.status, 200, 'tokens-cold.css 经白名单可服务')
+      assert.match(coldRes.headers.get('content-type') || '', /^text\/css/)
+      assert.match(await coldRes.text(), /:root\[data-theme="cold"\]/)
+    } finally {
+      await new Promise((r) => themeServer.server.close(r))
+    }
+    // 界面级钉（jsdom）：下拉切换落对 data-theme 并写 flowdeck-theme；重开尊重记忆；legacy 'light' 迁移到冷白
+    function themeDom(port, stored) {
+      const errs = []
+      const vcT = new VirtualConsole()
+      vcT.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
+      const d = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:' + port + '/',
+        pretendToBeVisual: true,
+        virtualConsole: vcT,
+        beforeParse(window) {
+          if (stored) window.localStorage.setItem('flowdeck-theme', stored)
+          window.fetch = fetchRouter([
+            ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(statePayload)) })],
+          ], '主题用例不该请求别的接口')
+        },
+      })
+      return { d, errs }
+    }
+    const pickTheme = (c, v) => {
+      const sel = c.d.window.document.getElementById('themeSelect')
+      sel.value = v
+      sel.dispatchEvent(new c.d.window.Event('change'))
+    }
+    const themeAttr = (c) => c.d.window.document.documentElement.getAttribute('data-theme')
+    const plain = themeDom(39351, null)
+    await settle()
+    assert.equal(themeAttr(plain), 'cold', '没记过偏好 → 冷白（标记默认）')
+    assert.equal(plain.d.window.document.getElementById('themeSelect').value, 'cold', '下拉选中态与标记一致')
+    pickTheme(plain, 'paper')
+    assert.equal(themeAttr(plain), 'paper', '切暖纸即时生效')
+    assert.equal(plain.d.window.localStorage.getItem('flowdeck-theme'), 'paper', '选择写进 flowdeck-theme')
+    pickTheme(plain, 'dark')
+    assert.equal(themeAttr(plain), 'dark', '切 GitHub 暗即时生效')
+    pickTheme(plain, 'cold')
+    assert.equal(themeAttr(plain), 'cold', '切回冷白即时生效')
+    assert.equal(plain.d.window.localStorage.getItem('flowdeck-theme'), 'cold')
+    assert.deepEqual(plain.errs, [])
+    plain.d.window.close()
+    const legacyCases = [['dark', 'dark'], ['paper', 'paper'], ['cold', 'cold'], ['light', 'cold']]
+    for (let i = 0; i < legacyCases.length; i++) {
+      const [stored, want] = legacyCases[i]
+      const c = themeDom(39352 + i, stored)
+      await settle()
+      assert.equal(themeAttr(c), want, '记过 ' + stored + ' → 重开仍是 ' + want + (stored === 'light' ? '（legacy 亮色迁移到冷白）' : ''))
+      assert.equal(c.d.window.document.getElementById('themeSelect').value, want, '下拉选中态随记忆/迁移')
+      assert.deepEqual(c.errs, [])
+      c.d.window.close()
+    }
+    ok('三主题（jsdom + 文件级）：冷白默认住在标记上、顶栏三选下拉切换落对 data-theme 并写 flowdeck-theme、重开尊重记忆、legacy「light」迁移到冷白；三套 token 字面平级、语义槽位对齐、冷白保留自身朱红且经白名单可服务')
 
     // ── 阶段名单一来源（双轴评审收口）：界面词表不再抄四阶段名/副题，取词全走载荷下发列 ──
     assert.deepEqual(

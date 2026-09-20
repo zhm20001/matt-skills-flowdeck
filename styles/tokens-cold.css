@@ -1,0 +1,36 @@
+/* tokens-cold.css —— 机器生成 by derive.mjs（2026-09-16）· 勿手改
+ * 候选: 冷白纸 · 冷白 × 纯碳墨 × 朱红
+ * 锚点: paper {"H":250,"C":0.006,"L":0.998} · ink {"H":250,"C0":0,"Cmuted":0.006} · accent {"H":25,"C":0.146}
+ * 重新生成: 改 palettes.mjs → node derive.mjs
+ * 晋升: 定稿后拷贝本文件内容为权威 assets/tokens-cold.css（并扩展 sync-tokens.mjs）
+ */
+:root[data-theme="cold"] {
+  --paper: #fefeff;
+  --desk: #f0f4f8;
+  --card-bg: #fbfdff;
+  --card-hover-bg: #fdfeff;
+  --ink: #1a1a1a;
+  --ink-body: #393a3b;
+  --ink-muted: #676a6d;
+  --accent: #b1413e;
+  --accent-hover: #963633;
+  --accent-ink: #ffffff;
+  --accent-soft: #faf2f1;
+  --ok: #2b6d3d;
+  --ok-soft: #f0f5f1;
+  --bad: #a03230;
+  --bad-soft: #faf2f1;
+  --rule: #cfd5db;
+  --rule-soft: #dfe4e9;
+  --chip-bg: #eef2f7;
+  --chip-hover-bg: #e5e9ee;
+  --code-bg: #eff3f7;
+  --shadow-float: 0 24px 60px rgba(26, 26, 26, 0.22), 0 2px 8px rgba(26, 26, 26, 0.08);
+  --shadow-card: 0 10px 28px rgba(26, 26, 26, 0.12);
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", Georgia, serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius-sm: 6px;
+  --radius-btn: 8px;
+  --radius: 10px;
+}

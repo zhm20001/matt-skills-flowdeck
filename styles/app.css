@@ -1,5 +1,10 @@
-  /* ── 消费层：tokens 只经这一层 --fd-* 别名进入业务样式（tokens 规则 2）──
-     业务样式零裸值；暗色专属槽位用 var(名字, 纸感回落) 消费。 */
+  /* ── 消费层：tokens 只经这一层 --fd-* 别名进入业务样式 ──
+   token 纪律（违反即坏味道，统一声明在此，ADR-0002）：
+     1. 任何裸十六进制色值 / 字体栈，只允许出现在 styles/tokens-*.css；
+     2. 业务样式只消费本块的一层 --fd-* 别名，不得写裸值、也不得直引源 token 名；
+     3. 新主题 = 另建 styles/tokens-<名>.css（三套平级，各自 :root[data-theme=<名>]，
+        同名 token 同序对齐）+ server.mjs 白名单放行一行 + 顶栏下拉加一项。
+   暗色专属槽位用 var(名字, 亮色回落) 消费，切主题无控件失配色。 */
   :root {
     color-scheme: light;
     --fd-desk: var(--desk);
@@ -27,7 +32,7 @@
     --fd-radius: var(--radius);
     --fd-shadow-card: var(--shadow-card);
     --fd-shadow-float: var(--shadow-float);
-    /* 暗色专属槽位（tokens-github-dark.css 定义），亮色回落到纸感 token */
+    /* 暗色专属槽位（tokens-github-dark.css 定义），冷白/暖纸回落到各自同名 token */
     --fd-tab-on-bg: var(--mark-bg, var(--ink));
     --fd-tab-on-ink: var(--mark-ink, var(--paper));
     --fd-progress: var(--mark-bg, var(--accent));

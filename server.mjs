@@ -74,6 +74,7 @@ const SKILL_CATEGORY_RANK = { overview: 0, engineering: 1, productivity: 2, misc
 // 界面引用的静态资源白名单：只放行 styles/ 里点名的文件，不做通用静态服务，也就没有路径穿越。
 const STATIC_FILES = {
   '/styles/app.css': [nodePath.join(HERE, 'styles', 'app.css'), 'text/css; charset=utf-8'],
+  '/styles/tokens-cold.css': [nodePath.join(HERE, 'styles', 'tokens-cold.css'), 'text/css; charset=utf-8'],
   '/styles/tokens-paper.css': [nodePath.join(HERE, 'styles', 'tokens-paper.css'), 'text/css; charset=utf-8'],
   '/styles/tokens-github-dark.css': [nodePath.join(HERE, 'styles', 'tokens-github-dark.css'), 'text/css; charset=utf-8'],
 }

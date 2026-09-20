@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="cold">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI 编程流程板</title>
 <script>
-/* 主题在首帧前定好：默认纸感（tokens-paper.css），记忆过暗色则挂 data-theme 切到 GitHub 暗色。 */
+/* 主题在首帧前定好：标记上的 data-theme="cold"（styles/tokens-cold.css）是无 JS 也命中的默认，
+   记忆过主题则绘制前覆写；旧二态 'light' 迁移到 cold（视为无明确偏好、落新默认），'dark' 保留。 */
 (function () {
-  try { if (localStorage.getItem('flowdeck-theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark') } catch (e) {}
+  try {
+    var v = localStorage.getItem('flowdeck-theme')
+    if (v === 'light') v = 'cold'
+    if (v === 'cold' || v === 'paper' || v === 'dark') document.documentElement.setAttribute('data-theme', v)
+  } catch (e) {}
 })()
 </script>
+<link rel="stylesheet" href="styles/tokens-cold.css">
 <link rel="stylesheet" href="styles/tokens-paper.css">
 <link rel="stylesheet" href="styles/tokens-github-dark.css">
 <link rel="stylesheet" href="styles/app.css">
@@ -37,7 +43,11 @@
       <div id="rootMenu" class="menu" hidden></div>
     </div>
       <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
-      <button id="themeBtn" data-i18n-title="theme.btn.title" title="在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）">🌙 暗色</button>
+      <select id="themeSelect" data-i18n-aria="theme.label" data-i18n-title="theme.select.title" aria-label="主题" title="在冷白、暖纸与 GitHub 暗三套主题之间切换（记忆在本浏览器里）">
+        <option value="cold" data-i18n="theme.cold">冷白</option>
+        <option value="paper" data-i18n="theme.paper">暖纸</option>
+        <option value="dark" data-i18n="theme.dark">GitHub 暗</option>
+      </select>
       <button id="langBtn" data-i18n-title="lang.btn.title" title="切换界面语言为英文（记忆在本浏览器里）">EN</button>
       <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
       <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
@@ -226,9 +236,11 @@ var UI_TEXT = {
   'rootmenu.btn.aria': { zh: '展开常用目录下拉', en: 'Open the recent directories menu' },
   'roots.btn.label': { zh: '项目', en: 'Projects' },
   'roots.btn.title': { zh: '项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）', en: 'Project overview: every recent directory scanned read-only (chain stage, ticket counts, fog on one screen; click a row to switch)' },
-  'theme.btn.title': { zh: '在纸感亮色与 GitHub 暗色之间切换（记忆在本浏览器里）', en: 'Switch between paper light and GitHub dark (remembered in this browser)' },
-  'theme.btn.dark': { zh: '🌙 暗色', en: '🌙 Dark' },
-  'theme.btn.light': { zh: '☀️ 纸面', en: '☀️ Paper' },
+  'theme.label': { zh: '主题', en: 'Theme' },
+  'theme.select.title': { zh: '在冷白、暖纸与 GitHub 暗三套主题之间切换（记忆在本浏览器里）', en: 'Switch between the cold white, warm paper and GitHub dark themes (remembered in this browser)' },
+  'theme.cold': { zh: '冷白', en: 'Cold white' },
+  'theme.paper': { zh: '暖纸', en: 'Warm paper' },
+  'theme.dark': { zh: 'GitHub 暗', en: 'GitHub dark' },
   'switch.btn.label': { zh: '换目录', en: 'Switch' },
   'switch.btn.title': { zh: '切换追踪目录：立即生效并写进 config.json', en: 'Switch the tracked directory: takes effect at once and is written to config.json' },
   'refresh.btn.label': { zh: '立即刷新', en: 'Refresh' },
@@ -1641,19 +1653,23 @@ document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Escape' && frontierState.open) closeFrontierPanel()
 })
 
-/* 主题：纸感亮色 ⇄ GitHub 暗色，选择记忆在 localStorage */
-function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark' }
-function applyThemeButton() {
-  document.getElementById('themeBtn').textContent = t(isDark() ? 'theme.btn.light' : 'theme.btn.dark')
+/* 主题：冷白 / 暖纸 / GitHub 暗三选下拉（三套平级，ADR-0002），选择记忆在 localStorage。
+   CSS 拥有全部色值（tokens-*.css 各自 :root[data-theme=<名>]），JS 只设 <html> 上的标记属性；
+   标记缺省即冷白（markup 静态写死），旧二态 'light' 读出时迁移成 cold。 */
+function currentTheme() {
+  var v = document.documentElement.getAttribute('data-theme')
+  return (v === 'paper' || v === 'dark') ? v : 'cold'
 }
-document.getElementById('themeBtn').addEventListener('click', function () {
-  var next = isDark() ? 'light' : 'dark'
-  if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
-  else document.documentElement.removeAttribute('data-theme')
-  try { localStorage.setItem(THEME_KEY, next) } catch (e) {}
-  applyThemeButton()
+function applyThemeSelect() {
+  document.getElementById('themeSelect').value = currentTheme()
+}
+document.getElementById('themeSelect').addEventListener('change', function () {
+  var v = this.value
+  if (v !== 'cold' && v !== 'paper' && v !== 'dark') v = 'cold'
+  document.documentElement.setAttribute('data-theme', v)
+  try { localStorage.setItem(THEME_KEY, v) } catch (e) {}
 })
-applyThemeButton()
+applyThemeSelect()
 
 function applyLangButton() {
   var b = document.getElementById('langBtn')
@@ -1669,7 +1685,7 @@ function applyLangButton() {
 function applyLang() {
   applyStaticCopy()
   applyLangButton()
-  applyThemeButton()
+  applyThemeSelect()
   render()
   renderMeta(!!lastOk)
   applyPollModeUI()
