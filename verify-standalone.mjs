@@ -55,6 +55,9 @@
  *  30. 三主题并列（ui-appearance 02）→ 冷白默认住在标记上；顶栏三选下拉切换落对 data-theme 并写
  *                                flowdeck-theme；重开尊重记忆；legacy 'light' 迁移到冷白；三套 token
  *                                字面平级（无 :root 基底）、语义槽位对齐；冷白经白名单可服务。
+ *  31. 流式缩放基座（ui-appearance 03）→ 根字号 = --fluid-base × --ui-scale 的接线在案、主容器
+ *                                clamp(1080px, 92vw, 1600px)、字号与间距声明零 px（rem 化）、
+ *                                组件定宽/圆角留 px；像素尺寸不断言（jsdom 无布局能力）。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -555,6 +558,30 @@ async function runScenarios(tmp) {
   assert.deepEqual(dangling, [], 'markup 每个 data-i18n* 键都在词表里（悬空即空白，零残留扫不出来）')
   assert.deepEqual(drifted, [], '写死的中文默认态与词表中文列逐字一致（中文态字节不变这条硬约束的静态壳侧）')
   ok('静态壳取词绑定（文件级）：data-i18n* 键不悬空，title/placeholder/aria 三通道的 markup 中文默认态与词表中文列逐字一致')
+
+  // ── 流式缩放基座（ui-appearance 票 03）：jsdom 无布局能力，本组只钉「接线存在」，不断言像素尺寸 ──
+  const appCss = await fs.readFile(nodePath.join(HERE, 'styles', 'app.css'), 'utf8')
+  assert.match(appCss, /--fluid-base:\s*clamp\(10px, 0\.5vw \+ 4\.6px, 11\.5px\)/, '流式基值声明在案（≤1080 视口落 10px 下限）')
+  assert.match(appCss, /--ui-scale:\s*1;/, '缩放档倍率缺省 1（中档 = 与改造前一致）')
+  assert.match(appCss, /html\s*\{\s*font-size:\s*calc\(var\(--fluid-base\) \* var\(--ui-scale\)\)/, '根字号 = 流式基值 × 缩放档（一个乘法管整个界面）')
+  assert.match(appCss, /\.wrap\s*\{[^}]*max-width:\s*clamp\(1080px, 92vw, 1600px\)/, '主容器流式变宽、1600px 封顶守行长')
+  // rem 纪律（缩放生效的机制面）：字号与间距声明里不许留 px，留了就脱离缩放档
+  const scaledDecls = []
+  for (const line of appCss.split('\n')) {
+    for (const decl of line.split(/[{};]/)) {
+      const m = decl.match(/^\s*(font-size|font|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|gap|row-gap|column-gap)\s*:\s*(.*)$/)
+      if (m) scaledDecls.push([m[1], m[2]])
+    }
+  }
+  const pxInScaled = scaledDecls.filter(([, v]) => /\d+(?:\.\d+)?px/.test(v)).map(([k, v]) => k + ': ' + v)
+  assert.ok(scaledDecls.length >= 120, '缩放属性声明全部进入扫描面（' + scaledDecls.length + ' 条）')
+  assert.deepEqual(pxInScaled, [], '字号与间距声明零 px（px 即脱离流式缩放）')
+  // 边界另一侧：组件定宽与圆角/边框刻意留 px，不随缩放档变化
+  assert.match(appCss, /\.menu\s*\{[^}]*width: 400px/, '菜单定宽保持 px')
+  assert.match(appCss, /\.modal \.box\.settings-box\s*\{[^}]*width: 560px/, '设置盒定宽保持 px')
+  assert.match(appCss, /\.rootbox #rootInput\s*\{[^}]*width: 250px/, '地址输入框定宽保持 px')
+  assert.match(appCss, /\.chip\s*\{[^}]*border-radius: 999px/, '圆角保持 px')
+  ok('流式缩放基座（文件级）：--fluid-base/--ui-scale/根字号乘法与主容器 clamp 接线在案、字号与间距声明零 px（缩放靠 rem 生效）、组件定宽与圆角刻意留 px；不断言像素尺寸（jsdom 无布局）')
 
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
   const { deriveEvents } = await import('./notify.mjs')
