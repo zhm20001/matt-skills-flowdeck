@@ -1,0 +1,33 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build artifact
+        run: |
+          mkdir -p dist
+          echo "Hello Release" > dist/release_info.txt
+
+      - name: GH Release
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            这是 ${{ github.ref_name }} 的自动发布。
+          files: dist/release_info.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
