@@ -33,6 +33,8 @@
   --ok-soft: #eaf3ec;
   --bad: #a03030;              /* 错误红 */
   --bad-soft: #f7ecec;
+  --warn: #d97706;             /* 格式告警徽标「!」底 */
+  --warn-ink: #fff;
 
   /* 色板：结构与弱化 */
   --rule: #d8d4c8;             /* 米色细边框（弱） */

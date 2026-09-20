@@ -1,8 +1,14 @@
-/* tokens-cold.css —— 机器生成 by derive.mjs（2026-09-16）· 勿手改
- * 候选: 冷白纸 · 冷白 × 纯碳墨 × 朱红
- * 锚点: paper {"H":250,"C":0.006,"L":0.998} · ink {"H":250,"C0":0,"Cmuted":0.006} · accent {"H":25,"C":0.146}
- * 重新生成: 改 palettes.mjs → node derive.mjs
- * 晋升: 定稿后拷贝本文件内容为权威 assets/tokens-cold.css（并扩展 sync-tokens.mjs）
+/* ── tokens-cold.css · flowdeck 冷白主题（默认）──────────────────────
+ * 三套平级主题之一（冷白 / 暖纸 / GitHub 暗，见 ADR-0002）：
+ * 默认主题写死在 <html data-theme="cold"> 标记上，无 JS 也命中本文件。
+ * 取值来自外部 paper-palette-lab 的生成件（候选: 冷白纸 · 冷白 × 纯碳墨 × 朱红；
+ * 锚点 paper {H:250,C:0.006,L:0.998} · ink {H:250,Cmuted:0.006} · accent {H:25,C:0.146}），
+ * 拷入时只把 :root re-scope 成 :root[data-theme="cold"]；此后本文件归 flowdeck 所有，
+ * 槽位可随界面增删（--warn/--warn-ink 即拷入后本地补的一例），
+ * token 纪律统一声明在 styles/app.css 的别名块。
+ *
+ * 与其余两套主题的分工：三套同名 token 同序对齐，保证光源语义一致；
+ * 暗色文件多出的「GitHub 专属槽位」业务侧以 var(名字, 回落) 消费。
  */
 :root[data-theme="cold"] {
   --paper: #fefeff;
@@ -20,6 +26,8 @@
   --ok-soft: #f0f5f1;
   --bad: #a03230;
   --bad-soft: #faf2f1;
+  --warn: #d97706;             /* 格式告警徽标「!」底 */
+  --warn-ink: #fff;
   --rule: #cfd5db;
   --rule-soft: #dfe4e9;
   --chip-bg: #eef2f7;

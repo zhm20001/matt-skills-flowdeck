@@ -9,16 +9,20 @@
    主题：标记上的 data-theme="cold"（styles/tokens-cold.css）是无 JS 也命中的默认，
    记忆过主题则绘制前覆写；旧二态 'light' 迁移到 cold（视为无明确偏好、落新默认），'dark' 保留。
    缩放档：不写属性即中档（styles/app.css 里 --ui-scale 缺省 1），所以无 JS/无存储天然落默认。
-   两个 try 各自独立——一个键读崩不连带另一个。 */
+   两个 try 各自独立——一个键读崩不连带另一个。
+   两套值域常量也住在这里（head 先跑）：主脚本复用同一份，免得每个读写点各抄一遍合法性判断。 */
+var THEMES = ['cold', 'paper', 'dark']
+var UI_SCALES = ['sm', 'md', 'lg', 'xl']
+function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
 (function () {
   try {
     var v = localStorage.getItem('flowdeck-theme')
     if (v === 'light') v = 'cold'
-    if (v === 'cold' || v === 'paper' || v === 'dark') document.documentElement.setAttribute('data-theme', v)
+    if (THEMES.indexOf(v) >= 0) document.documentElement.setAttribute('data-theme', v)
   } catch (e) {}
   try {
     var s = localStorage.getItem('flowdeck-ui-scale')
-    if (s === 'sm' || s === 'md' || s === 'lg' || s === 'xl') document.documentElement.setAttribute('data-ui-scale', s)
+    if (UI_SCALES.indexOf(s) >= 0) document.documentElement.setAttribute('data-ui-scale', s)
   } catch (e) {}
 })()
 </script>
@@ -1683,15 +1687,13 @@ document.addEventListener('keydown', function (ev) {
    CSS 拥有全部色值（tokens-*.css 各自 :root[data-theme=<名>]），JS 只设 <html> 上的标记属性；
    标记缺省即冷白（markup 静态写死），旧二态 'light' 读出时迁移成 cold。 */
 function currentTheme() {
-  var v = document.documentElement.getAttribute('data-theme')
-  return (v === 'paper' || v === 'dark') ? v : 'cold'
+  return oneOf(document.documentElement.getAttribute('data-theme'), THEMES, 'cold')
 }
 function applyThemeSelect() {
   document.getElementById('themeSelect').value = currentTheme()
 }
 document.getElementById('themeSelect').addEventListener('change', function () {
-  var v = this.value
-  if (v !== 'cold' && v !== 'paper' && v !== 'dark') v = 'cold'
+  var v = oneOf(this.value, THEMES, 'cold')
   document.documentElement.setAttribute('data-theme', v)
   try { localStorage.setItem(THEME_KEY, v) } catch (e) {}
 })
@@ -1701,15 +1703,13 @@ applyThemeSelect()
    :root[data-ui-scale=<档>]，JS 只设 <html> 标记属性并记本浏览器偏好；不写属性即中档
    （--ui-scale 缺省 1）。即时生效，不进设置弹窗的保存补丁：那格只写 config.json，缩放只属于本浏览器。 */
 function currentUiScale() {
-  var v = document.documentElement.getAttribute('data-ui-scale')
-  return (v === 'sm' || v === 'lg' || v === 'xl') ? v : 'md'
+  return oneOf(document.documentElement.getAttribute('data-ui-scale'), UI_SCALES, 'md')
 }
 function applyScaleSelect() {
   document.getElementById('setScale').value = currentUiScale()
 }
 document.getElementById('setScale').addEventListener('change', function () {
-  var v = this.value
-  if (v !== 'sm' && v !== 'lg' && v !== 'xl') v = 'md'
+  var v = oneOf(this.value, UI_SCALES, 'md')
   document.documentElement.setAttribute('data-ui-scale', v)
   try { localStorage.setItem(SCALE_KEY, v) } catch (e) {}
 })
@@ -1730,6 +1730,7 @@ function applyLang() {
   applyStaticCopy()
   applyLangButton()
   applyThemeSelect()
+  applyScaleSelect()
   render()
   renderMeta(!!lastOk)
   applyPollModeUI()
@@ -2425,6 +2426,8 @@ function openSettings() {
   document.getElementById('setPort').value = settingsState.initial.port
   // 桌面通知（票 04）：浏览器本地偏好，即时生效——不进下面的保存补丁（不写 config.json）
   document.getElementById('setNotify').checked = notifyOn()
+  // 界面缩放档（票 04）同样是本浏览器偏好：控件初值从 <html> 标记读（那里才是唯一真相）
+  applyScaleSelect()
   document.getElementById('setToken').value = ''
   renderSettingsDynamic()
   document.getElementById('setSaveHint').textContent = ''

@@ -20,6 +20,8 @@
     --fd-ok: var(--ok);
     --fd-bad: var(--bad);
     --fd-bad-soft: var(--bad-soft);
+    --fd-warn: var(--warn);
+    --fd-warn-ink: var(--warn-ink);
     --fd-rule: var(--rule);
     --fd-rule-soft: var(--rule-soft);
     --fd-chip: var(--chip-bg);
@@ -164,7 +166,7 @@
   tr.closed td.title { text-decoration: line-through; }
   .state-open { color: var(--fd-ok); }
   .state-closed { color: var(--fd-ink-muted); }
-  .warn { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 0.6rem; border-radius: 50%; background: #d97706; color: #fff; font-size: 1rem; font-weight: 700; line-height: 1; vertical-align: 1px; cursor: help; flex: none; }
+  .warn { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 0.6rem; border-radius: 50%; background: var(--fd-warn); color: var(--fd-warn-ink); font-size: 1rem; font-weight: 700; line-height: 1; vertical-align: 1px; cursor: help; flex: none; }
   .key { font-family: var(--fd-font-mono); color: var(--fd-key-ink); }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; }

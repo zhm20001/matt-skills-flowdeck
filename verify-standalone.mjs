@@ -57,7 +57,8 @@
  *                                字面平级（无 :root 基底）、语义槽位对齐；冷白经白名单可服务。
  *  31. 流式缩放基座（ui-appearance 03）→ 根字号 = --fluid-base × --ui-scale 的接线在案、主容器
  *                                clamp(1080px, 92vw, 1600px)、字号与间距声明零 px（rem 化）、
- *                                组件定宽/圆角留 px；像素尺寸不断言（jsdom 无布局能力）。
+ *                                组件定宽/圆角留 px、业务样式零裸色值与零裸字体栈（token 纪律规则 1）；
+ *                                像素尺寸不断言（jsdom 无布局能力）。
  *  32. 界面缩放档（ui-appearance 04）→ 四档倍率只住在 CSS（sm/md/lg/xl = 0.9/1/1.125/1.25），与设置
  *                                「外观」区的 <option> 值域同集；head 防闪读数排在样式表之前；jsdom 里
  *                                切档落对 data-ui-scale 并写 flowdeck-ui-scale、缺省不写属性即中档、
@@ -573,7 +574,7 @@ async function runScenarios(tmp) {
   const scaledDecls = []
   for (const line of appCss.split('\n')) {
     for (const decl of line.split(/[{};]/)) {
-      const m = decl.match(/^\s*(font-size|font|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|gap|row-gap|column-gap)\s*:\s*(.*)$/)
+      const m = decl.match(/^\s*(font-size|font-family|font|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|gap|row-gap|column-gap)\s*:\s*(.*)$/)
       if (m) scaledDecls.push([m[1], m[2]])
     }
   }
@@ -585,7 +586,14 @@ async function runScenarios(tmp) {
   assert.match(appCss, /\.modal \.box\.settings-box\s*\{[^}]*width: 560px/, '设置盒定宽保持 px')
   assert.match(appCss, /\.rootbox #rootInput\s*\{[^}]*width: 250px/, '地址输入框定宽保持 px')
   assert.match(appCss, /\.chip\s*\{[^}]*border-radius: 999px/, '圆角保持 px')
-  ok('流式缩放基座（文件级）：--fluid-base/--ui-scale/根字号乘法与主容器 clamp 接线在案、字号与间距声明零 px（缩放靠 rem 生效）、组件定宽与圆角刻意留 px；不断言像素尺寸（jsdom 无布局）')
+  // token 纪律规则 1 的机器面（双轴评审收口）：裸值一旦溜进业务样式，两份 README 的「零裸值」即成空话，
+  // 而换肤就会漏这一处——暗色主题下那个琥珀点就是三套里唯一不随肤走的颜色。
+  assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(appCss), '业务样式零裸十六进制色值（裸值只准住 styles/tokens-*.css）')
+  // 字体同理：shorthand 的族名部分只准引别名或 inherit（scaledDecls 已把 font/font-family 收进扫描面）
+  const fontDecls = scaledDecls.filter(([k]) => k === 'font' || k === 'font-family')
+  assert.deepEqual(fontDecls.filter(([, v]) => !/var\(--fd-font|inherit/.test(v)).map(([k, v]) => k + ': ' + v), [],
+    '业务样式零裸字体栈（只写 var(--fd-font-*) 或 inherit）')
+  ok('流式缩放基座（文件级）：--fluid-base/--ui-scale/根字号乘法与主容器 clamp 接线在案、字号与间距声明零 px（缩放靠 rem 生效）、组件定宽与圆角刻意留 px、业务样式零裸色值与零裸字体栈（token 纪律规则 1 的机器面）；不断言像素尺寸（jsdom 无布局）')
 
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
   const { deriveEvents } = await import('./notify.mjs')
@@ -3183,8 +3191,9 @@ async function runScenarios(tmp) {
     } finally {
       await new Promise((r) => themeServer.server.close(r))
     }
-    // 界面级钉（jsdom）：下拉切换落对 data-theme 并写 flowdeck-theme；重开尊重记忆；legacy 'light' 迁移到冷白
-    function themeDom(port, stored, storedScale) {
+    // 界面级钉（jsdom）：外观两键共用一个夹具——stored 预置 flowdeck-theme、storedScale 预置
+    // flowdeck-ui-scale，传 null 即「本浏览器没记过」。命名跟着「外观」这件事走，不跟着票 02 的主题走。
+    function appearanceDom(port, stored, storedScale) {
       const errs = []
       const vcT = new VirtualConsole()
       vcT.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
@@ -3209,7 +3218,7 @@ async function runScenarios(tmp) {
       sel.dispatchEvent(new c.d.window.Event('change'))
     }
     const themeAttr = (c) => c.d.window.document.documentElement.getAttribute('data-theme')
-    const plain = themeDom(39351, null)
+    const plain = appearanceDom(39351, null)
     await settle()
     assert.equal(themeAttr(plain), 'cold', '没记过偏好 → 冷白（标记默认）')
     assert.equal(plain.d.window.document.getElementById('themeSelect').value, 'cold', '下拉选中态与标记一致')
@@ -3226,7 +3235,7 @@ async function runScenarios(tmp) {
     const legacyCases = [['dark', 'dark'], ['paper', 'paper'], ['cold', 'cold'], ['light', 'cold']]
     for (let i = 0; i < legacyCases.length; i++) {
       const [stored, want] = legacyCases[i]
-      const c = themeDom(39352 + i, stored)
+      const c = appearanceDom(39352 + i, stored)
       await settle()
       assert.equal(themeAttr(c), want, '记过 ' + stored + ' → 重开仍是 ' + want + (stored === 'light' ? '（legacy 亮色迁移到冷白）' : ''))
       assert.equal(c.d.window.document.getElementById('themeSelect').value, want, '下拉选中态随记忆/迁移')
@@ -3244,8 +3253,11 @@ async function runScenarios(tmp) {
     const scaleBox = deckHtml.match(/<select id="setScale">([\s\S]*?)<\/select>/)
     assert.ok(scaleBox, '设置弹窗「外观」区有缩放控件')
     assert.deepEqual([...scaleBox[1].matchAll(/value="(\w+)"/g)].map((m) => m[1]), cssTiers.map(([k]) => k), '档位值域 CSS 与控件同集')
-    assert.ok(deckHtml.indexOf("'flowdeck-ui-scale'") < deckHtml.indexOf('<link rel="stylesheet" href="styles/app.css">'),
-      'head 防闪脚本读档排在样式表之前（先定档再绘制）')
+    // 「绘制前定档」的结构面（评审收口）：切「样式表之前的那段文档」再找读数，顺序才真的被钉住——
+    // 拿字面量首次出现比下标是假钉（'flowdeck-ui-scale' 在主脚本的 SCALE_KEY 处还会出现一次）。
+    const preCss = deckHtml.slice(0, deckHtml.indexOf('<link rel="stylesheet" href="styles/app.css">'))
+    assert.match(preCss, /localStorage\.getItem\('flowdeck-ui-scale'\)/, '缩放档读数排在样式表之前（先定档再绘制）')
+    assert.match(preCss, /localStorage\.getItem\('flowdeck-theme'\)/, '主题读数同在那个防闪脚本里')
     // 界面级钉（jsdom）：切档落对 data-ui-scale 并写 flowdeck-ui-scale；缺省不写属性即中档；重开尊重记忆；野值回落中档
     const scaleAttr = (c) => c.d.window.document.documentElement.getAttribute('data-ui-scale')
     const scaleValue = (c) => c.d.window.document.getElementById('setScale').value
@@ -3254,7 +3266,7 @@ async function runScenarios(tmp) {
       sel.value = v
       sel.dispatchEvent(new c.d.window.Event('change'))
     }
-    const untouched = themeDom(39356, null, null)
+    const untouched = appearanceDom(39356, null, null)
     await settle()
     assert.equal(scaleAttr(untouched), null, '没记过偏好 → 不写属性（CSS 缺省 --ui-scale: 1 即中档）')
     assert.equal(scaleValue(untouched), 'md', '控件选中态落中档')
@@ -3268,14 +3280,14 @@ async function runScenarios(tmp) {
     untouched.d.window.close()
     for (let i = 0; i < cssTiers.length; i++) {
       const [tier] = cssTiers[i]
-      const c = themeDom(39357 + i, null, tier)
+      const c = appearanceDom(39357 + i, null, tier)
       await settle()
       assert.equal(scaleAttr(c), tier, '记过 ' + tier + ' → 绘制前就设好 data-ui-scale')
       assert.equal(scaleValue(c), tier, '控件选中态随记忆')
       assert.deepEqual(c.errs, [])
       c.d.window.close()
     }
-    const junkScale = themeDom(39361, null, 'huge')
+    const junkScale = appearanceDom(39361, null, 'huge')
     await settle()
     assert.equal(scaleAttr(junkScale), null, '认不出的档位不写属性')
     assert.equal(scaleValue(junkScale), 'md', '野值落回中档（跟主题一样不猜用户想要什么）')
