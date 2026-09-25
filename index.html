@@ -423,7 +423,7 @@ var UI_TEXT = {
   'ticket.row.aria': { zh: '票 {key} {title}，进行中。按 Enter 复制实现指引{warn}', en: 'Ticket {key} {title}, open. Press Enter to copy the implementation prompt{warn}' },
   'ticket.row.warn': { zh: '。警告：{msgs}', en: '. Warning: {msgs}' },
   'sep.blocked': { zh: '、#', en: ', #' },
-  'copy.ticket': { zh: '请实现票 {key}（{path}）：{title}。在本次 effort 的工作分支上进行（还没有就先开：`git switch -c <effort 短名>-impl`）。完成后把该票文件里的 Status 行改为 resolved。', en: 'Implement ticket #{key} ({path}): {title}. Work on the branch for this effort (create one first if none yet: `git switch -c <effort-slug>-impl`). When it is done, change the Status line in that ticket file to resolved.' },
+  'copy.ticket': { zh: '请实现票 {key}（{path}）：{title}。完成后把该票文件里的 Status 行改为 resolved。', en: 'Implement ticket #{key} ({path}): {title}. When it is done, change the Status line in that ticket file to resolved.' },
 
   // 地图与规格
   'map.h2': { zh: '地图（map.md）', en: 'Map (map.md)' },
@@ -461,7 +461,7 @@ var UI_TEXT = {
       '2. 规格（to-spec）：把讨论沉淀为 .scratch/<特性名>/spec.md。',
       '3. 拆票（to-tickets）：每张票一个文件，路径 .scratch/<特性名>/issues/<两位编号>-<短名>.md，',
       '   正文含行内字段「Status:」（ready-for-agent / claimed / resolved）、「Type:」（research/prototype/grilling/task）、「Blocked by: #编号」。',
-      '4. 实现（implement）：在为本次 effort 开的新分支上逐票实现（未开则先 `git switch -c <特性名>-impl`）；每完成一张票，就把该票文件里的 Status 行改为 resolved；全部票关闭并验证通过后合回 main。',
+      '4. 实现（implement）：逐票实现；每完成一张票，就把该票文件里的 Status 行改为 resolved。',
     ].join('\n'),
     en: [
       'The AI coding flow in this project follows the .scratch artifact convention — follow it exactly:',
@@ -469,7 +469,7 @@ var UI_TEXT = {
       '2. Spec (to-spec): distill the discussion into .scratch/<feature>/spec.md.',
       '3. Tickets (to-tickets): one file per ticket, at .scratch/<feature>/issues/<NN>-<short-name>.md,',
       '   body containing the inline fields "Status:" (ready-for-agent / claimed / resolved), "Type:" (research/prototype/grilling/task) and "Blocked by: #NN".',
-      '4. Implementation (implement): work the tickets one at a time on a new branch created for the effort (create one first if none yet: `git switch -c <feature-slug>-impl`); when a ticket is done, change its Status line to resolved; once all tickets are closed and verified, merge back to main.',
+      '4. Implementation (implement): work the tickets one at a time; when a ticket is done, change its Status line to resolved.',
     ].join('\n'),
   },
   'empty.scaffold': {

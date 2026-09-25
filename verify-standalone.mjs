@@ -63,10 +63,15 @@
  *                                「外观」区的 <option> 值域同集；head 防闪读数排在样式表之前；jsdom 里
  *                                切档落对 data-ui-scale 并写 flowdeck-ui-scale、缺省不写属性即中档、
  *                                重开尊重记忆、野值回落中档。
- *  33. 分支纪律（branch-discipline 01）→ 三处指引词织入「实现开工作分支、全关验证后合回 main」：
- *                                Implement 阶段格与起步约定第 4 步（中英两列）含分支指令与合回措辞，
- *                                票行点击指引词含分支指令但不含合回措辞，收尾（implementDone）不提合并；
- *                                jsdom 行为钉：票行/链格复制词与工作约定副本都验到原文。
+ *  33. 指引词零工程习惯（custom-guides 01）→ 默认指引词不预设任何工程习惯（ADR-0004）。查两条**规则**、
+ *                                不查逐字原文：① 零 git 指令——出厂固定文案（四个阶段格的全部状态分支 ×
+ *                                中英两列 = 五面里的四面，加票行复制词，再加同样出厂固定的起步工作
+ *                                约定）里 git 零出现；② 不点名 Matt 技能包以外的技能——包内技能名取自
+ *                                docs/skill-intros/ 的 frontmatter，扫明写的「X 技能 / X skill」两种写法
+ *                                （直说的「to-spec 技能」与带括号备选的「grilling（或 wayfinder）技能」，
+ *                                局限与 ADR 并列承认）。票行与收尾（implementDone）的「不提合并」负向钉
+ *                                降级保留为回归防护；两份 README 的起步约定第 4 步已缩成指针，钉它不再
+ *                                逐字复制权威原文。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -537,32 +542,110 @@ async function runScenarios(tmp) {
     '载荷里的阶段名/副题 en 列 = FLOW_STAGES 英文列')
   ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、阶段名/副题也随载荷按语言下发、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
 
-  // ── 分支纪律（branch-discipline 票 01）：三处指引词织入「实现都开工作分支、全部票关闭并验证通过后
-  //    合回 main」。阶段格与起步约定第 4 步提合并（effort 级收束），票行点击指引词不提——单票指引说
-  //    合并会诱导每票一合。收尾（implementDone）文案不动、也不该提合并。──
-  const bdHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
-  const bdOpen = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [{ key: '01', state: 'open', blockedBy: [] }] })
-  const bdImpl = bdOpen.stages.find((st) => st.id === 'implement')
-  assert.match(bdImpl.hint, /git switch -c/, '阶段格中文指引含分支指令')
-  assert.match(bdImpl.hint, /合回 main/, '阶段格中文指引含合回 main（全部票关闭、验证通过后）')
-  assert.match(bdImpl.en.hint, /git switch -c/, '阶段格英文指引含分支指令')
-  assert.match(bdImpl.en.hint, /merge back to main/, '阶段格英文指引含合回措辞')
-  const bdDone = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [{ key: '01', state: 'closed', blockedBy: [] }] })
-  const bdDoneImpl = bdDone.stages.find((st) => st.id === 'implement')
-  assert.doesNotMatch(bdDoneImpl.hint + bdDoneImpl.en.hint, /合回|merge back/, '收尾（implementDone）文案不提合并')
-  const bdTicketLine = bdHtml.split('\n').find((l) => l.indexOf("'copy.ticket'") >= 0)
-  assert.ok(bdTicketLine, '词表含 copy.ticket 词条')
-  assert.match(bdTicketLine, /git switch -c <effort 短名>-impl/, '票行指引中文列含分支指令')
-  assert.match(bdTicketLine, /git switch -c <effort-slug>-impl/, '票行指引英文列含分支指令')
-  assert.doesNotMatch(bdTicketLine, /合回|merge back/, '票行指引不提合并（单票指引说它诱导每票一合）')
-  const bdAgreeZh = bdHtml.split('\n').find((l) => l.indexOf('4. 实现（implement）') >= 0)
-  const bdAgreeEn = bdHtml.split('\n').find((l) => l.indexOf('4. Implementation (implement)') >= 0)
-  assert.ok(bdAgreeZh && bdAgreeEn, '起步约定第 4 步中英两段都在')
-  assert.match(bdAgreeZh, /git switch -c <特性名>-impl/, '约定第 4 步中文段含分支指令')
-  assert.match(bdAgreeZh, /合回 main/, '约定第 4 步中文段含合回 main')
-  assert.match(bdAgreeEn, /git switch -c <feature-slug>-impl/, '约定第 4 步英文段含分支指令')
-  assert.match(bdAgreeEn, /merge back to main/, '约定第 4 步英文段含合回措辞')
-  ok('分支纪律（branch-discipline 01）：Implement 阶段指引词与起步约定第 4 步中英两列都含分支指令（git switch -c）与合回 main 措辞；票行点击指引词含分支指令但不含合回措辞；收尾（implementDone）文案不提合并')
+  // ── 指引词零工程习惯（custom-guides 票 01，ADR-0004）：默认指引词不写死任何工程纪律。这组查两条
+  //    **规则**、不再查逐字原文——逐字钉每次改措辞都要全文对照，而 README 里那份逐字复制品已经这样漂过
+  //    一次（英文「起步约定第 4 步」与 index.html 权威源对不上，直到本次一并收敛成指针）。
+  //
+  //    ① 零 git 指令：五面内置段的中英两列里 git 零出现。阶段格指引词随状态分支而变（完工 / 推定 /
+  //       迷雾未清 / 无票可实现 / 带阻塞尾巴……），所以穷举场景把每个分支的文案都收齐再扫——只扫一个
+  //       场景等于给没扫到的分支留后门，规则会退化成「主干那一句零 git」。这里刻意比票面写的「零 `git `」
+  //       更宽一档（整个 git 字样都算），因为 ADR 的口径是「默认指引词一个字 git 都不提」。
+  //    ② 不点名 Matt 技能包以外的技能：包内技能名取自 docs/skill-intros/ 的 frontmatter，逐段扫明写的
+  //       「X 技能」与英文同形的「X skill」两种形式。局限与 ADR 并列承认：只认这两种明写形式、不做全文
+  //       语义判断——换个说法绕过去它看不见，这是自愿接下的代价。
+  //
+  //    票行与收尾（implementDone）的「不提合并」负向钉**保留**但降级：回退后它们本就不含 git，而
+  //    「合回 main / merge back」不经过 git 字样、规则①盖不住，留着防的就是「以后又织回来」。──
+  const gwHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+
+  // 扫的面：四阶段格（copyText 即 hint 逐字）× 场景全集，再加票行复制词与起步工作约定。
+  // 场景刻意挑满：每格至少覆盖「已完工」与其未完工的各个分支，否则扫到的只是同一句话。
+  const gwMapDone = { exists: true, destination: 'd', fogCount: 0 }
+  const gwSpecDone = { exists: true, contentLength: 9 }
+  const gwScenarios = [
+    ['空 effort', {}],
+    ['有 map 未写 Destination', { map: { exists: true, destination: '', fogCount: 0 } }],
+    ['有 map 迷雾未清', { map: { exists: true, destination: 'd', fogCount: 2 } }],
+    ['map 就绪 · 无 spec', { map: gwMapDone }],
+    ['map 就绪 · spec 在盘', { map: gwMapDone, spec: gwSpecDone }],
+    ['无 map 但有票（推定分支）', { tickets: [{ key: '01', state: 'open', blockedBy: [] }] }],
+    ['票目录在但没票', { map: gwMapDone, spec: gwSpecDone, tickets: [] }],
+    ['有票未关', { map: gwMapDone, spec: gwSpecDone, tickets: [{ key: '01', state: 'open', blockedBy: [] }] }],
+    ['有票被依赖阻塞（阻塞尾巴分支）', { map: gwMapDone, spec: gwSpecDone, tickets: [{ key: '01', state: 'open', blockedBy: ['00'] }, { key: '00', state: 'open', blockedBy: [] }] }],
+    ['票全关（收尾分支）', { map: gwMapDone, spec: gwSpecDone, tickets: [{ key: '01', state: 'closed', blockedBy: [] }] }],
+  ]
+  const gwSegments = []
+  for (const [label, extra] of gwScenarios) {
+    const chain = deriveChain(Object.assign({ slug: 'deck' }, extra))
+    for (const st of chain.stages) {
+      gwSegments.push({ face: `${st.id}·${label}·中文`, text: st.copyText })
+      gwSegments.push({ face: `${st.id}·${label}·英文`, text: st.en.copyText })
+    }
+  }
+  const gwTicketM = /'copy\.ticket': \{ zh: '([\s\S]*?)', en: '([\s\S]*?)' \},/.exec(gwHtml)
+  assert.ok(gwTicketM, '词表含 copy.ticket 词条（zh/en 两列都切得出来）')
+  gwSegments.push({ face: '票行复制词·中文', text: gwTicketM[1] })
+  gwSegments.push({ face: '票行复制词·英文', text: gwTicketM[2] })
+  // 起步工作约定（空态页那段两栏并列的步骤）不是五面之一，但它同样是出厂固定文案、同样发给使用者，
+  // 且正是本次回退的第三处——一并纳入，免得规则只守住两个面。
+  const gwAgreeFrom = gwHtml.indexOf("'empty.agreement': {")
+  const gwAgreeEn = gwHtml.indexOf('en: [', gwAgreeFrom)
+  const gwAgreeTo = gwHtml.indexOf('\n  },', gwAgreeFrom)
+  assert.ok(gwAgreeFrom > 0 && gwAgreeEn > gwAgreeFrom && gwAgreeTo > gwAgreeEn, '词表含 empty.agreement 段（两栏都切得出来）')
+  gwSegments.push({ face: '起步工作约定·中文', text: gwHtml.slice(gwAgreeFrom, gwAgreeEn) })
+  gwSegments.push({ face: '起步工作约定·英文', text: gwHtml.slice(gwAgreeEn, gwAgreeTo) })
+
+  // 空扫等于白扫：先钉「确实扫到了一批面、且去重后确实是多段不同文案」，后面的零断言才有意义。
+  // 用下限而不是 assert.equal 是有意的：往后加一个场景是常事，等值会让这条护栏在正当增补时误炸；
+  // 它要挡的是「某个面整个没被扫到」这种塌方，真塌了数量一定掉到下限以下。
+  assert.ok(gwSegments.length >= 80, `扫的面数够（${gwSegments.length} 段 = 四阶段格 × 场景 × 中英 + 票行 + 工作约定）`)
+  const gwDistinct = new Set(gwSegments.map((s) => s.text))
+  assert.ok(gwDistinct.size >= 12, `状态分支确实被扫到（去重后 ${gwDistinct.size} 段不同文案）`)
+
+  // ① 零 git 指令
+  for (const seg of gwSegments) {
+    assert.doesNotMatch(seg.text, /\bgit\b/, `默认指引词零 git 措辞：${seg.face} 里出现了 git`)
+  }
+  // ② 不点名 Matt 技能包以外的技能
+  const gwSkillNames = new Set()
+  for (const f of await fs.readdir(nodePath.join(HERE, 'docs', 'skill-intros'))) {
+    if (!f.endsWith('.md') || f === 'README.md') continue
+    const head = (await fs.readFile(nodePath.join(HERE, 'docs', 'skill-intros', f), 'utf8')).split('\n').slice(0, 12).join('\n')
+    const nm = /^name:\s*(\S+)/m.exec(head)
+    if (nm) gwSkillNames.add(nm[1])
+  }
+  assert.ok(gwSkillNames.size > 10, `包内技能名集合取自 frontmatter（取到 ${gwSkillNames.size} 个）`)
+  // 「X 技能」有两种写法，两种都得认：直说的「to-spec 技能」，以及带括号备选的
+  // 「grilling（或 wayfinder）技能」/「grilling (or wayfinder) skill」。只认直说那一支的话，
+  // 恰恰是 grill 那面的两个技能名（内置文案里唯一点名两个技能的地方）会整个漏检——
+  // 括号挡在名字和「技能」之间，不给它留位置，正则就一路滑过去、这条规则空转。
+  const gwSkillRe = /([A-Za-z][\w-]*)(?:\s*[（(]\s*(?:或|or)\s*([A-Za-z][\w-]*)\s*[）)])?\s*(?:技能|skill)/g
+  let gwSkillHits = 0
+  for (const seg of gwSegments) {
+    for (const hit of seg.text.matchAll(gwSkillRe)) {
+      gwSkillHits++
+      for (const name of [hit[1], hit[2]].filter(Boolean)) {
+        assert.ok(gwSkillNames.has(name), `默认指引词只点名包内技能：「${name} 技能」（${seg.face}）不在 docs/skill-intros/ 的 frontmatter 名单里`)
+      }
+    }
+  }
+  // 规则自己也得证明自己咬得着：内置文案里 grill 那面明写两个技能名，扫不到就是正则退化了。
+  assert.ok(gwSkillHits >= 8, `技能名规则确实咬得着（扫到 ${gwSkillHits} 处点名；括号备选那一支也认）`)
+  // 降级保留的负向钉：合回措辞不经过 git 字样，规则①盖不住，单留两条钉防重新织入。
+  assert.doesNotMatch(gwTicketM[1] + gwTicketM[2], /合回|merge back/, '票行指引不提合并（回归防护：回退后本就没有，防的是重新织入）')
+  const gwDoneChain = deriveChain({ slug: 'deck', map: gwMapDone, spec: gwSpecDone, tickets: [{ key: '01', state: 'closed', blockedBy: [] }] })
+  const gwDoneImpl = gwDoneChain.stages.find((s) => s.id === 'implement')
+  assert.doesNotMatch(gwDoneImpl.hint + gwDoneImpl.en.hint, /合回|merge back/, '收尾（implementDone）文案不提合并（回归防护：回退后本就没有，防的是重新织入）')
+  // 两份 README 的起步约定第 4 步缩成指向产品内「工作约定」的指针：它们曾与 index.html 的权威源
+  // 逐字重复，而英文那份已经漂过一次（"4. Implementation:" 少了 (implement)、"as each ticket finishes"
+  // 与中文那句也对不上），没人发现。钉两件事——不带 git 字样、不再逐字复制权威原文。
+  for (const readme of ['README.zh-CN.md', 'README.md']) {
+    const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+    assert.doesNotMatch(txt, /git switch/, `${readme} 不含 \`git switch\` 字样（第 4 步已缩成指针）`)
+    assert.doesNotMatch(txt, /逐票实现；每完成一张票|change its Status line to resolved/, `${readme} 不再逐字复制第 4 步原文（权威源只有产品内那份）`)
+    assert.doesNotMatch(txt, /合回 main|merge back to main/, `${readme} 不含合回 main 措辞`)
+  }
+  ok(`指引词零工程习惯（custom-guides 01 / ADR-0004）：${gwSegments.length} 段内置文案（去重 ${gwDistinct.size} 段）零 git 措辞；点名的技能全在 Matt 包内（frontmatter 名单 ${gwSkillNames.size} 个）；票行与收尾文案不提合并；两份 README 第 4 步已缩成指针`)
 
   // ── 静态壳取词绑定（english-ui 票 02，票 04 实拍补的洞）：markup 的 data-i18n* 键不许悬空，
   //    写死的中文默认态不许与词表漂移。悬空键把标签擦成空白，而「零中文残留」照样通过——所以这一组
@@ -2166,8 +2249,11 @@ async function runScenarios(tmp) {
     assert.equal(copiesA.length, 1, 'focus 后 Enter 触发复制')
     assert.match(copiesA[0], /请实现票 01/)
     assert.match(copiesA[0], /01-index-core/)
-    assert.match(copiesA[0], /git switch -c/, '票行复制词带分支指令（branch-discipline 01）')
-    assert.doesNotMatch(copiesA[0], /合回|merge back/, '票行复制词不提合并（合并是 effort 级动作）')
+    // 逐字钉 `git switch -c` 已随 branch-discipline 撤销（custom-guides 01 / ADR-0004），
+    // 这里改钉规则：使用者真正复制到的那串字里不得有 git 措辞。文件级规则管的是词表字面量，
+    // 这一条管拼装后的结果——模板里再拼进去也能兜住。
+    assert.doesNotMatch(copiesA[0], /\bgit\b/, '票行复制词零 git 措辞（custom-guides 01）')
+    assert.doesNotMatch(copiesA[0], /合回|merge back/, '票行复制词不提合并（回归防护：合并是 effort 级动作，防重新织入）')
     aKey(aRow, ' ')
     await tick()
     assert.equal(copiesA.length, 2, 'Space 与 Enter 同一处理')
@@ -2188,7 +2274,7 @@ async function runScenarios(tmp) {
     aKey(aStages[3], 'Enter')
     await tick()
     assert.match(copiesA[copiesA.length - 1], /Blocked by 为空的票/, '链格 Enter 复制本格指引词')
-    assert.match(copiesA[copiesA.length - 1], /git switch -c/, '链格复制词带分支指令（branch-discipline 01）')
+    assert.doesNotMatch(copiesA[copiesA.length - 1], /\bgit\b/, '链格复制词零 git 措辞（custom-guides 01）')
 
     // 推定含义不再只藏悬停：推定链格的 aria-label 与推定徽标都载说明
     aTab('only-spec').dispatchEvent(new aWin.Event('click'))
@@ -3096,7 +3182,7 @@ async function runScenarios(tmp) {
     const scWin = scaffoldDom.window
     const scPres = Array.from(scDoc.querySelectorAll('pre.agreement'))
     assert.equal(scPres.length, 2, '空态页有两段可复制文本（工作约定 + 建骨架指令）')
-    assert.match(scPres[0].textContent, /git switch -c/, '工作约定第 4 步带分支指令（branch-discipline 01）')
+    assert.doesNotMatch(scPres[0].textContent, /\bgit\b/, '工作约定副本零 git 措辞（custom-guides 01）')
     assert.match(scPres[1].textContent, /\.scratch\/<特性名>\/map\.md/, '骨架指令给出相对追踪目录的 map.md 路径')
     assert.match(scPres[1].textContent, /Destination/, '要求 Destination 一节')
     assert.match(scPres[1].textContent, /Not yet specified/, '要求 Not yet specified 一节')

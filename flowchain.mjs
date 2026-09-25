@@ -205,9 +205,9 @@ export function deriveChain(input = {}) {
       ? bi(`${where}的票已全部关闭，四个阶段完成。可以收尾，或开下一个 effort。`,
         `All tickets under ${whereEn} are closed — the four stages are done. Wrap it up, or open the next effort.`)
       : bi(
-        `${where} 有 ${tickets.length} 张票、已关 ${closed} 张。请在为本次 effort 开的工作分支上逐张实现（还没有就先 \`git switch -c <effort 短名>-impl\`），从 Blocked by 为空的票开始，每完成一张就把该票文件里的 Status 行改为 resolved；全部票关闭、验证通过后再合回 main。` +
+        `${where} 有 ${tickets.length} 张票、已关 ${closed} 张。请从 Blocked by 为空的票开始逐张实现，每完成一张就把该票文件里的 Status 行改为 resolved。` +
           (blocked > 0 ? ` 当前有 ${blocked} 张票被依赖阻塞，先做它们所依赖的票。` : ''),
-        `${whereEn} has ${tickets.length} tickets, ${closed} closed. Work the tickets one at a time on a branch created for this effort (create one first if none yet: \`git switch -c <effort-slug>-impl\`), starting from the tickets whose Blocked by line is empty, and change each ticket file's Status line to resolved when it is done; once all tickets are closed and verified, merge back to main.` +
+        `${whereEn} has ${tickets.length} tickets, ${closed} closed. Implement them one at a time starting from the tickets whose Blocked by line is empty, and change that ticket file's Status line to resolved when each one is done.` +
           (blocked > 0 ? ` ${blocked} tickets are blocked by dependencies right now — do the tickets they depend on first.` : '')
       )
   const implementStage = {
