@@ -63,6 +63,10 @@
  *                                「外观」区的 <option> 值域同集；head 防闪读数排在样式表之前；jsdom 里
  *                                切档落对 data-ui-scale 并写 flowdeck-ui-scale、缺省不写属性即中档、
  *                                重开尊重记忆、野值回落中档。
+ *  33. 分支纪律（branch-discipline 01）→ 三处指引词织入「实现开工作分支、全关验证后合回 main」：
+ *                                Implement 阶段格与起步约定第 4 步（中英两列）含分支指令与合回措辞，
+ *                                票行点击指引词含分支指令但不含合回措辞，收尾（implementDone）不提合并；
+ *                                jsdom 行为钉：票行/链格复制词与工作约定副本都验到原文。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -532,6 +536,33 @@ async function runScenarios(tmp) {
     FLOW_STAGES.map((f) => [f.titleEn, f.subtitleEn]),
     '载荷里的阶段名/副题 en 列 = FLOW_STAGES 英文列')
   ok('指引词英文列：四阶段证据/指引/复制词/推定标注两列同支、阶段名/副题也随载荷按语言下发、英文列零中文、判据字段名（Status/Blocked by/Destination/Not yet specified）与路径不随语言')
+
+  // ── 分支纪律（branch-discipline 票 01）：三处指引词织入「实现都开工作分支、全部票关闭并验证通过后
+  //    合回 main」。阶段格与起步约定第 4 步提合并（effort 级收束），票行点击指引词不提——单票指引说
+  //    合并会诱导每票一合。收尾（implementDone）文案不动、也不该提合并。──
+  const bdHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+  const bdOpen = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [{ key: '01', state: 'open', blockedBy: [] }] })
+  const bdImpl = bdOpen.stages.find((st) => st.id === 'implement')
+  assert.match(bdImpl.hint, /git switch -c/, '阶段格中文指引含分支指令')
+  assert.match(bdImpl.hint, /合回 main/, '阶段格中文指引含合回 main（全部票关闭、验证通过后）')
+  assert.match(bdImpl.en.hint, /git switch -c/, '阶段格英文指引含分支指令')
+  assert.match(bdImpl.en.hint, /merge back to main/, '阶段格英文指引含合回措辞')
+  const bdDone = deriveChain({ slug: 'deck', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 9 }, tickets: [{ key: '01', state: 'closed', blockedBy: [] }] })
+  const bdDoneImpl = bdDone.stages.find((st) => st.id === 'implement')
+  assert.doesNotMatch(bdDoneImpl.hint + bdDoneImpl.en.hint, /合回|merge back/, '收尾（implementDone）文案不提合并')
+  const bdTicketLine = bdHtml.split('\n').find((l) => l.indexOf("'copy.ticket'") >= 0)
+  assert.ok(bdTicketLine, '词表含 copy.ticket 词条')
+  assert.match(bdTicketLine, /git switch -c <effort 短名>-impl/, '票行指引中文列含分支指令')
+  assert.match(bdTicketLine, /git switch -c <effort-slug>-impl/, '票行指引英文列含分支指令')
+  assert.doesNotMatch(bdTicketLine, /合回|merge back/, '票行指引不提合并（单票指引说它诱导每票一合）')
+  const bdAgreeZh = bdHtml.split('\n').find((l) => l.indexOf('4. 实现（implement）') >= 0)
+  const bdAgreeEn = bdHtml.split('\n').find((l) => l.indexOf('4. Implementation (implement)') >= 0)
+  assert.ok(bdAgreeZh && bdAgreeEn, '起步约定第 4 步中英两段都在')
+  assert.match(bdAgreeZh, /git switch -c <特性名>-impl/, '约定第 4 步中文段含分支指令')
+  assert.match(bdAgreeZh, /合回 main/, '约定第 4 步中文段含合回 main')
+  assert.match(bdAgreeEn, /git switch -c <feature-slug>-impl/, '约定第 4 步英文段含分支指令')
+  assert.match(bdAgreeEn, /merge back to main/, '约定第 4 步英文段含合回措辞')
+  ok('分支纪律（branch-discipline 01）：Implement 阶段指引词与起步约定第 4 步中英两列都含分支指令（git switch -c）与合回 main 措辞；票行点击指引词含分支指令但不含合回措辞；收尾（implementDone）文案不提合并')
 
   // ── 静态壳取词绑定（english-ui 票 02，票 04 实拍补的洞）：markup 的 data-i18n* 键不许悬空，
   //    写死的中文默认态不许与词表漂移。悬空键把标签擦成空白，而「零中文残留」照样通过——所以这一组
@@ -2135,6 +2166,8 @@ async function runScenarios(tmp) {
     assert.equal(copiesA.length, 1, 'focus 后 Enter 触发复制')
     assert.match(copiesA[0], /请实现票 01/)
     assert.match(copiesA[0], /01-index-core/)
+    assert.match(copiesA[0], /git switch -c/, '票行复制词带分支指令（branch-discipline 01）')
+    assert.doesNotMatch(copiesA[0], /合回|merge back/, '票行复制词不提合并（合并是 effort 级动作）')
     aKey(aRow, ' ')
     await tick()
     assert.equal(copiesA.length, 2, 'Space 与 Enter 同一处理')
@@ -2155,6 +2188,7 @@ async function runScenarios(tmp) {
     aKey(aStages[3], 'Enter')
     await tick()
     assert.match(copiesA[copiesA.length - 1], /Blocked by 为空的票/, '链格 Enter 复制本格指引词')
+    assert.match(copiesA[copiesA.length - 1], /git switch -c/, '链格复制词带分支指令（branch-discipline 01）')
 
     // 推定含义不再只藏悬停：推定链格的 aria-label 与推定徽标都载说明
     aTab('only-spec').dispatchEvent(new aWin.Event('click'))
@@ -3062,6 +3096,7 @@ async function runScenarios(tmp) {
     const scWin = scaffoldDom.window
     const scPres = Array.from(scDoc.querySelectorAll('pre.agreement'))
     assert.equal(scPres.length, 2, '空态页有两段可复制文本（工作约定 + 建骨架指令）')
+    assert.match(scPres[0].textContent, /git switch -c/, '工作约定第 4 步带分支指令（branch-discipline 01）')
     assert.match(scPres[1].textContent, /\.scratch\/<特性名>\/map\.md/, '骨架指令给出相对追踪目录的 map.md 路径')
     assert.match(scPres[1].textContent, /Destination/, '要求 Destination 一节')
     assert.match(scPres[1].textContent, /Not yet specified/, '要求 Not yet specified 一节')
