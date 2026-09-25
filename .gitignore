@@ -2,5 +2,8 @@ node_modules/
 .DS_Store
 config.json
 
+# git worktree 的落地面（隔离开发用），工作树本身不进版本库
+.worktrees/
+
 # 工单与流程产物只留在本地，不上传（flowdeck 自己吃自己的狗粮，但票据不进公开仓库）
 .scratch/
