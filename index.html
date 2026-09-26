@@ -163,13 +163,18 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
           <div class="hint" data-i18n="set.guides.face.hint">五面各存各的：四个阶段格各一面，加票行那面。留空或空串的面复制时用内置文案。上面四项的名字跟着界面语言走，改语言即换。</div>
         </div>
         <div class="frow">
+          <label for="setGuidesPrefix" data-i18n="set.guides.prefix">前缀</label>
+          <input id="setGuidesPrefix" type="text" spellcheck="false">
+          <div class="hint" data-i18n="set.guides.prefix.hint">一段每次都一样的文字，复制那一刻贴在最前面（不区分中英，面下拉切换不换它）。留空 = 不贴。例：`/using-git-worktrees /implement`。</div>
+        </div>
+        <div class="frow">
           <label for="setGuidesZh" data-i18n="set.guides.zh">指引词（中文）</label>
-          <textarea id="setGuidesZh" rows="7" spellcheck="false"></textarea>
+          <textarea id="setGuidesZh" rows="4" spellcheck="false"></textarea>
           <div class="hint" data-i18n="set.guides.zh.hint">留空 = 用内置文案；非空 = 整段取代它（不是接在前面）。这一列只在中文界面生效。</div>
         </div>
         <div class="frow">
           <label for="setGuidesEn" data-i18n="set.guides.en">指引词（英文）</label>
-          <textarea id="setGuidesEn" rows="7" spellcheck="false"></textarea>
+          <textarea id="setGuidesEn" rows="4" spellcheck="false"></textarea>
           <div class="hint" data-i18n="set.guides.en.hint">同上，只管英文界面。只填中文不必管这一格——中英各判各的。</div>
         </div>
         <div class="frow" id="setGuidesSlotsRow" hidden>
@@ -179,12 +184,15 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
         <div class="frow">
           <label data-i18n="set.guides.preview">保存后生效</label>
           <pre id="setGuidesPreview" class="guide-preview"></pre>
-          <div class="hint" data-i18n="set.guides.preview.hint">按当前界面语言显示：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。</div>
+          <div class="hint" data-i18n="set.guides.preview.hint">按当前界面语言显示，含前缀：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。前缀一定会跟着复制出去，不显示它这个面板就是在说谎。</div>
         </div>
         <div class="frow">
           <label></label>
-          <button id="setGuidesReset" data-i18n="set.guides.reset">恢复默认…</button>
-          <div class="hint" data-i18n="set.guides.reset.hint">清空当前这一面的中英两段，复制时回落内置文案（其余四面不碰；点「保存」才写盘）。</div>
+          <div class="btnline">
+            <button id="setGuidesCopy" data-i18n="set.guides.copy">复制当前效果</button>
+            <button id="setGuidesReset" data-i18n="set.guides.reset">恢复默认…</button>
+          </div>
+          <div class="hint" data-i18n="set.guides.reset.hint">「恢复默认」只清空当前这一面的中英两段，复制时回落内置文案（其余四面不碰，前缀也不碰；点「保存」才写盘）。「复制当前效果」复制此刻真的粘得出的那一段，读的是已存的那份，不读输入框里还没保存的草稿。</div>
         </div>
         <div class="fcat" data-i18n="settings.appearance">外观</div>
         <div class="frow">
@@ -195,7 +203,7 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
             <option value="lg" data-i18n="scale.lg">大</option>
             <option value="xl" data-i18n="scale.xl">特大</option>
           </select>
-          <div class="hint" data-i18n="settings.uiScale.hint">小 / 中 / 大 / 特大四档，字号与间距一起整体缩放，切换即时生效。默认「中」，即改造前的尺寸；偏好只存本浏览器，不进 config.json。</div>
+          <div class="hint" data-i18n="settings.uiScale.hint">小 / 中 / 大 / 特大四档，字号与间距/留白一起整体缩放，切换即时生效。默认「中」，即改造前的尺寸；偏好只存本浏览器，不进 config.json。</div>
         </div>
         <div class="factions">
           <button id="settingsSave" class="primary" data-i18n="set.save.label">保存</button>
@@ -377,6 +385,8 @@ var UI_TEXT = {
   'set.guides.face.none': { zh: '— 选一面 —', en: '— pick a surface —' },
   'set.guides.face.hint': { zh: '五面各存各的：四个阶段格各一面，加票行那面。留空或空串的面复制时用内置文案。上面四项的名字跟着界面语言走，改语言即换。', en: 'The five surfaces are stored apart: one per stage cell, plus the ticket row. A surface left empty falls back to the built-in text. The four names above follow the interface language — switching it swaps them.' },
   'set.guides.face.ticket': { zh: '票行（实现这张票）', en: 'Ticket row (implement this ticket)' },
+  'set.guides.prefix': { zh: '前缀', en: 'Prefix' },
+  'set.guides.prefix.hint': { zh: '一段每次都一样的文字，复制那一刻贴在最前面（不区分中英，面下拉切换不换它）。留空 = 不贴。例：`/using-git-worktrees /implement`。', en: 'Text that is always the same, pasted in front of the guidance at copy time (one value for both languages; switching surfaces does not swap it). Empty = not pasted. For example: `/using-git-worktrees /implement`.' },
   'set.guides.zh': { zh: '指引词（中文）', en: 'Guidance words (Chinese)' },
   'set.guides.zh.hint': { zh: '留空 = 用内置文案；非空 = 整段取代它（不是接在前面）。这一列只在中文界面生效。', en: 'Empty means the built-in text; anything here replaces it wholesale (it is not prepended). This column applies to the Chinese interface only.' },
   'set.guides.en': { zh: '指引词（英文）', en: 'Guidance words (English)' },
@@ -385,12 +395,13 @@ var UI_TEXT = {
   'set.guides.slots.none': { zh: '这一面无槽：{key} {path} {title} 只在票行那面可用。这里写的字原样复制出去。', en: 'No slots on this surface: {key} {path} {title} only work on the ticket row. Whatever you write here is copied out verbatim.' },
   'set.guides.slots.ticket': { zh: '票行是五面里唯一带槽的一面：{key} {path} {title} 会在复制那一刻实填成被点那张票的票号、路径与标题。其余四面无槽——这里不提供别的占位符。下面的预览拿当前 effort 的第一张票当样本；真复制时填的是你点的那张。', en: 'The ticket row is the only surface with slots: {key} {path} {title} are filled in at copy time with the number, path and title of the ticket you clicked. The other four have none — no other placeholders exist here. The preview below uses the first ticket of the current effort as its sample; a real copy fills in whichever one you click.' },
   'set.guides.preview': { zh: '保存后生效', en: 'Takes effect on save' },
-  'set.guides.preview.hint': { zh: '按当前界面语言显示：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。', en: 'Shown for the current interface language: whatever is in the box once you save, otherwise the built-in text (only the one that takes effect, never both side by side).' },
+  'set.guides.preview.hint': { zh: '按当前界面语言显示，含前缀：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。前缀一定会跟着复制出去，不显示它这个面板就是在说谎。', en: 'Shown for the current interface language, prefix included: whatever is in the box once you save, otherwise the built-in text (only the one that takes effect, never both side by side). The prefix always travels with the copy, so hiding it here would make the panel lie.' },
   'set.guides.preview.pick': { zh: '（先在上面选一面）', en: '(pick a surface above first)' },
   'set.guides.preview.none': { zh: '（当前追踪目录还没有 effort，没有内置段可显示）', en: '(the tracked directory has no effort yet, so there is no built-in text to show)' },
+  'set.guides.copy': { zh: '复制当前效果', en: 'Copy current effect' },
   'set.guides.reset': { zh: '恢复默认…', en: 'Restore default…' },
-  'set.guides.reset.hint': { zh: '清空当前这一面的中英两段，复制时回落内置文案（其余四面不碰；点「保存」才写盘）。', en: 'Clears both columns of the surface you have selected so copying falls back to the built-in text (the other four are untouched; it reaches config.json when you press Save).' },
-  'set.guides.reset.confirm': { zh: '清空「{face}」这面的中英两段指引词？保存后复制将回到内置文案。', en: 'Clear both guidance columns for “{face}”? Once saved, copying falls back to the built-in text.' },
+  'set.guides.reset.hint': { zh: '「恢复默认」只清空当前这一面的中英两段，复制时回落内置文案（其余四面不碰，前缀也不碰；点「保存」才写盘）。「复制当前效果」复制此刻真的粘得出的那一段，读的是已存的那份，不读输入框里还没保存的草稿。', en: '“Restore default” clears both columns of the surface you have selected so copying falls back to the built-in text (the other four are untouched, and neither is the prefix; it reaches config.json when you press Save). “Copy current effect” copies the text that would land on the clipboard right now — what is saved, not the unsaved draft in the box.' },
+  'set.guides.reset.confirm': { zh: '清空「{face}」这面的中英两段指引词？保存后复制将回到内置文案（前缀保留）。', en: 'Clear both guidance columns for “{face}”? Once saved, copying falls back to the built-in text (the prefix is kept).' },
   'set.save.label': { zh: '保存', en: 'Save' },
   'set.field.pollMs': { zh: '轮询间隔', en: 'poll interval' },
   'set.field.pollMode': { zh: '轮询模式', en: 'poll mode' },
@@ -399,6 +410,7 @@ var UI_TEXT = {
   'set.field.token': { zh: '访问令牌', en: 'access token' },
   'set.field.root': { zh: '追踪目录', en: 'tracked directory' },
   'set.field.guides': { zh: '指引词', en: 'guidance words' },
+  'set.field.guidesPrefix': { zh: '前缀', en: 'prefix' },
   'set.applied': { zh: '已生效：{fields}', en: 'Applied: {fields}' },
   'set.applied-restart': { zh: '重启后生效：{fields}', en: 'Applies after restart: {fields}' },
   'set.saved': { zh: '已保存', en: 'Saved' },
@@ -923,10 +935,11 @@ function guideText(s, field) {
    规则一句话：某一面的自定义段非空即整段取代内置段，为空回落内置段——中英各判各的。
    五面 = 四个阶段格（面名就是 flowchain.mjs 的阶段 id）+ 票行那面（ticket）。四个阶段格的取词
    是一行（面名即阶段 id，for 都不用写），下一步卡按钮未完工时走的也是它。服务端只把 guides 原值
-   搬下来，不参与拼装——「服务端不造字」的纪律在这一格同样成立，取舍全在界面这一侧。 */
+   搬下来，不参与拼装——「服务端不造字」的纪律在这一格同样成立，取舍全在界面这一侧。
+   另有「前缀」（guides-prefix 票 01）：每一面一行、每次都一样的一段话，复制那一刻贴在最前面。 */
 var GUIDE_TICKET = 'ticket'
 
-/** 票行复制的三槽（票 03）：票行那面是五面里唯一以「是哪张票」为身份的一面，所以它得知道是哪张票。
+/** 票行复制的三槽（票 03）：票行那面是最细粒度的一面（它得知道是哪张票），所以才有这三个槽。
     path 的拼法与指引词无关，只此一处。 */
 function ticketGuideVars(eff, tk) {
   return {
@@ -935,12 +948,27 @@ function ticketGuideVars(eff, tk) {
     title: tk.title,
   }
 }
+/** 某一面存的前缀：非空判据与自定义段同款（同一个函数，不另写一份 trim 判据），
+ *  服务端只搬 guidesPrefix 原值下来，贴不贴、怎么贴全在这一侧。 */
+function guidePrefix(face) {
+  return guideOverrideValue(((state && state.guidesPrefix && state.guidesPrefix[face]) || ''))
+}
+/** 组装成真正粘出去的那一段：前缀 + 空行 + 正文；没有前缀就正文原样（连一个空行都不多）。
+ *  产品里贴前缀的出口有两处——链格/下一步卡、票行；设置弹窗的「复制当前效果」复制的正是这两处
+ *  此刻会粘出的那段，所以也带前缀。三处各走这一个函数——各拼一次，迟早会漂移。 */
+function withPrefix(face, body) {
+  var p = guidePrefix(face)
+  return p ? p + '\n\n' + body : body
+}
 function ticketCopy(eff, tk) {
   // 单趟填槽：内置段与自定义段走同一趟，先 tf 再套 fillSlots 会把票路径/标题里本来就有的
   // 「{key}」再替换一次（一张文件名里带花括号的票就会被二次加工）。
   // 自定义段非空即整段取代内置段；取代之后那三个槽照样实填——全文覆盖成静态文字就会产出
   // 「请实现这张票」而无票号、无路径、无标题，正是票行这一面带槽的理由。
-  return fillSlots(guideOverride(GUIDE_TICKET) || t('copy.ticket'), ticketGuideVars(eff, tk))
+  // 先填槽、再拼前缀：前缀没有槽，里面的花括号原样复制出去，所以它不能过填槽器这一趟——
+  // 顺序上让 withPrefix 在外层，前缀就永远不进 fillSlots（反过来写，填槽器会把前缀里的 {key}
+  // 也当成票行槽填掉）。单趟替换本身不会二次加工票路径/标题里的花括号，这里守的是前缀不过槽。
+  return withPrefix(GUIDE_TICKET, fillSlots(guideOverride(GUIDE_TICKET) || t('copy.ticket'), ticketGuideVars(eff, tk)))
 }
 
 /** 当前语言对应的自定义段列：中英各判各的判据就这一处。 */
@@ -958,7 +986,7 @@ function guideOverride(face) {
 /** 某一格当前生效的指引词：面名即阶段 id，四个阶段面同一段代码；未改写的面照旧走内置段（按语言取列）。
     链格复制与下一步卡按钮同走这一个函数——两处各判一次，迟早会漂移。 */
 function effectiveStageGuide(s) {
-  return s ? (guideOverride(s.id) || guideText(s, 'copyText')) : ''
+  return s ? withPrefix(s.id, guideOverride(s.id) || guideText(s, 'copyText')) : ''
 }
 
 /* ── triage 档位过滤（票 01）：六档单选 chip，点亮=只看该档、再点回全量 ──
@@ -2987,6 +3015,7 @@ function settingsSnapshotInitial() {
     host: state && state.host ? state.host : '',
     port: state && state.port !== undefined ? state.port : '',
     guides: (state && state.guides) || {},
+    guidesPrefix: (state && state.guidesPrefix) || {},
   }
 }
 
@@ -2994,6 +3023,8 @@ function settingsSnapshotInitial() {
    键名散着写迟早串台（尤其是「提交时哪一列对哪一格」这种一旦错位就静默的配对）。 */
 var GUIDE_BOXES = { zh: 'setGuidesZh', en: 'setGuidesEn' }
 function guideBoxId(langKey) { return GUIDE_BOXES[langKey] }
+/* 前缀那一个输入框同样只有一个出处（它不是 textarea，键名表管不着它）。 */
+var GUIDE_PREFIX_BOX = 'setGuidesPrefix'
 
 /* 面下拉里那四个阶段面的名字读载荷 stageNames（阶段名单一来源，english-ui 票 02 立的纪律）——
    markup 里那四个 <option> 因此是空的，由这里按当前语言填。票行那面没有阶段名可读，标签住词表
@@ -3032,10 +3063,12 @@ function guidePreviewVars(face) {
   return tk ? ticketGuideVars(eff, tk) : null
 }
 
-/** 指引词预览（票 02 + 03）：自定义段非空显示自定义段、为空显示内置段——只显示生效的那一份，不并列。
+/** 指引词预览（票 02 + 03 + guides-prefix 01）：自定义段非空显示自定义段、为空显示内置段——只显示生效的那一份，
+    不并列；前缀在时显示为「前缀 + 空行 + 正文」（它一定会跟着复制出去，不显示它这个面板就是在说谎）。
     读的是**输入框里当前的值**而不是已存的那份：预览回答的是「点保存之后会复制出什么」，
-    所以改一个字就重画，不必等保存。语言跟着界面走（英文界面看英文列），这本身就是「中英各判各的」的样子。
-    标签因此写「保存后生效」而不是「当前生效」——存着的那份此刻确实还在生效，两处不能混说。 */
+    所以改一个字就重画，不必等保存。语言跟着界面走（英文界面看英文列），这本身就是「中英各判各的」的样子；
+    前缀不分语言，两个界面读同一份。标签因此写「保存后生效」而不是「当前生效」——存着的那份此刻确实还在生效，
+    两处不能混说。 */
 function renderGuidesPreview() {
   var box = document.getElementById('setGuidesPreview')
   var face = settingsState.guideFace
@@ -3043,7 +3076,19 @@ function renderGuidesPreview() {
   var draft = guideOverrideValue(document.getElementById(guideBoxId(guideLangKey())).value)
   var text = draft || guideBuiltinText(face)
   var vars = guidePreviewVars(face)
-  box.textContent = vars ? fillSlots(text, vars) : text
+  var body = vars ? fillSlots(text, vars) : text
+  var pfx = guideOverrideValue(document.getElementById(GUIDE_PREFIX_BOX).value)
+  // 前缀与正文住同一个 <pre>（预白的换行正是「空一行」这件事本身），前缀另住一个元素：
+  // 不标出来的话，使用者在预览里也分不清哪半句是自己填的
+  box.textContent = ''
+  if (pfx) {
+    var span = document.createElement('span')
+    span.className = 'gp-pfx'
+    span.textContent = pfx
+    box.appendChild(span)
+    box.appendChild(document.createTextNode('\n\n'))
+  }
+  box.appendChild(document.createTextNode(body))
 }
 
 /** 草稿里某一面某一列的当前值：没编辑过 = 打开时的初值，缺面即空串（= 回落内置段）。 */
@@ -3051,28 +3096,51 @@ function guideDraftValue(face, langKey) {
   var d = settingsState.guideDraft[face]
   return d ? (d[langKey] || '') : ''
 }
+/** 草稿里某一面那一行前缀：同款缺面即空串（= 不贴前缀）。 */
+function guideDraftPrefix(face) {
+  var d = settingsState.guideDraft[face]
+  return d ? (d.prefix || '') : ''
+}
 /** 把当前选中的那一面从输入框收回草稿——换面与保存都调它。输入框是「正在编辑的那一面」的真相，
-    草稿是「其余四面」的真相，两边在一处汇合；漏调一次，这一面没敲的改动就跟着换面丢了。 */
+    草稿是「其余四面」的真相，两边在一处汇合；漏调一次，这一面没敲的改动就跟着换面丢了。
+    三格（正文两列 + 前缀）一起收：前缀也是草稿的一部分，否则换面会把它按空值带走。 */
 function guideStashFace() {
   if (!settingsState.guideFace) return
   settingsState.guideDraft[settingsState.guideFace] = {
     zh: document.getElementById(guideBoxId('zh')).value,
     en: document.getElementById(guideBoxId('en')).value,
+    prefix: document.getElementById(GUIDE_PREFIX_BOX).value,
   }
 }
 
+/** 「复制当前效果」复制的那一段：此刻真的粘得出的东西 = 前缀 +（已存自定义段非空 ? 已存的那份 : 内置段），
+    票行面按当前 effort 第一张票采样实填。读**已存**值（guideOverride / guidePrefix 都读 state），
+    不读输入框里的草稿——所以有未存草稿时它与「保存后生效」的预览并不相同，那正是「当前」二字的含义。
+    术语上它比「内置段」准：它复制的不止内置段（还带前缀，也可能带自定义段）。 */
+function guideCurrentEffect(face) {
+  var text = guideOverride(face) || guideBuiltinText(face)
+  var vars = guidePreviewVars(face)
+  return withPrefix(face, vars ? fillSlots(text, vars) : text)
+}
+
 /** 按当前选中的面重画这一组控件（开窗、切面、恢复默认三处共用）。未选面是明确的空态：
-    两个输入框与恢复默认一并禁用、预览明说先选一面——默认落在某一面（比如 implement）会让人
-    以为那就是全部五面，而它其实只是五分之一。 */
+    三个输入框与两个按钮一并禁用、预览明说先选一面——默认落在某一面（比如 implement）会让人
+    以为那就是全部五面，而它其实只是五分之一。
+    「复制当前效果」另有一档停用：选了一个阶段面而当前追踪目录没有 effort 时没有内置段可复制，
+    与其把一句「这里没有内置段可显示」复制走，不如把按钮停用（票行面不依赖 effort，照常可复制）。 */
 function renderGuideFace() {
   var face = settingsState.guideFace
   var zh = document.getElementById(guideBoxId('zh'))
   var en = document.getElementById(guideBoxId('en'))
+  var pfx = document.getElementById(GUIDE_PREFIX_BOX)
   zh.disabled = !face
   en.disabled = !face
+  pfx.disabled = !face
   zh.value = face ? guideDraftValue(face, 'zh') : ''
   en.value = face ? guideDraftValue(face, 'en') : ''
+  pfx.value = face ? guideDraftPrefix(face) : ''
   document.getElementById('setGuidesReset').disabled = !face
+  document.getElementById('setGuidesCopy').disabled = !face || (face !== GUIDE_TICKET && !currentEffort())
   // 槽那一行整行随空态收掉：留个「槽」标签配一片空白，比没有这行更难读
   var slotsRow = document.getElementById('setGuidesSlotsRow')
   slotsRow.hidden = !face
@@ -3109,12 +3177,16 @@ function openSettings() {
   document.getElementById('setPollMode').value = settingsState.initial.pollMode
   document.getElementById('setHost').value = settingsState.initial.host
   document.getElementById('setPort').value = settingsState.initial.port
-  // 指引词（票 02 + 03）：草稿以初值起底（config.json 里现存的每一面都带上，未编辑过的面
-  // 原样带回，不吞）；下拉回到空态——每次开窗都要重新选面，别让上次选的那面冒充默认值。
+  // 指引词（票 02 + 03 + guides-prefix 01）：草稿以初值起底（config.json 里现存的每一面都带上，
+  // 未编辑过的面原样带回，不吞）；下拉回到空态——每次开窗都要重新选面，别让上次选的那面冒充默认值。
+  // 起底的面取两个字段的并集：只存了前缀没存正文的那一面也得进来（它有草稿要保，漏了就等于没这面）。
   settingsState.guideDraft = {}
   var initFaces = settingsState.initial.guides
-  Object.keys(initFaces).forEach(function (f) {
-    settingsState.guideDraft[f] = { zh: initFaces[f].zh || '', en: initFaces[f].en || '' }
+  var initPrefix = settingsState.initial.guidesPrefix
+  var seedFaces = Object.keys(initFaces)
+  Object.keys(initPrefix).forEach(function (f) { if (seedFaces.indexOf(f) < 0) seedFaces.push(f) })
+  seedFaces.forEach(function (f) {
+    settingsState.guideDraft[f] = { zh: initFaces[f] ? (initFaces[f].zh || '') : '', en: initFaces[f] ? (initFaces[f].en || '') : '', prefix: initPrefix[f] || '' }
   })
   settingsState.guideFace = ''
   document.getElementById('setGuidesFace').value = ''
@@ -3142,19 +3214,26 @@ function settingsChanges() {
   var tok = document.getElementById('setToken').value
   if (tok !== '') patch.token = tok
   if (settingsState.clearToken) patch.token = ''
-  // 指引词（票 02 + 03）：没动就不进补丁；动了就把**全部五面**一起发（服务端整份替换 guides，
-  // 只发当前面会把其余四面清掉）。发之前先把当前面的输入框收回草稿——没收回来的改动就丢了。
+  // 指引词（票 02 + 03 + guides-prefix 01）：没动就不进补丁；动了就把**全部五面**一起发（服务端整份替换，
+  // 只发当前面会把其余四面清掉）。两个字段各判各的脏——没改正文就别拿 guides 去覆盖磁盘上那份；
+  // 但发了就是整份（guidesPrefix 同款，不做逐面差异）。发之前先把当前面的输入框收回草稿。
   guideStashFace()
   var initGuides = settingsState.initial.guides
+  var initPrefix = settingsState.initial.guidesPrefix
   var faces = {}
+  var prefixes = {}
   var guidesChanged = false
+  var prefixChanged = false
   Object.keys(settingsState.guideDraft).forEach(function (f) {
     var v = settingsState.guideDraft[f]
     faces[f] = { zh: v.zh || '', en: v.en || '' }
+    prefixes[f] = v.prefix || ''
     var g0 = initGuides[f] || {}
     if (faces[f].zh !== (g0.zh || '') || faces[f].en !== (g0.en || '')) guidesChanged = true
+    if (prefixes[f] !== (initPrefix[f] || '')) prefixChanged = true
   })
   if (guidesChanged) patch.guides = faces
+  if (prefixChanged) patch.guidesPrefix = prefixes
   return patch
 }
 
@@ -3211,11 +3290,12 @@ document.getElementById('setTokenClear').addEventListener('click', function () {
   document.getElementById('setTokenClearRow').hidden = true
   document.getElementById('setTokenHint').textContent = t('set.token.cleared')
 })
-/* 指引词（票 02 + 03）：预览是「保存之后会复制出什么」，所以边打字边重画，不等保存。
-   两个输入框都挂同一个重画——两列里只有当前语言那列会被预览读到，另一个挂上是零成本的。 */
+/* 指引词（票 02 + 03 + guides-prefix 01）：预览是「保存之后会复制出什么」，所以边打字边重画，不等保存。
+   三个输入框都挂同一个重画——两列正文里只有当前语言那列会被预览读到，另一个挂上是零成本的。 */
 ;['zh', 'en'].forEach(function (k) {
   document.getElementById(guideBoxId(k)).addEventListener('input', renderGuidesPreview)
 })
+document.getElementById(GUIDE_PREFIX_BOX).addEventListener('input', renderGuidesPreview)
 /* 面下拉：换面 = 收回当前面的草稿 + 按新面重画。收回放在换值之前——顺序反了就把刚敲的字丢掉。 */
 document.getElementById('setGuidesFace').addEventListener('change', function () {
   guideStashFace()
@@ -3223,15 +3303,25 @@ document.getElementById('setGuidesFace').addEventListener('change', function () 
   renderGuideFace()
 })
 /* 恢复默认：清空**当前面**的中英两列（与提交时「五面一起发」同形），二次确认挡住误点，
-   确认文案点名当前面——「清空指引词」听起来像是把五面都清了。其余四面不碰。
-   只清输入框、不直接写盘——设置弹窗的写入口只有「保存」一个，另有第二条路就说不清了。 */
+   确认文案点名当前面——「清空指引词」听起来像是把五面都清了。其余四面不碰，**前缀也不碰**
+   （点它是想撤销一段写坏的自定义段，不是想把整面恢复到出厂；一个独立的前缀清除入口也没有，
+   那一行输入框选中即删）。只清输入框、不直接写盘——设置弹窗的写入口只有「保存」一个，
+   另有第二条路就说不清了。 */
 document.getElementById('setGuidesReset').addEventListener('click', function () {
   var face = settingsState.guideFace
   if (!face) return
   var name = guideFaceLabel(face)
   if (!window.confirm(tf('set.guides.reset.confirm', { face: name }))) return
-  settingsState.guideDraft[face] = { zh: '', en: '' }
+  settingsState.guideDraft[face] = { zh: '', en: '', prefix: guideDraftPrefix(face) }
   renderGuideFace()
+})
+/* 复制当前效果：把「此刻点一下链格/票行会粘出的那一段」直接复制走，省得为了看一眼默认文案去点链格
+   （点链格会顺带走一次复制，而多数时候只是想知道它长什么样）。标签无省略号——省略号在这套 UI 里
+   表示「后面跟着一个确认框」，复制不确认。 */
+document.getElementById('setGuidesCopy').addEventListener('click', function () {
+  var face = settingsState.guideFace
+  if (!face) return
+  copyText(guideCurrentEffect(face))
 })
 // 桌面通知开关（票 04）：开启即申请权限（权限时机由用户掌控，默认关）；被拒回落并提示
 // 补救路径（浏览器站点设置）；关闭即抹去本地偏好。全部走 localStorage，与保存按钮无关。

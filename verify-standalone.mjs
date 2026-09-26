@@ -73,15 +73,8 @@
  *                                降级保留为回归防护；两份 README 的起步约定第 4 步已缩成指针，钉它不再
  *                                逐字复制权威原文。
  *  34. 指引词可整段改写 · 五面铺开（custom-guides 02 + 03）→ config.json 的 guides 字段：逐形状校验
- *  35. 项目标签纯函数（project-tabs 01）→ 从 index.html 的 TAG_FN 区直接求值（不复制第二份）：
- *                                emoji 派生（同目录恒同图、池内无重复、不同名散开）、开卡（去重/上限 8）、
- *                                关卡（右邻优先、无右邻落左邻、全关落 -1）、读回清洗、补位（含满额换位）。
- *  36. 项目标签条（project-tabs 01）→ HTTP：切标签即换根写盘，root 恒等于活跃卡目录、
- *                                「说明」「字段说明」与 pollMs 一次不丢；jsdom：卡面渲染与生命周期
- *                                （开/切/关、去重落已有卡、上限拦截、空态）、折叠与折叠态持久化、
- *                                重开页面原样恢复、页面加载以服务端追踪目录补位、每卡界面状态按目录分桶。
- *                                （非法整体 400 且一个字不写盘、错误码稳定）、applied.immediate、手改下一拍
- *                                生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，
+ *                                （非法含面内多余键一律整体 400 且一个字不写盘、错误码稳定）、applied.immediate、
+ *                                手改下一拍生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，
  *                                面上额外键剔除，缺面/空串/清空皆合法）；界面上五面（四个阶段格 + 票行）各设自定义
  *                                段各复制一次都走该面自己的段，面下拉带空态（不默认落在某一面）、切面即换内容与
  *                                预览、下拉里四个阶段名读载荷 stageNames、只填中文时英文界面仍复制内置英文段、
@@ -90,6 +83,13 @@
  *                                票行那面 {key}/{path}/{title} 实填、其余四面无槽；config.example.json 与两份
  *                                README 的 config 段同步了 guides 字段。
  *                                必改的既有缺陷：设置弹窗焦点圈禁那条测试的选择器补上 textarea。
+ *  35. 项目标签纯函数（project-tabs 01）→ 从 index.html 的 TAG_FN 区直接求值（不复制第二份）：
+ *                                emoji 派生（同目录恒同图、池内无重复、不同名散开）、开卡（去重/上限 8）、
+ *                                关卡（右邻优先、无右邻落左邻、全关落 -1）、读回清洗、补位（含满额换位）。
+ *  36. 项目标签条（project-tabs 01）→ HTTP：切标签即换根写盘，root 恒等于活跃卡目录、
+ *                                「说明」「字段说明」与 pollMs 一次不丢；jsdom：卡面渲染与生命周期
+ *                                （开/切/关、去重落已有卡、上限拦截、空态）、折叠与折叠态持久化、
+ *                                重开页面原样恢复、页面加载以服务端追踪目录补位、每卡界面状态按目录分桶。
  *  37. 切换条减负（ui-declutter 01）→ 顶部 effort 切换条按 chain.complete 分组：进行中平铺在前、
  *                                「✓ 完工 (n)」折叠入口、展开时的完工 tab、「全部」垫底；计数中英双语、
  *                                入口可 Tab 到达且 aria-expanded 如实；选中项例外（选中的完工 effort 照常
@@ -113,6 +113,23 @@
  *                                切回失败沿用既有失败提示并停留原卡且不谎报恢复；换根落定前发出、
  *                                落定后回来的那一拍整拍丢弃；追踪目录被别处换掉而留在挂起的那张，
  *                                同样按离开时原样存下内容与时刻。
+ *  40. 指引词前缀（guides-prefix 01）→ config.json 的 guidesPrefix 字段：形状 { 面名: 字符串 }（比 guides
+ *                                窄一维——中英不分列，硬撑两列会造出界面表示不了的状态），逐形状校验（面值
+ *                                非字符串/非对象与 __proto__ 一律整体 400 且一个字不写盘、错误码独立一个
+ *                                config.guides-prefix）、applied.immediate、手改下一拍生效、写盘保留「说明」与
+ *                                「字段说明」、服务端只搬原值不参与拼装（内置段里不出现前缀）、面名原样透传不拦、
+ *                                缺面/空串/整份清空皆合法；界面上链格/下一步卡与票行两处出口走同一段拼装
+ *                                （= 前缀 + 空行 + 正文；票行先填槽再拼前缀，所以文件名里带 {key} 的票不被二次
+ *                                加工），两面各填各的互不串台，空前缀正文原样（连一个空行都不多）、空串与全空白
+ *                                等同没填、非空则原样贴出，自定义段与前缀同时生效，预览含前缀且前缀那一眼可与
+ *                                正文区分，「复制当前效果」读已存值（未存草稿时给已存那份、草稿与已存相同时与
+ *                                预览逐字一致、阶段面无 effort 时禁用、未选面时禁用），恢复默认清正文而前缀原样
+ *                                留着、换面再切回前缀不丢，负面项：完工收尾文案/工作约定/建骨架指令三处不带前缀
+ *                                且逐字与今天一致、服务端下发的阶段段里不出现前缀；文件级：markup 有前缀输入行与
+ *                                「复制当前效果」按钮（标签无省略号）、两个 textarea 的行数与样式表最小高度都降
+ *                                到位（字面量断言，三层里最脆的一条，保留它只为让「被谁又调高了」有人发现）、
+ *                                样式表不为它新开 id 选择器，config.example.json 与两份 README 讲清 guidesPrefix，
+ *                                CONTEXT.md 有「前缀」词条且那句「唯一以…为身份」已改掉。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -126,7 +143,7 @@ import os from 'node:os'
 import nodePath from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { scanWorkspace } from './scan.mjs'
-import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT, normalizeGuides } from './server.mjs'
+import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT, normalizeGuides, normalizeGuidesPrefix } from './server.mjs'
 
 const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
 
@@ -716,16 +733,29 @@ async function runScenarios(tmp) {
       bound++
       if (!SHELL_TEXT[key]) { dangling.push(attr + '=' + key); continue }
       const dom = SHELL_CHANNELS[attr]
-      if (dom === null) continue // 正文通道由 jsdom 那组按当前语言逐字钉，这里不比 innerHTML
+      if (dom === null) continue // 正文通道走下面那段（innerText 不是属性，这里取不到）
       const literal = (attrs.find((a) => a[0] === dom) || [])[1]
       if (literal !== SHELL_TEXT[key].zh) drifted.push(key + '：markup ' + JSON.stringify(literal) + ' ≠ 词表 ' + JSON.stringify(SHELL_TEXT[key].zh))
     }
   }
+  // 正文通道（data-i18n → textContent）也要逐字钉：不钉的话「词表改了、markup 里那份中文默认态忘了跟」
+  // 就没人发现（运行期 applyStaticCopy 首帧即覆写，用户看不见，而 jsdom 那组只钉英文列、且发生在覆写之后）。
+  // 字符串法而非 jsdom：本组在 jsdom 门槛之前，拷出去没装 jsdom 也得跑。留空的元素豁免——它的字由 JS 填。
+  let bodyBound = 0
+  for (const m of deckHtml.slice(deckHtml.indexOf('<body')).matchAll(/<([a-zA-Z]+)([^>]*\sdata-i18n="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>/g)) {
+    const key = m[3]
+    if (!SHELL_TEXT[key]) continue // 悬空已由上面那条钉
+    bodyBound++
+    const inner = m[4].replace(/<[^>]+>/g, '')
+    if (!inner.trim()) continue // 留空 = JS 填（如 foot.note），不是漂移
+    if (inner !== SHELL_TEXT[key].zh) drifted.push(key + '：markup 正文 ' + JSON.stringify(inner) + ' ≠ 词表 ' + JSON.stringify(SHELL_TEXT[key].zh))
+  }
   assert.ok(Object.keys(SHELL_TEXT).length > 200, '词表整块求值成功（' + Object.keys(SHELL_TEXT).length + ' 条）')
   assert.ok(bound >= 40, '静态壳的取词绑定全部进入扫描面（' + bound + ' 条）')
+  assert.ok(bodyBound >= 40, '正文通道的绑定也全部进入扫描面（' + bodyBound + ' 条）')
   assert.deepEqual(dangling, [], 'markup 每个 data-i18n* 键都在词表里（悬空即空白，零残留扫不出来）')
   assert.deepEqual(drifted, [], '写死的中文默认态与词表中文列逐字一致（中文态字节不变这条硬约束的静态壳侧）')
-  ok('静态壳取词绑定（文件级）：data-i18n* 键不悬空，title/placeholder/aria 三通道的 markup 中文默认态与词表中文列逐字一致')
+  ok('静态壳取词绑定（文件级）：data-i18n* 键不悬空，title/placeholder/aria 三通道与正文通道的 markup 中文默认态都与词表中文列逐字一致')
 
   // ── 流式缩放基座（ui-appearance 票 03）：jsdom 无布局能力，本组只钉「接线存在」，不断言像素尺寸 ──
   const appCss = await fs.readFile(nodePath.join(HERE, 'styles', 'app.css'), 'utf8')
@@ -925,6 +955,20 @@ async function runScenarios(tmp) {
   assert.equal(Object.getPrototypeOf(normalizeGuides({ implement: { zh: '甲' } })), Object.prototype, '归一结果仍是普通对象（原型没被动过）')
   ok('normalizeGuides：每面只取 {zh,en} 两列、面名原样透传、缺面/空串合法；非对象/面非对象/语言列非字符串/面内多余键与 __proto__ 一律回 undefined')
 
+  // ── 指引词前缀（guides-prefix 票 01）：形状比 guides 窄一维——{ 面名: 字符串 }，中英不分列。
+  //    值的维度只有一个是刻意的：硬撑成 {zh,en} 会造出「两列不等」这种界面表示不了的状态。──
+  assert.deepEqual(normalizeGuidesPrefix({ implement: '/implement' }), { implement: '/implement' })
+  assert.deepEqual(normalizeGuidesPrefix({ implement: '/implement', ticket: '/implement' }), { implement: '/implement', ticket: '/implement' }, '两面各存各的，互不继承')
+  assert.deepEqual(normalizeGuidesPrefix({ implement: '' }), { implement: '' }, '空串原样留着——它就是「空前缀 = 不贴」这一事实，由界面按非空判定')
+  assert.deepEqual(normalizeGuidesPrefix({}), {})
+  assert.deepEqual(normalizeGuidesPrefix({ 我们这面: '/我们这面' }), { 我们这面: '/我们这面' }, '面名不校验、原样透传（与 guides 同纪律）')
+  for (const bad of [undefined, null, 'x', 7, [], { implement: { zh: '/x', en: '/x' } }, { implement: 42 }, { implement: null }, { implement: ['/x'] }]) {
+    assert.equal(normalizeGuidesPrefix(bad), undefined, '结构非法应回落 undefined（POST 据此 400）：' + JSON.stringify(bad))
+  }
+  assert.equal(normalizeGuidesPrefix(JSON.parse('{"__proto__":"/x"}')), undefined, '__proto__ 不是面名，归一早拒')
+  assert.equal(Object.getPrototypeOf(normalizeGuidesPrefix({ implement: '/x' })), Object.prototype, '归一结果仍是普通对象（原型没被动过）')
+  ok('normalizeGuidesPrefix：每面就是一个字符串、面名原样透传、空串原样留着；非对象/面值非字符串/面值是对象与 __proto__ 一律回 undefined')
+
   const crowd = []
   for (let i = 0; i < RECENT_ROOTS_LIMIT + 10; i++) crowd.push('/tmp/fd-r' + i)
   const capped = touchRecentRoot(crowd, '/tmp/fd-new')
@@ -1067,8 +1111,8 @@ async function runScenarios(tmp) {
   }
 
   // ── 配置：config.json 的 root/pollMs 生效；缺文件用默认 ──
-  assert.deepEqual(loadConfig(nodePath.join(tmp, '不存在的配置.json')), { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', guides: {}, configPath: nodePath.resolve(nodePath.join(tmp, '不存在的配置.json')) })
-  ok('配置缺省：config.json 不存在时不报错，全部字段回落默认（含 token 空 = 不启用、pollMode 观测、guides 空 = 复制内置段）')
+  assert.deepEqual(loadConfig(nodePath.join(tmp, '不存在的配置.json')), { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', guides: {}, guidesPrefix: {}, configPath: nodePath.resolve(nodePath.join(tmp, '不存在的配置.json')) })
+  ok('配置缺省：config.json 不存在时不报错，全部字段回落默认（含 token 空 = 不启用、pollMode 观测、guides 空 = 复制内置段、guidesPrefix 空 = 不贴前缀）')
 
   const cfgHandPath = nodePath.join(tmp, 'config-handwritten.json')
   await writeFile(cfgHandPath, JSON.stringify({
@@ -1860,6 +1904,65 @@ async function runScenarios(tmp) {
     await new Promise((r) => gdServer.server.close(r))
   }
   ok('指引词服务端（custom-guides 02）：guides 逐形状校验（非法含面内多余键一律整体 400 且一个字不写盘、错误码稳定）、applied.immediate、手改 config 下一拍生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装；面名不写死原样透传、缺面/空串/清空皆合法')
+
+  // ── 指引词前缀服务端（guides-prefix 票 01）：guidesPrefix 与 guides 平级，形状 { 面名: 字符串 }。
+  //    服务端仍然只搬原值——「服务端不造字」在这一格同样成立，前缀与正文的拼装在界面复制那一刻。
+  //    沿用上一组那套夹具与真链格根目录（内置段那几处断言要真 effort 才说得清）。──
+  const gpCfg = gdCfg
+  const gpBase = Object.assign({}, gdBase, { guidesPrefix: { implement: '/using-git-worktrees /implement' } })
+  await writeFile(gpCfg, JSON.stringify(gpBase))
+  const gpServer = await startServer({ root: gdRoot, port: 0, configPath: gpCfg })
+  const gpRead = async () => (await fetch(gpServer.url + '/api/state')).json()
+  try {
+    assert.deepEqual((await gpRead()).guidesPrefix, { implement: '/using-git-worktrees /implement' }, 'guidesPrefix 随 /api/state 原值下发（服务端不拼装）')
+    // 手改下一拍生效：config 的 mtime+size 本就在指纹里，这条不靠新机制
+    await fs.writeFile(gpCfg, JSON.stringify(Object.assign({}, gpBase, { guidesPrefix: { implement: '/grilling' } })))
+    assert.deepEqual((await gpRead()).guidesPrefix, { implement: '/grilling' }, '手改 config.json 的 guidesPrefix 下一拍即生效')
+    await fs.writeFile(gpCfg, JSON.stringify(Object.assign({}, gpBase, { guidesPrefix: { implement: { zh: '/x' } } })))
+    assert.deepEqual((await gpRead()).guidesPrefix, {}, '手改写成坏形状回落空对象（读侧不抛也不整份丢弃，与 guides 同姿态）')
+
+    // 逐形状 400：非对象、面值非字符串、面值是对象。结构非法整体拒，一个字都不写盘。
+    await fs.writeFile(gpCfg, JSON.stringify(gpBase))
+    const gpBefore = await fs.readFile(gpCfg, 'utf8')
+    for (const bad of ['x', 123, null, [], { implement: 42 }, { implement: { zh: '/x' } }, { implement: ['/x'] }, { implement: null }]) {
+      const r = await postJson(gpServer.url + '/api/config', { guidesPrefix: bad })
+      assert.equal(r.status, 400, 'guidesPrefix 结构非法应 400：' + JSON.stringify(bad))
+      assert.equal(r.data.code, 'config.guides-prefix', '错误码独立一个（界面按 code 措辞，不与 guides 混）')
+    }
+    // __proto__ 不写盘：它是「面名」的极端形状，与 guides 同一处置
+    const gpProto = await postJson(gpServer.url + '/api/config', JSON.parse('{"guidesPrefix":{"__proto__":"/x"}}'))
+    assert.equal(gpProto.status, 400, '__proto__ 不是面名，整体 400')
+    assert.equal(await fs.readFile(gpCfg, 'utf8'), gpBefore, '全非法请求一个字都不写盘（连格式都不动）')
+
+    // 合法保存：applied.immediate、写盘保留「说明」与「字段说明」、下一拍带上新值
+    const gpOk = await postJson(gpServer.url + '/api/config', { guidesPrefix: { implement: '/implement', ticket: '/implement' } })
+    assert.equal(gpOk.status, 200)
+    assert.deepEqual(gpOk.data.applied, { guidesPrefix: 'immediate' }, 'guidesPrefix 生效语义 immediate（写盘即生效）')
+    const gpSaved = JSON.parse(await fs.readFile(gpCfg, 'utf8'))
+    assert.deepEqual(gpSaved.guidesPrefix, { implement: '/implement', ticket: '/implement' }, 'guidesPrefix 写进 config.json')
+    assert.equal(gpSaved['说明'], '整段保留', '写盘保留「说明」')
+    assert.deepEqual(gpSaved['字段说明'], { root: '要追踪的项目目录' }, '写盘保留「字段说明」')
+    assert.deepEqual(gpSaved.guides, gpBase.guides, '与 guides 平级：改前缀不牵动自定义段')
+    const gpState = await gpRead()
+    assert.deepEqual(gpState.guidesPrefix, { implement: '/implement', ticket: '/implement' }, '写盘后下一拍 /api/state 就带上新值')
+
+    // 「服务端不造字」：前缀绝不进内置段。真链格上钉——内置段仍是服务端的原样推导结果。
+    const gpImpl = gpState.efforts.find((e) => e.slug === 'demo').chain.stages.find((s) => s.id === 'implement')
+    assert.doesNotMatch(gpImpl.copyText + gpImpl.en.copyText, /\/implement/, '前缀不参与服务端拼装（内置段原样）')
+
+    // 面名不写死：归一原样透传每一面（不校验、不拦别的面名）
+    await postJson(gpServer.url + '/api/config', { guidesPrefix: { 我们这面: '/我们这面' } })
+    assert.deepEqual((await gpRead()).guidesPrefix, { 我们这面: '/我们这面' }, '面名原样透传不拦（界面只认五面，写错的面名等于没写）')
+
+    // 缺面、空串与整份清空都合法——空前缀 = 不贴，那正是出厂状态
+    assert.equal((await postJson(gpServer.url + '/api/config', { guidesPrefix: {} })).status, 200, '缺面 / 整份清空合法')
+    assert.deepEqual((await gpRead()).guidesPrefix, {}, '清空后载荷为空对象（出厂：五面都不贴前缀）')
+    assert.equal((await postJson(gpServer.url + '/api/config', { guidesPrefix: { implement: '' } })).status, 200, '空串合法（= 不贴）')
+    assert.deepEqual((await gpRead()).guidesPrefix, { implement: '' }, '空串原样下发，由界面按非空判定')
+  } finally {
+    await new Promise((r) => gpServer.server.close(r))
+  }
+  ok('指引词前缀服务端（guides-prefix 01）：guidesPrefix 与 guides 平级、形状 { 面名: 字符串 }（面值非字符串/非对象与 __proto__ 一律整体 400 且一个字不写盘、错误码独立一个）、applied.immediate、手改 config 下一拍生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装（内置段里不出现前缀）；面名原样透传不拦、缺面/空串/整份清空皆合法')
 
   // ── 错误码（english-ui 票 02）：JSON 错误响应带稳定 code，原人话照旧留着供日志 ──
   const codeCfg = nodePath.join(tmp, 'config-codes.json')
@@ -4513,18 +4616,20 @@ async function runScenarios(tmp) {
       tickets: [gdTk],
       chain: deriveChain({ slug: 'demo', map: { exists: true, destination: 'Ship it', fogCount: 0 }, spec: { exists: true, contentLength: 12 }, tickets: [gdTk] }),
     }
-    // guides 就是载荷里那份原值（服务端不拼装，见服务端那组）：测试自己造，不从 config.json 读回来绕一圈
-    const gdPayload = (guides) => ({
+    // guides 就是载荷里那份原值（服务端不拼装，见服务端那组）：测试自己造，不从 config.json 读回来绕一圈。
+    // guides-prefix 票 01 起同一个夹具也带 guidesPrefix（第四个参数），第五个参数替换载荷里的其他字段
+    // （换一套 effort、换成没有 effort 的空态），两票共用同一批助手，不新开夹具。
+    const gdPayload = (guides, guidesPrefix, over) => Object.assign({
       root: '/tmp/fd-guides', rootName: 'fd-guides', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
       pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config-guides.json', recentRoots: [], stageNames: STAGE_TABLE,
-      efforts: [JSON.parse(JSON.stringify(gdEffort))], guides,
-    })
+      efforts: [JSON.parse(JSON.stringify(gdEffort))], guides, guidesPrefix,
+    }, over || {})
     /** 夹具：带剪贴板（复制内容落 copies）、confirm（恢复默认的二次确认）与 /api/config POST 记录。 */
-    function guidesDom(port, guides, langStored) {
+    function guidesDom(port, guides, langStored, guidesPrefix, over) {
       const errs = []
       const copies = []
       const posts = []
-      const payload = gdPayload(guides)
+      const payload = gdPayload(guides, guidesPrefix, over)
       const vcG = new VirtualConsole()
       vcG.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
       const d = uiDom({
@@ -4574,6 +4679,17 @@ async function runScenarios(tmp) {
       const ta = gdDoc(c).getElementById(langKey === 'zh' ? 'setGuidesZh' : 'setGuidesEn')
       ta.value = value
       ta.dispatchEvent(new c.d.window.Event('input', { bubbles: true }))
+    }
+    /** 往当前面的前缀那一行打字：同一条 input 通路（单行 input 不是 textarea，助手分开写一处）。 */
+    const gdTypePrefix = (c, value) => {
+      const box = gdDoc(c).getElementById('setGuidesPrefix')
+      box.value = value
+      box.dispatchEvent(new c.d.window.Event('input', { bubbles: true }))
+    }
+    /** 「复制当前效果」按钮：面板控件那一处出口（不带走前缀——它自己就带）。 */
+    const gdCopyCurrent = (c) => {
+      gdDoc(c).getElementById('setGuidesCopy').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      return c.copies[c.copies.length - 1]
     }
     const gdCopyStage = (c, i) => {
       const cell = gdDoc(c).querySelectorAll('.stage')[i]
@@ -4822,6 +4938,221 @@ async function runScenarios(tmp) {
       assert.match(txt, /"guides":\s*\{\}/, `${readme} 的 config.json 段列出 guides 字段`)
     }
     ok('指引词可整段改写 · 五面铺开（custom-guides 02 + 03 · jsdom + 文件级 + 文档）：出厂五面各复制一次都落内置段；面下拉带空态（不默认落在某一面，未选面时输入框与恢复默认一并禁用）、切面即换内容与预览、下拉里四个阶段名读载荷 stageNames；五面各设自定义段各复制一次都走该面自己的段（互不串台）；票行那面 {key}/{path}/{title} 实填、其余四面无槽（段里的槽标记原样留着）；票行无自定义段回落内置段且内置段三槽照旧实填；只填中文时英文界面仍复制内置英文段；只敲全白等同没填（但有内容的边缘空白原样带出）、预览与复制同步回落；预填来自载荷、保存只提交变更字段（改动中英成对发、五面并存时只换当前面、其余面原样带回）、恢复默认只清当前面；「指引词」分区、面下拉与两个 textarea 在案，.frow textarea 与焦点环规则到位；config.example.json 与两份 README 的 config 段同步了 guides 字段')
+
+    // ── 指引词前缀（guides-prefix 票 01，ADR-0004）：一段每次都一样的文字，复制那一刻贴在最前面 ──
+    // 沿用上一组的夹具与两个点击助手（gdCopyStage / gdCopyTicket / gdCopyNext / gdSave / gdPickFace），
+    // 只多两个助手：往前缀那行打字（gdTypePrefix）与「复制当前效果」按钮（gdCopyCurrent）。
+    // 规则一句话：某一面存的前缀去首尾空白后非空即 `前缀 + 空行 + 正文` 原样贴出，为空（缺面/空串/
+    // 全空白）就正文原样、连一个空行都不多。两处出口（链格与下一步卡、票行）走同一段拼装代码；
+    // 票行那面**先填槽再拼前缀**，所以文件名里带 {key} 的票不会被二次加工。
+    const gpPfx = '/using-git-worktrees /implement'
+    const gpJoins = (p, body) => p + '\n\n' + body
+    const gpTicketBuiltin = SHELL_TEXT['copy.ticket'].zh.replace('{key}', '01').replace('{path}', gdTkPath).replace('{title}', '指引票')
+
+    // 链格 / 下一步卡 / 票行三处出口：前缀 + 空行 + 正文
+    const wired = guidesDom(39400, undefined, null, { implement: gpPfx, ticket: '/implement' })
+    await gdSettle()
+    assert.equal(gdCopyStage(wired, 3), gpJoins(gpPfx, gdBuiltin), '链格复制 = 前缀 + 空行 + 内置段')
+    assert.equal(gdCopyNext(wired), gpJoins(gpPfx, gdBuiltin), '未完工的下一步卡按钮同一段拼装（两处出口不各拼一次）')
+    assert.equal(gdCopyTicket(wired, 0), gpJoins('/implement', gpTicketBuiltin), '票行复制 = 前缀 + 空行 + 填槽后的内置段')
+    // 两面各填各的：只给 implement 存了前缀，其余四面（以及票行没存的那些）一个字节都不多
+    assert.equal(gdCopyStage(wired, 0), gdEffort.chain.stages[0].copyText, '没存前缀的面：正文原样（不互相继承）')
+    assert.equal(gdCopyStage(wired, 2), gdEffort.chain.stages[2].copyText, '没存前缀的面：正文原样（连一个空行都不多）')
+    assert.deepEqual(wired.errs, [])
+    await gdClose(wired)
+
+    // 空前缀 = 不贴：空串与全空白都按没填处理，正文逐字原样
+    const emptyPfx = guidesDom(39401, undefined, null, { implement: '', ticket: '   \n  ' })
+    await gdSettle()
+    assert.equal(gdCopyStage(emptyPfx, 3), gdBuiltin, '空前缀（空串）→ 正文原样')
+    assert.equal(gdCopyTicket(emptyPfx, 0), gpTicketBuiltin, '全空白前缀等同没填 → 票行正文原样')
+    assert.deepEqual(emptyPfx.errs, [])
+    await gdClose(emptyPfx)
+
+    // 非空则**原样**贴出：边缘空白不藏一步看不见的去空白（「整段取代」那条纪律同样适用于前缀）
+    const spacedPfx = guidesDom(39402, undefined, null, { implement: '  ' + gpPfx + '  ' })
+    await gdSettle()
+    assert.equal(gdCopyStage(spacedPfx, 3), gpJoins('  ' + gpPfx + '  ', gdBuiltin), '边缘空白原样带出（粘出去的与存盘的逐字一致）')
+    await gdClose(spacedPfx)
+
+    // 自定义段与前缀同时生效：两者正交，前缀带技能调用、段重写正文
+    const bothPfx = guidesDom(39403, { implement: { zh: '自定义正文段' } }, null, { implement: gpPfx })
+    await gdSettle()
+    assert.equal(gdCopyStage(bothPfx, 3), gpJoins(gpPfx, '自定义正文段'), '自定义段非空时：前缀 + 空行 + 自定义段')
+    assert.deepEqual(bothPfx.errs, [])
+    await gdClose(bothPfx)
+
+    // 单趟填槽：票路径/标题里本来就有的 {key} 不被前缀这一趟二次加工
+    const braceTk = { key: '02', fileName: '02-{key}-花括号.md', title: '标题里也有 {key}', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' }
+    const braceEffort = Object.assign(JSON.parse(JSON.stringify(gdEffort)), {
+      tickets: [braceTk],
+      chain: deriveChain({ slug: 'demo', map: { exists: true, destination: 'Ship it', fogCount: 0 }, spec: { exists: true, contentLength: 12 }, tickets: [braceTk] }),
+    })
+    const braces = guidesDom(39404, undefined, null, { ticket: '/implement' }, { efforts: [braceEffort] })
+    await gdSettle()
+    const braceCopy = gdCopyTicket(braces, 0)
+    assert.equal((braceCopy.match(/\{key\}/g) || []).length, 2, '票路径与标题里各有一个 {key}，原样留着（单趟填槽，不被二次替换）')
+    assert.ok(braceCopy.startsWith('/implement\n\n请实现票 02（'), '票行那面先填槽再拼前缀：前缀落在最前，正文里 {key} 已实填成票号')
+    assert.deepEqual(braces.errs, [])
+    await gdClose(braces)
+
+    // 面板：预览含前缀，前缀那一眼要与正文分得开（不显示它，面板就是在说谎）
+    const panelPfx = guidesDom(39405, undefined, null, { implement: '/grilling' })
+    await gdSettle()
+    await gdOpenSettings(panelPfx)
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPrefix').disabled, true, '未选面：前缀那一行一并禁用（没选面时无处可编辑）')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesCopy').disabled, true, '未选面：复制当前效果一并禁用')
+    gdPickFace(panelPfx, 'implement')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPrefix').disabled, false, '选面后前缀可编辑')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPrefix').value, '/grilling', '预填：前缀来自 /api/state 的 guidesPrefix')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPreview').textContent, gpJoins('/grilling', gdBuiltin), '预览含前缀：前缀 + 空行 + 正文')
+    const gpSpan = gdDoc(panelPfx).querySelector('#setGuidesPreview .gp-pfx')
+    assert.ok(gpSpan, '预览里前缀住自己的元素（与正文一眼分得开）')
+    assert.equal(gpSpan.textContent, '/grilling', '预览里那一眼就是前缀本身')
+    // 预览读草稿：改一个字符就重画，不必等保存
+    gdTypePrefix(panelPfx, '/grilling /using-git-worktrees')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPreview').textContent, gpJoins('/grilling /using-git-worktrees', gdBuiltin), '草稿改前缀 → 预览同步')
+    gdType(panelPfx, 'zh', '新正文')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPreview').textContent, gpJoins('/grilling /using-git-worktrees', '新正文'), '前缀与正文各改各的，互不吞')
+    // 换面再切回：前缀草稿不丢（与自定义段同一套草稿机制）
+    gdPickFace(panelPfx, 'ticket')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPrefix').value, '', '切到票行面：那是它自己存的那一份（没存即空）')
+    gdPickFace(panelPfx, 'implement')
+    assert.equal(gdDoc(panelPfx).getElementById('setGuidesPrefix').value, '/grilling /using-git-worktrees', '切回 implement 面：前缀草稿还在')
+    assert.deepEqual(panelPfx.errs, [])
+    await gdClose(panelPfx)
+
+    // 「复制当前效果」= 此刻真的粘得出的那一段：读**已存**值、不读输入框草稿
+    // （所以有未存草稿时它与「保存后生效」的预览并不相同——那正是「当前」二字的含义）
+    const currentPfx = guidesDom(39406, { implement: { zh: '已存的自定义段' } }, null, { implement: '/已存的前缀' })
+    await gdSettle()
+    await gdOpenSettings(currentPfx)
+    gdPickFace(currentPfx, 'implement')
+    gdTypePrefix(currentPfx, '/没存的前缀')
+    gdType(currentPfx, 'zh', '没存的正文')
+    assert.equal(gdCopyCurrent(currentPfx), gpJoins('/已存的前缀', '已存的自定义段'), '有未存草稿时：复制当前效果给的是已存那份（读已存值，不读草稿）')
+    // 草稿与已存相同时，它与预览逐字一致——两个控件此时说的是同一件事
+    gdTypePrefix(currentPfx, '/已存的前缀')
+    gdType(currentPfx, 'zh', '已存的自定义段')
+    assert.equal(gdCopyCurrent(currentPfx), gdDoc(currentPfx).getElementById('setGuidesPreview').textContent, '草稿与已存相同时：复制当前效果与预览逐字一致')
+    // 没存自定义段时它给内置段（术语上比「内置段」准：它复制的不止内置段）
+    gdPickFace(currentPfx, 'ticket')
+    assert.equal(gdCopyCurrent(currentPfx), gpTicketBuiltin, '票行面：没有自定义段时复制内置段并按第一张票实填（这面没存前缀，原样不加空行）')
+    assert.deepEqual(currentPfx.errs, [])
+    await gdClose(currentPfx)
+
+    // 保存：前缀与 guides 一起提交（各自按「脏了才发」，发了就是整份——服务端整份替换）
+    const savePfx = guidesDom(39407, { implement: { zh: '旧正文', en: 'Old English' } }, null, { implement: '/旧前缀', ticket: '/票行前缀' })
+    await gdSettle()
+    await gdOpenSettings(savePfx)
+    await gdSave(savePfx)
+    assert.deepEqual(savePfx.posts, [], '一字未改时不提交任何字段（沿用 settingsChanges 的差异收集）')
+    await gdOpenSettings(savePfx)
+    gdPickFace(savePfx, 'implement')
+    gdTypePrefix(savePfx, '/新前缀')
+    gdDoc(savePfx).getElementById('setGuidesZh').value = '新正文'
+    await gdSave(savePfx)
+    assert.deepEqual(savePfx.posts[savePfx.posts.length - 1], {
+      guides: { implement: { zh: '新正文', en: 'Old English' }, ticket: { zh: '', en: '' } },
+      guidesPrefix: { implement: '/新前缀', ticket: '/票行前缀' },
+    }, '改前缀与改正文同一次保存一起发；其余面原样带回（只发当前面会把其余面清掉）')
+    assert.match(gdDoc(savePfx).getElementById('toast').textContent, /已生效：.*前缀/, 'toast 的字段名走 set.field.guidesPrefix，不回落成裸字段名')
+    assert.deepEqual(savePfx.errs, [])
+    await gdClose(savePfx)
+
+    // 只改前缀时不必带上 guides（不拿没动过的字段去覆盖磁盘上的那份）
+    const onlyPfx = guidesDom(39408, { implement: { zh: '磁盘上的正文' } }, null, { implement: '/磁盘上的前缀' })
+    await gdSettle()
+    await gdOpenSettings(onlyPfx)
+    gdPickFace(onlyPfx, 'implement')
+    gdTypePrefix(onlyPfx, '/只改前缀')
+    await gdSave(onlyPfx)
+    assert.deepEqual(onlyPfx.posts[onlyPfx.posts.length - 1], { guidesPrefix: { implement: '/只改前缀' } }, '只改前缀就只发 guidesPrefix')
+    assert.deepEqual(onlyPfx.errs, [])
+    await gdClose(onlyPfx)
+
+    // 恢复默认：语义与范围一字不改——只清当前面的中英两列，**不碰前缀**
+    const resetPfx = guidesDom(39409, { implement: { zh: '要恢复的中文' } }, null, { implement: '/要留下的前缀' })
+    await gdSettle()
+    await gdOpenSettings(resetPfx)
+    gdPickFace(resetPfx, 'implement')
+    gdDoc(resetPfx).getElementById('setGuidesReset').dispatchEvent(new resetPfx.d.window.Event('click', { bubbles: true }))
+    assert.equal(gdDoc(resetPfx).getElementById('setGuidesZh').value, '', '恢复默认清空当前面的中文段')
+    assert.equal(gdDoc(resetPfx).getElementById('setGuidesPrefix').value, '/要留下的前缀', '恢复默认不碰前缀（它点的是「撤销一段写坏的自定义段」）')
+    assert.equal(gdDoc(resetPfx).getElementById('setGuidesPreview').textContent, gpJoins('/要留下的前缀', gdBuiltin), '恢复后预览回落内置段，前缀照旧在前面')
+    await gdSave(resetPfx)
+    assert.deepEqual(resetPfx.posts[resetPfx.posts.length - 1], { guides: { implement: { zh: '', en: '' } } },
+      '保存把正文清空，而补丁里根本没有 guidesPrefix 这一格（服务端是部分补丁，磁盘上那一份前缀原样留着）')
+    assert.deepEqual(resetPfx.errs, [])
+    await gdClose(resetPfx)
+
+    // 选了一个阶段面但当前追踪目录没有 effort：复制当前效果禁用（别把一句「没有内置段可显示」复制走）
+    const noEffort = guidesDom(39412, undefined, null, { implement: '/grilling' }, { efforts: [] })
+    await gdSettle()
+    await gdOpenSettings(noEffort)
+    gdPickFace(noEffort, 'implement')
+    assert.equal(gdDoc(noEffort).getElementById('setGuidesCopy').disabled, true, '阶段面 + 无 effort：复制当前效果禁用')
+    assert.equal(gdDoc(noEffort).getElementById('setGuidesReset').disabled, false, '阶段面 + 无 effort：恢复默认照常可用（它不依赖内置段）')
+    gdPickFace(noEffort, 'ticket')
+    assert.equal(gdDoc(noEffort).getElementById('setGuidesCopy').disabled, false, '票行面不依赖 effort（内置段是模板），照常可复制')
+    assert.deepEqual(noEffort.errs, [])
+    await gdClose(noEffort)
+
+    // 负面项：完工收尾文案、工作约定、建骨架指令三处**不带**前缀（它们不是指引词出口），逐字与今天一致
+    const doneTk = { key: '01', fileName: '01-done.md', title: '收尾票', state: 'closed', status: 'resolved', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' }
+    const doneEffort = {
+      slug: 'done', title: '收尾 demo', git: null, latestAt: '2026-09-18T00:00:00Z',
+      map: { exists: true, title: '', destination: 'Ship it', fog: [], decisions: [], outOfScope: [], fogCount: 0, progress: null, formatWarnings: [] },
+      spec: { exists: true, title: '', contentLength: 12, content: '# 规格\n\n一段内容。\n', formatWarnings: [] },
+      tickets: [doneTk],
+      chain: deriveChain({ slug: 'done', map: { exists: true, destination: 'Ship it', fogCount: 0 }, spec: { exists: true, contentLength: 12 }, tickets: [doneTk] }),
+    }
+    assert.equal(doneEffort.chain.complete, true, '收尾夹具：四格全绿（否则这组钉的不是收尾那条路）')
+    const noPfxDone = guidesDom(39410, undefined, null, { implement: gpPfx, ticket: gpPfx }, { efforts: [doneEffort] })
+    await gdSettle()
+    assert.equal(gdCopyNext(noPfxDone), SHELL_TEXT['next.done-copy'].zh.replace('{title}', '收尾 demo'), '完工收尾文案逐字与今天一致（不贴前缀）')
+    assert.deepEqual(noPfxDone.errs, [])
+    await gdClose(noPfxDone)
+    const noPfxEmpty = guidesDom(39411, undefined, null, { implement: gpPfx, ticket: gpPfx }, { efforts: [] })
+    await gdSettle()
+    const gdEmptyBtns = gdDoc(noPfxEmpty).querySelectorAll('.card.empty button')
+    assert.equal(gdEmptyBtns.length, 2, '空态页两段一键复制（工作约定 / 建骨架指令）')
+    gdEmptyBtns[0].dispatchEvent(new noPfxEmpty.d.window.Event('click', { bubbles: true }))
+    assert.equal(noPfxEmpty.copies[noPfxEmpty.copies.length - 1], SHELL_TEXT['empty.agreement'].zh, '工作约定逐字与今天一致（不贴前缀）')
+    gdEmptyBtns[1].dispatchEvent(new noPfxEmpty.d.window.Event('click', { bubbles: true }))
+    assert.equal(noPfxEmpty.copies[noPfxEmpty.copies.length - 1], SHELL_TEXT['empty.scaffold'].zh, '建骨架指令逐字与今天一致（不贴前缀）')
+    assert.deepEqual(noPfxEmpty.errs, [])
+    await gdClose(noPfxEmpty)
+    // 服务端下发的阶段 copyText 里不出现前缀（证明拼装没漏到别处：拼装只在界面复制那一刻）
+    for (const st of gdEffort.chain.stages) {
+      assert.doesNotMatch(st.copyText + st.en.copyText, /\/using-git-worktrees|\/implement/, `服务端下发的 ${st.id} 段里没有前缀`)
+    }
+    ok('指引词前缀（guides-prefix 01 · jsdom）：链格/下一步卡与票行两处出口同一段拼装（= 前缀 + 空行 + 正文，票行先填槽再拼前缀所以单趟）；两面各填各的互不串台；空前缀正文原样（连一个空行都不多）、空串/全空白等同没填、非空则原样贴出；自定义段与前缀同时生效；预览含前缀且前缀那一眼可与正文区分；「复制当前效果」读已存值（未存草稿时给已存那份，草稿与已存相同时与预览逐字一致）、阶段面无 effort 时禁用；恢复默认清正文而前缀原样留着；换面再切回前缀不丢；未选面时输入框与两个按钮一并禁用；完工收尾文案/工作约定/建骨架指令三处不带前缀且逐字与今天一致；服务端下发的阶段段里不出现前缀')
+
+    // 文件级与文档组：markup 有前缀输入行、两个 textarea 压矮、文档三处讲清 guidesPrefix
+    assert.ok(deckHtml.includes('<input id="setGuidesPrefix"'), '设置弹窗有前缀输入行（单行 input，不是 textarea）')
+    assert.ok(deckHtml.includes('<label for="setGuidesPrefix"'), '前缀输入行有配对的 <label for>（点标签能聚焦）')
+    assert.ok(deckHtml.includes('<button id="setGuidesCopy"'), '设置弹窗有「复制当前效果」按钮')
+    assert.doesNotMatch(SHELL_TEXT['set.guides.copy'].zh, /…|\.\.\./, '「复制当前效果」标签无省略号（省略号在这套 UI 里表示后面跟着确认框）')
+    assert.match(deckHtml, /<textarea id="setGuidesZh" rows="4"/, '两个 textarea 的行数都降到位（行数与样式表最小高度是两处独立事实，必须同时动）')
+    assert.match(deckHtml, /<textarea id="setGuidesEn" rows="4"/, '两个 textarea 的行数都降到位（英文那一个同样）')
+    // 样式表那条字面量断言是三层里最脆的，保留它的理由只有一个：没有它「textarea 被谁又调高了」不会有人发现
+    assert.match(appCss, /\.frow textarea \{[^}]*min-height: 6rem[^}]*resize: vertical/, 'styles/app.css 的 .frow textarea 最小高度降到位，且 resize: vertical 留着（要更高的人自己拖）')
+    assert.doesNotMatch(appCss, /#setGuidesZh/, '样式表不为单个控件新开 id 选择器（规则保持通用）')
+    const gpExCfg = JSON.parse(await fs.readFile(nodePath.join(HERE, 'config.example.json'), 'utf8'))
+    assert.deepEqual(gpExCfg.guidesPrefix, {}, 'config.example.json 有 guidesPrefix 字段，且出厂是空对象（不贴前缀）')
+    const gpNote = gpExCfg['字段说明'] && gpExCfg['字段说明'].guidesPrefix
+    assert.ok(typeof gpNote === 'string' && gpNote.length > 40, 'config.example.json 的「字段说明」有 guidesPrefix 条目')
+    assert.ok(gpNote.includes('{ 面名: 字符串 }'), 'config.example.json 的 guidesPrefix 说明点明形状是 { 面名: 字符串 }（中英不分列）')
+    for (const readme of ['README.zh-CN.md', 'README.md']) {
+      const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+      assert.match(txt, /"guidesPrefix":\s*\{\}/, `${readme} 的 config.json 段列出 guidesPrefix 字段`)
+      assert.match(txt, /^\s*-\s+\*\*.*`guidesPrefix`.*\*\*|^-\s+\*\*.*`guidesPrefix`.*\*\*/m, `${readme} 的 config 段落讲清了 guidesPrefix 的规则`)
+    }
+    const ctxTxt = await fs.readFile(nodePath.join(HERE, 'CONTEXT.md'), 'utf8')
+    assert.ok(/^\*\*前缀（prefix）\*\*/m.test(ctxTxt), 'CONTEXT.md 的词表里有「前缀」词条')
+    assert.ok(!/唯一以「是哪张票」为身份/.test(ctxTxt), 'CONTEXT.md 不再把票行说成唯一以「是哪张票」为身份的一面（四个阶段面的内置段同样以 effort 为身份）')
+    ok('指引词前缀 · 文件级与文档（guides-prefix 01）：markup 有前缀输入行与「复制当前效果」按钮（标签无省略号）、两个 textarea 的行数与样式表最小高度都降到位且没有为它新开 id 选择器；config.example.json 与两份 README 都讲清了 guidesPrefix；CONTEXT.md 有「前缀」词条且那句「唯一以…为身份」已改掉')
 
     // ── 英文态整页无残留（english-ui 票 02）：真跑界面，逐视图扫中文残留 ──
     /** 界面夹具用的英文用户数据：票标题、地图小节、规格正文全 ASCII——判据字段名（Status /

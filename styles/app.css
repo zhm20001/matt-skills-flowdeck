@@ -309,11 +309,17 @@
   /* 下拉不在 100% 那一支里（轮询模式 / 界面缩放两档都是短的，让它们撑满反而不像下拉），
      但指引词那五个面名比它们长一截——加上限，免得把 14rem+1fr 的格撑破设置框。 */
   .frow select { max-width: 100%; }
-  /* 指引词编辑区（custom-guides 票 02）：本弹窗第一个 textarea。
-     高度走 rem 才跟着缩放档一起长缩（min-height 留在 rem 基准上），resize 留给使用者自己拖 */
-  .frow textarea { width: 100%; min-height: 9rem; resize: vertical; }
+  /* 指引词编辑区（custom-guides 票 02，guides-prefix 票 01 压矮）：指引词分区那两个正文 textarea。
+     高度走 rem 才跟着缩放档一起长缩（min-height 留在 rem 基准上），resize 留给使用者自己拖。
+     行数（markup 的 rows）与这条最小高度是两处独立事实，必须同时动——只动一处，另一处会赢 */
+  .frow textarea { width: 100%; min-height: 6rem; resize: vertical; }
   /* 生效预览：只读的一段长文，给一个自己的滚动区，免得一行长指引词把整窗撑到底 */
   .frow .guide-preview { max-height: 14rem; overflow: auto; margin: 0; padding: 0.8rem 1rem; background: var(--fd-paper); border: 1px solid var(--fd-rule-soft); border-radius: var(--fd-radius-btn); font-family: var(--fd-font-mono); font-size: 1.2rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* 预览里的前缀那一眼：与正文分得开的唯一标记就是字色（跟着主题走，业务样式零裸值）。
+     它得能被认出来——使用者在预览里分不清哪半句是自己填的，面板就等于在替他们猜 */
+  .frow .guide-preview .gp-pfx { color: var(--fd-accent); }
+  /* 同一格里并排的两个按钮（「复制当前效果」 + 「恢复默认…」）：grid 的控件列放不下两个直接子元素 */
+  .frow .btnline { display: flex; flex-wrap: wrap; gap: 1.2rem; }
   .frow .hint { grid-column: 2; color: var(--fd-ink-muted); font-size: 1.2rem; }
   .factions { display: flex; align-items: center; gap: 1.2rem; padding: 1.4rem 0 0; }
   .factions .hint { color: var(--fd-bad); font-size: 1.2rem; }
