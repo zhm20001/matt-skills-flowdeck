@@ -47,7 +47,7 @@
  *                                指引词、桌面通知、报错措辞三处人话都随语言，未知 code 回退服务端原文；
  *                                中文态逐字节零回归（词表 zh 列与改动前拼装结果全等）。
  *  28. 技能介绍英文（票 03）     → /api/skills 与单篇认 ?lang（不带参数逐字节不变、英文只换 title/summary
- *                                与正文，骨架仍以中文目录为单一真相）；36 篇同名镜像逐篇对齐；
+ *                                与正文，骨架仍以中文目录为单一真相）；37 篇同名镜像逐篇对齐；
  *                                弹窗按语言取篇、缺镜像回退中文并挂标注。
  *  29. 静态壳取词通道（票 04）   → markup 的 data-i18n* 键都在词表里、三条属性通道的中文默认态与词表
  *                                逐字一致；英文态四条通道都取得到词且取的是英文列（空白页面骗得过
@@ -95,9 +95,12 @@
  *                                入口可 Tab 到达且 aria-expanded 如实；选中项例外（选中的完工 effort 照常
  *                                平铺、切走才收）；展开态只存会话变量（进渲染签名，刷新回落收起、零新
  *                                localStorage 键）、折叠展开全程零写请求。
- *  38. 流程链技能入口（ui-declutter 02）→ 链格内的大按钮行退役（词条与 .skillrow 样式零残留）、
- *                                标题行右上角一个「？」开弹窗定位聚合页 flowchain（阻断冒泡、零新端点）；
- *                                聚合页与英文镜像文件级钉（frontmatter 合法、镜像同名）。
+ *  38. 流程链技能入口（ui-declutter 02）→ 链格内的大按钮行退役（stage.skill.* 词条与 .skillrow 样式
+ *                                零残留）、标题行改弹性布局（标题 flex:1 + min-width:0、「？」flex:none）
+ *                                并钉住这两个关键声明、「？」可 Tab 到达、开弹窗即定位聚合页 flowchain
+ *                                且阻断冒泡、聚合页在导航里是总览分类下的普通条目；聚合页与英文镜像
+ *                                文件级钉（overview 归类、次序紧跟总览篇、slug 过名字白名单、按四阶段
+ *                                分节并内链各阶段技能、镜像只译 title/summary 与正文不带分类与次序）。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -1372,7 +1375,7 @@ async function runScenarios(tmp) {
     assert.equal(enDocRaw, await fs.readFile(nodePath.join(EN_DOCS, 'tdd.md'), 'utf8'), '英文单篇 = 同名镜像篇逐字节')
     assert.match(enDocRaw, /^---\nname: tdd\n/, '英文篇同样带 frontmatter（清单与单篇共用一套结构）')
     // 语言自报头（双轴评审收口）：界面挂「暂无英文」标注以实际响应为准——英文请求撞缺镜像时头是
-    // zh，标注跟着每一次响应走，不再依赖清单快照里会过期的 noEnglish。真回退没法在整仓 36/36
+    // zh，标注跟着每一次响应走，不再依赖清单快照里会过期的 noEnglish。真回退没法在整仓 37/37
     // 全译的现状下从磁盘触发，回退路径的可见性钉在上方 jsdom 缝（stub 按 SK_SERVED 回 zh 头）。
     assert.equal((await fetch(langServer.url + '/api/skills/tdd?lang=en')).headers.get('x-flowdeck-doc-lang'), 'en', '英文镜像命中：X-FlowDeck-Doc-Lang 自报 en')
     assert.equal((await fetch(langServer.url + '/api/skills/tdd')).headers.get('x-flowdeck-doc-lang'), 'zh', '中文缺省：X-FlowDeck-Doc-Lang 自报 zh')
@@ -1381,7 +1384,7 @@ async function runScenarios(tmp) {
     assert.equal(en404.status, 404, '不存在的篇 ?lang=en 仍 404')
     assert.equal((await (await fetch(langServer.url + '/api/skills/..%2F..%2Fserver.mjs?lang=en')).text()).indexOf('root:'), -1, '穿越加 lang 也读不到仓库文件')
     assert.equal((await fetch(langServer.url + '/api/skills/%ZZ?lang=en')).status, 404, '畸形转义加 lang 仍 404')
-    // 缺篇回退的口径与磁盘同真相：今天 36/36 全译（票 03 要求），所以 noEnglish 一条都不该有；
+    // 缺篇回退的口径与磁盘同真相：今天 37/37 全译（票 03 要求），所以 noEnglish 一条都不该有；
     // 谁日后加了中文篇没跟英文篇，这条就把他指回这里（回退本身的可见性钉在界面缝，见下方 jsdom 组）。
     const missingEn = zhList.filter((s) => !existsSync(nodePath.join(EN_DOCS, s.name + '.md')))
     assert.equal(enList.filter((s) => s.noEnglish).length, missingEn.length, 'noEnglish 条数 = 磁盘缺镜像条数')
@@ -1389,16 +1392,16 @@ async function runScenarios(tmp) {
     assert.deepEqual(
       (await fs.readdir(EN_DOCS)).filter((f) => f.endsWith('.md')).sort(),
       (await fs.readdir(ZH_DOCS)).filter((f) => f.endsWith('.md')).sort(),
-      '英文目录不多不少正好那 36 篇（镜像不是第二套清单）')
+      '英文目录不多不少正好那 37 篇（镜像不是第二套清单）')
   } finally {
     await new Promise((r) => langServer.server.close(r))
   }
   ok('技能介绍英文接口：?lang=en 换标题简介与单篇正文而骨架不动、大小写空格宽容；不带参数/非法 lang 的响应与磁盘中文原文逐字节一致；lang 不越名字白名单；中英目录同名一一对应')
 
-  // ── 英文镜像完整性（票 03）：36 篇镜像逐篇与中文原篇对齐，只翻该翻的、不夹带机器事实 ──
+  // ── 英文镜像完整性（票 03）：同名镜像逐篇与中文原篇对齐，只翻该翻的、不夹带机器事实 ──
   {
     const pairs = (await fs.readdir(ZH_DOCS)).filter((f) => f.endsWith('.md')).sort()
-    assert.equal(pairs.length, 36, '中英各 36 篇（35 技能 + 总览）')
+    assert.equal(pairs.length, 37, '中英各 37 篇（35 技能 + 总览 + 流程链聚合导读）')
     const drift = []
     for (const f of pairs) {
       const zhRaw = await fs.readFile(nodePath.join(ZH_DOCS, f), 'utf8')
@@ -1406,15 +1409,25 @@ async function runScenarios(tmp) {
       const cut = (t) => { const e = t.indexOf('\n---', 3); return { fm: t.slice(3, e), body: t.slice(e + 4) } }
       const zh = cut(zhRaw)
       const en = cut(enRaw)
+      // 两种篇型：总览分类下是不属于任何技能的聚合页（总览、流程链导读），其余四类才是
+      // 「每技能一篇」。判准取自中文篇的 category——英文列的骨架照中文来。
+      const perSkill = fmField(zhRaw, 'category') !== 'overview'
       const keys = (s) => s.split('\n').map((l) => l.slice(0, l.indexOf(':'))).join(',')
-      if (keys(zh.fm) !== keys(en.fm)) drift.push(f + '：frontmatter 键序不同')
-      const zhFm = zh.fm.split('\n')
-      const enFm = en.fm.split('\n')
-      zhFm.forEach((line, i) => {
-        const key = line.slice(0, line.indexOf(':'))
-        // 只有 title/summary 是译文；其余（name/category/order/inProgress）原样照抄，镜像不带新元数据
-        if (key !== 'title' && key !== 'summary' && line !== enFm[i]) drift.push(f + '：' + key + ' 被改动')
-      })
+      const zhKeys = new Set(keys(zh.fm).split(','))
+      // 总规矩：镜像的 frontmatter 键不得超出中文篇（镜像不引入新元数据）
+      for (const k of keys(en.fm).split(',')) {
+        if (k && !zhKeys.has(k)) drift.push(f + '：镜像多出键 ' + k)
+      }
+      if (perSkill) {
+        if (keys(zh.fm) !== keys(en.fm)) drift.push(f + '：frontmatter 键序不同')
+        const zhFm = zh.fm.split('\n')
+        const enFm = en.fm.split('\n')
+        zhFm.forEach((line, i) => {
+          const key = line.slice(0, line.indexOf(':'))
+          // 只有 title/summary 是译文；其余（name/category/order/inProgress）原样照抄，镜像不带新元数据
+          if (key !== 'title' && key !== 'summary' && line !== enFm[i]) drift.push(f + '：' + key + ' 被改动')
+        })
+      }
       if (!fmField(enRaw, 'title') || CJK_RE.test(fmField(enRaw, 'title'))) drift.push(f + '：title 空或含中文')
       if (!fmField(enRaw, 'summary') || CJK_RE.test(fmField(enRaw, 'summary'))) drift.push(f + '：summary 空或含中文')
       const h1 = (t) => (t.match(/^# .*$/m) || [''])[0]
@@ -1425,7 +1438,7 @@ async function runScenarios(tmp) {
       if (count(zh.body, /\[[^\]]+\]\([^)]+\)/g) !== count(en.body, /\[[^\]]+\]\([^)]+\)/g)) drift.push(f + '：链接数不同')
       const targets = (t) => (t.match(/\]\([^)]+\)/g) || []).sort().join('|')
       if (targets(zh.body) !== targets(en.body)) drift.push(f + '：链接目标被改动（内链要靠同名篇回退）')
-      if (f !== 'README.md') {
+      if (perSkill) {
         // 「什么时候用」的条数与正文段落数、加粗数一并钉住：译文不增删不合并
         const sec = (t, head) => { const i = t.indexOf(head); return i < 0 ? '' : t.slice(i + head.length).split(/^\s*## /m)[0] }
         const zhBullets = count(sec(zh.body, '## 什么时候用'), /^- /gm)
@@ -1439,9 +1452,47 @@ async function runScenarios(tmp) {
         if (quote(zh.body, '## 原文描述') !== quote(en.body, '## Original description')) drift.push(f + '：原文描述引用不逐字节一致')
       }
     }
-    assert.deepEqual(drift, [], '36 篇镜像逐篇对齐（键序、原样字段、结构计数、内链目标、原文描述逐字节）')
+    assert.deepEqual(drift, [], '37 篇镜像逐篇对齐（键序、原样字段、结构计数、内链目标、原文描述逐字节）')
   }
-  ok('英文镜像完整性（文件级）：36 篇同名镜像的 frontmatter 键序与非译文字段原样、H1 与段落/条数/加粗/内链目标对齐、原文描述逐字节照抄、零中文残留')
+  ok('英文镜像完整性（文件级）：37 篇同名镜像的 frontmatter 键序与非译文字段原样（聚合导读篇只留 name/title/summary，不夹带分类与次序）、H1 与段落/条数/加粗/内链目标对齐、原文描述逐字节照抄、零中文残留')
+
+  // ── 流程链聚合导读（ui-declutter 票 02）：文件级钉住它能进弹窗、正文按四阶段串技能 ──
+  {
+    // 名字白名单是正则不是固定清单：slug 过不了这条正则就 404，整篇等于不存在
+    assert.ok(/^[A-Za-z0-9][A-Za-z0-9-]*$/.test('flowchain'), '聚合页 slug 过服务端名字白名单正则（合法可服务）')
+    const fcRaw = await fs.readFile(nodePath.join(ZH_DOCS, 'flowchain.md'), 'utf8')
+    assert.equal(fmField(fcRaw, 'name'), 'flowchain', 'frontmatter 的 name 与文件名一致')
+    assert.equal(fmField(fcRaw, 'category'), 'overview', '归入总览分类（与总览篇同一分类，弹窗里相邻）')
+    const overviewDocs = []
+    for (const f of (await fs.readdir(ZH_DOCS)).filter((x) => x.endsWith('.md')).sort()) {
+      const raw = await fs.readFile(nodePath.join(ZH_DOCS, f), 'utf8')
+      if (fmField(raw, 'category') === 'overview') overviewDocs.push([f, Number(fmField(raw, 'order'))])
+    }
+    assert.deepEqual(overviewDocs, [['README.md', 0], ['flowchain.md', 1]], '总览分类下次序紧跟总览篇（README 0 → flowchain 1）')
+    // 正文按四阶段分节，每节串起该阶段挂的技能——技能名单与 flowchain.mjs 的阶段定义同源
+    const fcBody = fcRaw.slice(fcRaw.indexOf('\n---', 3) + 4)
+    assert.deepEqual(
+      FLOW_STAGES.map((st) => [st.id, st.skills]),
+      [['grill', ['grilling', 'wayfinder']], ['spec', ['to-spec']], ['tickets', ['to-tickets']], ['implement', ['implement']]],
+      '阶段定义里的技能名单是四格各自的挂载（grill 两枚、其余各一）',
+    )
+    for (const st of FLOW_STAGES) {
+      for (const skill of st.skills) {
+        assert.match(fcBody, new RegExp('\\[' + skill + '\\]\\(' + skill + '\\.md\\)'), '聚合页内链到该阶段的 ' + skill + ' 介绍')
+        assert.ok(existsSync(nodePath.join(ZH_DOCS, skill + '.md')), '内链目标存在：' + skill + '.md')
+      }
+    }
+    // 四节标题各就各位（导读的骨架：一格一节）
+    assert.equal((fcBody.match(/^## /gm) || []).length, 5, '四阶段各一节 + 末尾一节「跑完之后」')
+    // 镜像纪律：分类与次序以中文目录为唯一元数据源，聚合篇的镜像连它们都不带（服务端也从不读）
+    const fcEnRaw = await fs.readFile(nodePath.join(EN_DOCS, 'flowchain.md'), 'utf8')
+    assert.equal(fmField(fcEnRaw, 'category'), '', '英文镜像不带 category（分类以中文目录为唯一真相）')
+    assert.equal(fmField(fcEnRaw, 'order'), '', '英文镜像不带 order（次序以中文目录为唯一真相）')
+    assert.notEqual(fmField(fcEnRaw, 'title'), '', '英文镜像有 title（否则清单会打 noEnglish、正文回退中文）')
+    assert.equal(fmField(fcEnRaw, 'title'), 'A tour of the four flowchain stages', '英文标题照译')
+    assert.notEqual(fmField(fcEnRaw, 'summary'), fmField(fcRaw, 'summary'), '英文 summary 是译文不是照抄')
+    ok('流程链聚合导读（文件级）：docs/skill-intros/flowchain.md 归入 overview、次序紧跟总览篇、slug 过名字白名单、正文按四阶段分节并内链各阶段技能（与 FLOW_STAGES 的 skills 同源）；英文镜像同名在位，只译 title/summary 与正文，分类与次序不自带')
+  }
 
   // ── 访问令牌：config.json 的 token 非空时，/api/* 无/错令牌 401，头与查询串携带皆可；静态壳不设防 ──
   const tokenCfgPath = nodePath.join(tmp, 'config-token.json')
@@ -3710,10 +3761,17 @@ async function runScenarios(tmp) {
     const miscRaw = JSON.stringify(miscPayload, null, 2)
     const miscSkillDocs = {
       README: '# 技能包总览\n\n总览正文。\n',
+      flowchain: '# flowchain\n\n四阶段导读正文。\n',
       'to-spec': '# to-spec\n\n规格技能正文。\n',
       implement: '# implement\n\n实现技能正文。\n',
     }
-    const miscSkillsPayload = ['README', 'to-spec', 'implement'].map((name) => ({ name, category: name === 'README' ? 'overview' : 'engineering', order: 0, title: name, summary: name + ' 一句话', inProgress: false }))
+    // 清单里聚合页与总览同在 overview 分类、次序紧跟总览（服务端就是按 category + order 排的）
+    const miscSkillsPayload = [
+      { name: 'README', category: 'overview', order: 0 },
+      { name: 'flowchain', category: 'overview', order: 1 },
+      { name: 'to-spec', category: 'engineering', order: 0 },
+      { name: 'implement', category: 'engineering', order: 0 },
+    ].map((s) => ({ ...s, title: s.name, summary: s.name + ' 一句话', inProgress: false }))
     const miscCalls = []
     const miscCopies = []
     const miscDownloads = []
@@ -3765,30 +3823,55 @@ async function runScenarios(tmp) {
     await new Promise((r) => setTimeout(r, 20))
     assert.equal(miscRevoked, 1, '对象 URL 用完即释放')
 
-    // 技能联动：每个链格有对应技能的入口（grill 两枚、其余各一枚）；点击打开技能包弹窗并定位该篇
-    const skillBtns = Array.from(zpDoc.querySelectorAll('.stage .skillrow button'))
-    assert.equal(skillBtns.length, 5, '四格共五枚技能入口（grill→grilling/wayfinder，spec/tickets/implement 各一）')
-    assert.deepEqual(skillBtns.map((b) => b.textContent), ['grilling 介绍', 'wayfinder 介绍', 'to-spec 介绍', 'to-tickets 介绍', 'implement 介绍'], '技能名来自阶段定义旁的硬编码映射')
-    const toSpecBtn = skillBtns.find((b) => b.textContent === 'to-spec 介绍')
-    toSpecBtn.dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    // 技能入口（票 02 减负）：链格内的大按钮行退役，标题行右上角常驻一个小「？」，
+    // 点开打开技能包弹窗并定位到聚合页 flowchain（复用单篇懒加载端点，零新增机制）
+    assert.equal(zpDoc.querySelectorAll('.stage .skillrow').length, 0, '链格内不再有技能按钮行')
+    const chainQ = zpDoc.querySelector('.cardhead .chainq')
+    assert.ok(chainQ, '「流程链」标题行右上角常驻一个「？」')
+    assert.equal(chainQ.textContent, '？', '中文态按钮文案是「？」')
+    assert.equal(chainQ.tagName, 'BUTTON', '原生 button（可 Tab 到达、Enter/Space 有默认键盘行为）')
+    chainQ.focus()
+    assert.equal(zpDoc.activeElement, chainQ, '「？」可聚焦（键盘可达）')
+    assert.match(chainQ.getAttribute('aria-label'), /flowchain|四阶段|阶段/, 'aria-label 说明点开的是聚合导读')
+    chainQ.dispatchEvent(new zpWin.Event('click', { bubbles: true }))
     await tick()
     await tick()
-    assert.equal(zpDoc.getElementById('skillsModal').hasAttribute('hidden'), false, '点技能入口打开技能包弹窗')
-    assert.ok(miscCalls.some((u) => u.indexOf('/api/skills/to-spec') >= 0), '复用单篇懒加载端点取该篇')
-    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'to-spec', '清单回来后直接定位到该篇（不是默认总览）')
-    assert.deepEqual(miscCopies, [], '点技能入口不得触发链格的复制指引')
-    assert.ok(Array.from(zpDoc.querySelectorAll('#skillsNav .item')).find((b) => b.querySelector('.en').textContent === 'to-spec').className.indexOf('on') >= 0, '侧栏高亮定位篇')
-    // 已开窗再定位：点另一格的技能入口直接换篇，清单不重拉
+    assert.equal(zpDoc.getElementById('skillsModal').hasAttribute('hidden'), false, '点「？」打开技能包弹窗')
+    assert.ok(miscCalls.some((u) => u.indexOf('/api/skills/flowchain') >= 0), '复用单篇懒加载端点取聚合页')
+    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'flowchain', '清单回来后直接定位到聚合页（不是默认总览）')
+    assert.deepEqual(miscCopies, [], '点「？」不得触发链格的复制指引（点击阻断冒泡）')
+    assert.ok(Array.from(zpDoc.querySelectorAll('#skillsNav .item')).find((b) => b.querySelector('.en').textContent === 'flowchain').className.indexOf('on') >= 0, '侧栏高亮定位篇')
+    // 聚合页在导航里就是一条普通条目，落在总览分类下、与总览篇相邻（不是被藏起来的第二套路）
+    const navCats = Array.from(zpDoc.querySelectorAll('#skillsNav .cat')).map((c) => c.textContent)
+    const navNames = Array.from(zpDoc.querySelectorAll('#skillsNav .item .en')).map((s) => s.textContent)
+    assert.equal(navCats[0], '总览', '总览分类仍排第一')
+    assert.deepEqual(navNames, ['README', 'flowchain', 'to-spec', 'implement'], '聚合页与总览篇同在总览分类下、次序紧跟其后')
+    // 已开窗再定位：点另一条进弹窗的路直接换篇，清单不重拉
     const listCallsBefore = miscCalls.filter((u) => /\/api\/skills\/?$/.test(u)).length
-    skillBtns.find((b) => b.textContent === 'implement 介绍').dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    zpDoc.getElementById('skillsBtn').dispatchEvent(new zpWin.Event('click', { bubbles: true }))
+    Array.from(zpDoc.querySelectorAll('#skillsNav .item')).find((b) => b.querySelector('.en').textContent === 'to-spec')
+      .dispatchEvent(new zpWin.Event('click', { bubbles: true }))
     await tick()
     await tick()
-    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'implement', '已开窗点别的技能入口直接换篇')
+    assert.equal(zpDoc.getElementById('skillsDoc').querySelector('h1').textContent, 'to-spec', '已开窗从侧栏换篇直接换文')
     assert.equal(miscCalls.filter((u) => /\/api\/skills\/?$/.test(u)).length, listCallsBefore, '清单只拉一次')
+    // 死代码零残留（票 02）：只服务那排大按钮的词条与样式一并撤掉——留在词表和 CSS 里只会
+    // 误导下一个改的人（「链格里还有技能按钮吗」）。渲染层不再碰 s.skills。
+    for (const deadKey of ['stage.skill.label', 'stage.skill.title']) {
+      assert.equal(SHELL_TEXT[deadKey], undefined, '退役按钮的词条已撤掉：' + deadKey)
+    }
+    assert.equal(appCss.indexOf('.skillrow'), -1, '链格技能按钮行的 .skillrow 样式已撤掉')
+    assert.equal(deckHtml.indexOf("el('div', 'skillrow')"), -1, '链格不再渲染 skillrow 容器')
+    // 标题行弹性布局：钉关键声明（jsdom 无布局，钉不了换行后的像素）
+    assert.match(appCss, /\.cardhead\s*\{[^}]*display:\s*flex/, '标题行是弹性布局')
+    assert.match(appCss, /\.cardhead h2\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0/, '标题 flex:1 且 min-width:0（标题长了自换行、不顶住右侧按钮）')
+    assert.match(appCss, /\.cardhead button\s*\{[^}]*flex:\s*none/, '「？」flex:none（不参与拉伸，钉在行右侧）')
+    assert.ok(deckHtml.indexOf("openSkillsModal(FLOWCHAIN_DOC)") > 0, '「？」定位的目标走 FLOWCHAIN_DOC 常量')
+    assert.match(deckHtml, /var FLOWCHAIN_DOC = 'flowchain'/, '聚合页 slug 是一处具名常量（改名只改这一处 + 文件名）')
     zpDoc.dispatchEvent(new zpWin.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     assert.deepEqual(jsErrorsM, [])
     miscDom.window.close()
-    ok('导出快照 + 技能联动（jsdom）：文件名含项目名与本地时间、内容为原始响应体原样（不重新序列化）、对象 URL 用完释放；链格技能入口打开弹窗即定位该篇、已开窗换篇不重拉清单、不误触复制')
+    ok('导出快照 + 流程链技能入口（jsdom + 文件级）：文件名含项目名与本地时间、内容为原始响应体原样（不重新序列化）、对象 URL 用完释放；链格内按钮行退役（stage.skill.* 词条与 .skillrow 样式零残留）、标题行「？」可 Tab 到达且开弹窗即定位聚合页 flowchain、不误触复制，聚合页在导航里是总览分类下的普通条目；已开窗换篇不重拉清单')
 
     // ── 建骨架指令（票 05）：空态页「工作约定」旁的第二段一键复制 ──
     const jsErrorsS = []
@@ -4517,6 +4600,11 @@ async function runScenarios(tmp) {
     assert.ok(shDoc.querySelector('.chip.infer'), '无 map 的 effort 亮推定标注')
     assert.deepEqual(cjkResidue(shDoc), [], '推定标注零残留')
     shClick(shTab('alpha'))
+    // 流程链标题行的「？」（票 02）：英文态出英文问号，aria-label 说明点开的是四阶段导读
+    const shQ = shDoc.querySelector('.cardhead .chainq')
+    assert.equal(shQ.textContent, '?', '英文态「？」出英文问号')
+    assert.match(shQ.getAttribute('aria-label'), /four-stage flowchain tour/i, '英文态 aria-label 说明点开的是四阶段导读')
+    assert.deepEqual(cjkResidue(shDoc), [], '「？」零中文残留（文案、title 与 aria-label）')
     // 前沿徽标面板
     shOpen('frontierBadge')
     assert.deepEqual(cjkResidue(shDoc), [], '前沿面板零残留（分组名、票行 title 与 aria-label）')

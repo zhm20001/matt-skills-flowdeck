@@ -144,10 +144,13 @@
 
   .card { background: var(--fd-card); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); padding: 1.6rem; margin-bottom: 1.6rem; }
   .card h2 { font-size: 1.3rem; margin: 0 0 1.2rem; color: var(--fd-ink-muted); font-weight: 600; letter-spacing: 0.02em; }
-  /* 卡片头：标题 + 右侧动作（如「展开阅读」）共处一行 */
+  /* 卡片头：标题 + 右侧动作（如「展开阅读」「？」）共处一行 */
   .cardhead { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.2rem; }
-  .cardhead h2 { flex: 1; margin: 0; }
+  /* min-width: 0：弹性子项默认不肯缩到 min-content 以下，标题长了会顶住右侧动作而不是自己换行 */
+  .cardhead h2 { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .cardhead button { flex: none; font-size: 1.2rem; padding: 0.2rem 1rem; }
+  /* 流程链标题行右上角的「？」（票 02）：一枚小圆钮，常驻、不抢标题的戏 */
+  .cardhead .chainq { font-size: 1.3rem; line-height: 1; padding: 0.25rem 0.7rem; color: var(--fd-ink-muted); }
 
   /* 流程链：横向四步 */
   .chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
@@ -171,9 +174,6 @@
   .stage.current { border-color: var(--fd-accent); }
   .stage.done { border-color: color-mix(in srgb, var(--fd-ok) 45%, transparent); }
   .stage .evidence { margin-top: 0.8rem; font-size: 1.2rem; color: var(--fd-ink-muted); }
-  /* 技能联动（票 05）：链格内的技能介绍入口（阶段定义旁硬编码的技能名，一技能一钮） */
-  .stage .skillrow { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.8rem; }
-  .stage .skillrow button { font-size: 1.1rem; padding: 0.1rem 0.9rem; }
 
   .next { display: flex; align-items: center; gap: 1.2rem; border-left: 3px solid var(--fd-accent); }
   .next.done-all { border-left-color: var(--fd-ok); }

@@ -243,6 +243,10 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
 'use strict'
 var state = null        // 最近一次 /api/state 的完整数据
 var selected = null     // 当前选中的 effort slug（ALL_VIEW = 「全部」汇总视图）
+/* 流程链「？」定位的聚合导读篇（票 02）。这是本文件与 docs/skill-intros/ 之间的接口契约：
+   改了 slug 得同时改文件名，否则弹窗定位一篇不存在的文档。服务端零改动——技能清单是扫目录
+   出来的，名字白名单是正则不是固定清单，文档挂上 frontmatter 就自动进弹窗。 */
+var FLOWCHAIN_DOC = 'flowchain'
 var lastOk = null       // 最近一次成功刷新的本地时间
 var pollMs = 5000       // 轮询间隔，以服务端配置（config.json 的 pollMs）为准
 var pollMode = 'observe' // 轮询模式，以服务端配置（config.json 的 pollMode）为准、随 /api/state 下发：
@@ -458,8 +462,10 @@ var UI_TEXT = {
   'status.pending': { zh: '待命', en: 'Pending' },
   'infer.note': { zh: '此格不是由本阶段产物证成，而是由更晚阶段的产物推定完成', en: 'This cell is not proven by this stage artifacts; a later stage implies the stage was walked through' },
   'infer.aria': { zh: '{infer}：{note}', en: '{infer}: {note}' },
-  'stage.skill.label': { zh: '{name} 介绍', en: '{name} intro' },
-  'stage.skill.title': { zh: '打开技能包弹窗，定位到「{name}」的介绍', en: 'Open the skills overview on the {name} intro' },
+  // 流程链标题行右上角的「？」（票 02）：链格内那排大按钮退役后，聚合导读的入口挪到这里
+  'chain.q.label': { zh: '？', en: '?' },
+  'chain.q.title': { zh: '四阶段导读：这四格背后各挂哪些技能', en: 'The four-stage tour: which skills sit behind each cell' },
+  'chain.q.aria': { zh: '打开流程链四阶段导读：grill / spec / tickets / implement 各挂哪些技能、各解决什么', en: 'Open the four-stage flowchain tour: which skills sit behind grill / spec / tickets / implement, and what each one is for' },
   'stage.cell.title': { zh: '点一下复制这段阶段指引词\n{hint}', en: 'Click to copy this stage prompt\n{hint}' },
   'stage.cell.aria': { zh: '{name}·{status}。{hint}', en: '{name}·{status}. {hint}' },
   'stage.cell.aria-infer': { zh: '{name}·{status}·{infer}：{note}。{hint}', en: '{name}·{status}·{infer}: {note}. {hint}' },
@@ -1022,7 +1028,21 @@ function doneFoldButton(folded) {
 
 function renderChain(eff) {
   var card = el('div', 'card')
-  card.appendChild(el('h2', null, tf('chain.h2', { title: eff.title })))
+  // 标题行：标题文字 + 右侧常驻的「？」（票 02）。链格里那排「{技能名} 介绍」大按钮退役了——
+  // 一整行只服务初学时的一两次点击，却四格各占一行；入口收成这一个，指向按四阶段串起各自技能的
+  // 聚合导读页。布局纯走 .cardhead 的弹性排版：标题 flex: 1 自己换行，按钮 flex: none 钉在行右上角，
+  // 不做 JS 测量。点击阻断冒泡，链格本体的复制指引词别被它带着触发。
+  var head = el('div', 'cardhead')
+  head.appendChild(el('h2', null, tf('chain.h2', { title: eff.title })))
+  var q = el('button', 'chainq', t('chain.q.label'))
+  q.title = t('chain.q.title')
+  q.setAttribute('aria-label', t('chain.q.aria'))
+  q.addEventListener('click', function (ev) {
+    ev.stopPropagation()
+    openSkillsModal(FLOWCHAIN_DOC)
+  })
+  head.appendChild(q)
+  card.appendChild(head)
   var chain = el('div', 'chain')
   eff.chain.stages.forEach(function (s, i) {
     if (i > 0) chain.appendChild(el('div', 'arrow', '→'))
@@ -1049,21 +1069,6 @@ function renderChain(eff) {
       st.appendChild(infer)
     }
     st.appendChild(el('div', 'evidence', guideText(s, 'evidence')))
-    // 技能联动（票 05）：阶段定义旁硬编码的技能名（flowchain.mjs 的 FLOW_STAGES.skills，与指引词
-    // 同源同漂移）——点开技能包弹窗并定位到该篇介绍（复用单篇懒加载端点，零新增机制）
-    if (s.skills && s.skills.length) {
-      var srow = el('div', 'skillrow')
-      s.skills.forEach(function (name) {
-        var sb = el('button', null, tf('stage.skill.label', { name: name }))
-        sb.title = tf('stage.skill.title', { name: name })
-        sb.addEventListener('click', function (ev) {
-          ev.stopPropagation() // 链格本身可点（复制指引词）：按钮点击别冒泡上去
-          openSkillsModal(name)
-        })
-        srow.appendChild(sb)
-      })
-      st.appendChild(srow)
-    }
     // 键盘层 + 兜底层：链格可 Tab 停留、Enter/Space 与点按同路复制本格指引词；
     // title 是鼠标福利，aria-label 同载状态、推定含义与指引全文（不再只藏在悬停里）。
     var hint = guideText(s, 'hint')

@@ -29,8 +29,12 @@ _Avoid_: 正册格式、元数据块、状态头
 _Avoid_: 错误、非法票、坏票
 
 **技能介绍文档（skill doc）**:
-`docs/skill-intros/` 下每个技能一篇的中文提炼介绍（含全景总览 README），frontmatter 供服务端出清单、正文末尾附原文描述。是静态展示素材：网页「技能包」弹窗与该目录本身都直接读它。
+`docs/skill-intros/` 下的中文介绍，frontmatter 供服务端出清单、正文末尾附原文描述。多数是「每技能一篇」，也有**不属于任何技能的聚合导读篇**——全景总览 README、流程链四阶段导读 `flowchain`（流程链「？」按钮定位的那一篇）；聚合篇归入 `overview` 分类、次序紧跟总览篇，它内链各技能篇而不复述它们。是静态展示素材：网页「技能包」弹窗与该目录本身都直接读它。
 _Avoid_: 使用手册、教程、技能包源码
+
+**流程链四阶段导读（flowchain tour）**:
+`docs/skill-intros/flowchain.md` 这篇聚合导读：按 grill / spec / tickets / implement 四格各成一节，串起该格在 `FLOW_STAGES` 里挂的技能，判据取「每格解决什么、这些技能各管哪一段」。流程链卡标题行的「？」是它的入口——链格内那排「{技能名} 介绍」大按钮退役后由它整体承接。slug `flowchain` 是本篇与界面之间的接口契约，改名要同改文件名。
+_Avoid_: 单篇技能介绍、按格定位的入口
 
 **英文镜像篇（English mirror doc）**:
 `docs/skill-intros-en/` 下与中文篇同名的一比一译文。只译 `title`/`summary` 两格与正文，分类、顺序、开发中标一律以中文目录为准——镜像不是第二套元数据。缺篇时清单打 `noEnglish`、正文回退中文原文并挂标注。
