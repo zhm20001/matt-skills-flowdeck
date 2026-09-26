@@ -1,6 +1,6 @@
 {
   "name": "flowdeck",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "description": "Matt Skills Flowdeck（简称 flowdeck）：mattpocock/skills 的可视化追踪面板——追踪任意项目 .scratch/ 产物，可视化 grill → to-spec → to-tickets → implement 进度。零依赖，整体拷到任何地方都能跑。",
   "repository": {
