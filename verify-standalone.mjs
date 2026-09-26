@@ -1411,22 +1411,35 @@ async function runScenarios(tmp) {
       const en = cut(enRaw)
       // 两种篇型：总览分类下是不属于任何技能的聚合页（总览、流程链导读），其余四类才是
       // 「每技能一篇」。判准取自中文篇的 category——英文列的骨架照中文来。
-      const perSkill = fmField(zhRaw, 'category') !== 'overview'
-      const keys = (s) => s.split('\n').map((l) => l.slice(0, l.indexOf(':'))).join(',')
-      const zhKeys = new Set(keys(zh.fm).split(','))
+      const isAggregate = fmField(zhRaw, 'category') === 'overview'
+      // 键集按数组比（cut() 切出的 frontmatter 带一个前导空行，join 成串会多出首段空串）
+      const keys = (s) => s.split('\n').map((l) => l.slice(0, l.indexOf(':'))).filter((k) => k)
+      const zhKeyList = keys(zh.fm)
+      const enKeyList = keys(en.fm)
+      const zhKeys = new Set(zhKeyList)
       // 总规矩：镜像的 frontmatter 键不得超出中文篇（镜像不引入新元数据）
-      for (const k of keys(en.fm).split(',')) {
-        if (k && !zhKeys.has(k)) drift.push(f + '：镜像多出键 ' + k)
+      for (const k of enKeyList) {
+        if (!zhKeys.has(k)) drift.push(f + '：镜像多出键 ' + k)
       }
-      if (perSkill) {
-        if (keys(zh.fm) !== keys(en.fm)) drift.push(f + '：frontmatter 键序不同')
+      // 聚合导读篇的镜像只可能两种形态：照抄中文篇的全套键（既有页，如总览篇），或者只留
+      // name/title/summary（新页，分类与次序不带——中文目录才是唯一真相）。半抄不算数：
+      // 键集一旦被允许随意收缩，逐字段对齐这条就没了着落，这里把口子堵死而不是放过。
+      const sameShape = enKeyList.join(',') === zhKeyList.join(',')
+      const isSubsetShape = enKeyList.join(',') === 'name,title,summary'
+      if (isAggregate && !sameShape && !isSubsetShape) {
+        drift.push(f + '：聚合篇镜像的键集只能是中文篇的全套或 name/title/summary，实为 ' + enKeyList.join(','))
+      }
+      // 键序一致时逐字段对账：只有 title/summary 是译文，其余（name/category/order/inProgress）
+      // 原样照抄。键集不同的聚合篇没有可对账的非译文字段，上一条已经把形态钉死了。
+      if (sameShape) {
         const zhFm = zh.fm.split('\n')
         const enFm = en.fm.split('\n')
         zhFm.forEach((line, i) => {
           const key = line.slice(0, line.indexOf(':'))
-          // 只有 title/summary 是译文；其余（name/category/order/inProgress）原样照抄，镜像不带新元数据
           if (key !== 'title' && key !== 'summary' && line !== enFm[i]) drift.push(f + '：' + key + ' 被改动')
         })
+      } else if (!isAggregate) {
+        drift.push(f + '：frontmatter 键序不同')
       }
       if (!fmField(enRaw, 'title') || CJK_RE.test(fmField(enRaw, 'title'))) drift.push(f + '：title 空或含中文')
       if (!fmField(enRaw, 'summary') || CJK_RE.test(fmField(enRaw, 'summary'))) drift.push(f + '：summary 空或含中文')
@@ -1438,7 +1451,7 @@ async function runScenarios(tmp) {
       if (count(zh.body, /\[[^\]]+\]\([^)]+\)/g) !== count(en.body, /\[[^\]]+\]\([^)]+\)/g)) drift.push(f + '：链接数不同')
       const targets = (t) => (t.match(/\]\([^)]+\)/g) || []).sort().join('|')
       if (targets(zh.body) !== targets(en.body)) drift.push(f + '：链接目标被改动（内链要靠同名篇回退）')
-      if (perSkill) {
+      if (!isAggregate) {
         // 「什么时候用」的条数与正文段落数、加粗数一并钉住：译文不增删不合并
         const sec = (t, head) => { const i = t.indexOf(head); return i < 0 ? '' : t.slice(i + head.length).split(/^\s*## /m)[0] }
         const zhBullets = count(sec(zh.body, '## 什么时候用'), /^- /gm)
@@ -1454,7 +1467,7 @@ async function runScenarios(tmp) {
     }
     assert.deepEqual(drift, [], '37 篇镜像逐篇对齐（键序、原样字段、结构计数、内链目标、原文描述逐字节）')
   }
-  ok('英文镜像完整性（文件级）：37 篇同名镜像的 frontmatter 键序与非译文字段原样（聚合导读篇只留 name/title/summary，不夹带分类与次序）、H1 与段落/条数/加粗/内链目标对齐、原文描述逐字节照抄、零中文残留')
+  ok('英文镜像完整性（文件级）：37 篇同名镜像的 frontmatter 键不超出中文篇、每技能篇键序与非译文字段原样（聚合导读篇不带分类与次序，键序对齐对它不适用）、H1 与段落/条数/加粗/内链目标对齐、原文描述逐字节照抄、零中文残留')
 
   // ── 流程链聚合导读（ui-declutter 票 02）：文件级钉住它能进弹窗、正文按四阶段串技能 ──
   {
@@ -2881,7 +2894,10 @@ async function runScenarios(tmp) {
     foDoc.querySelector('#main tr.donegroup').dispatchEvent(new foWin.Event('click', { bubbles: true })) // 先展开纵览的完工组，才点得到 gamma 那行
     Array.from(foDoc.querySelectorAll('#main tr.effortrow')).find((tr) => tr.querySelector('.name').textContent === 'gamma')
       .dispatchEvent(new foWin.Event('click', { bubbles: true }))
-    assert.deepEqual(foldTabs(), ['alpha', 'beta', 'gamma ✓', '✓ 完工 (1)', '全部'], '选中的完工 effort 照常平铺，折叠入口只数剩下那几个')
+    // 计数报的是全部完工 effort，不是折叠里那几个：那个数回答「一共完工了几个」，不随
+    // 「正看着哪一个」跳动（故事 2 要的是这份安心）。折叠里还有一个 delta，gamma 平铺在旁。
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', 'gamma ✓', '✓ 完工 (2)', '全部'], '选中的完工 effort 照常平铺，计数仍是全部完工数（2，不因平铺一个而变 1）')
+    assert.match(foldToggle().getAttribute('title'), /^展开这 1 个完工 effort$/, 'title 数的是折叠里实际会展开的那几个')
     assert.match(foDoc.querySelector('#main .card h2').textContent, /完了/, '主区与 tab 一致（gamma 的链卡）')
     // 切走才收：换一个进行中的 effort，gamma 回到折叠里
     Array.from(foDoc.querySelectorAll('#tabs button')).find((b) => b.textContent === 'beta').dispatchEvent(new foWin.Event('click', { bubbles: true }))
@@ -2914,13 +2930,35 @@ async function runScenarios(tmp) {
     const foDoc2 = foldDom2.window.document
     assert.deepEqual(Array.from(foDoc2.querySelectorAll('#tabs button')).map((b) => b.textContent), ['alpha', 'beta', '✓ 完工 (2)', '全部'], '新会话首渲染即收起（展开态不落盘）')
     assert.deepEqual(jsErrorsFold2, [])
+    // 只剩一个完工 effort 时没有可折叠的东西：不渲染折叠入口（那枚「✓ 完工 (0)」按钮
+    // 是噪音——选中项例外已经把那一个平铺出来了）
+    const onlyDone = JSON.parse(JSON.stringify(allPayload))
+    onlyDone.efforts = [allPayload.efforts[2]]
+    const jsErrorsFold3 = []
+    const vcFold3 = new VirtualConsole()
+    vcFold3.on('jsdomError', (e) => jsErrorsFold3.push(String((e && e.message) || e)))
+    const foldDom3 = uiDom({
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39326/',
+      pretendToBeVisual: true,
+      virtualConsole: vcFold3,
+      beforeParse(window) {
+        window.fetch = () => Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(onlyDone)) })
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const foDoc3 = foldDom3.window.document
+    assert.deepEqual(Array.from(foDoc3.querySelectorAll('#tabs button')).map((b) => b.textContent), ['gamma ✓', '全部'], '只有选中项一个完工 effort：没有折叠入口，平铺出来')
+    assert.equal(foDoc3.querySelector('#tabs button[aria-expanded]'), null, '折叠内空无一物时不渲染入口')
+    assert.deepEqual(jsErrorsFold3, [])
     // 文件级：展开态是主区渲染的一个输入，得进签名——否则某条别的路重画主区时会按收起的
     // 形态重建切换条，把用户刚展开的列表又吞回去（jsdom 钉不到这条：点按走的是直接 render()）
     const sigBody = deckHtml.slice(deckHtml.indexOf('function mainRenderSignature'), deckHtml.indexOf('function snapshotScrolls'))
     assert.match(sigBody, /doneFoldOpen/, '展开态进了主区渲染签名')
     foldDom.window.close()
     foldDom2.window.close()
-    ok('切换条完工折叠（jsdom + 文件级）：按 chain.complete 分组（进行中平铺在前、完工收进折叠入口、纵览垫底）、计数文案中英双语、折叠入口可 Tab 到达且 aria-expanded 如实、展开/收起即时重画、选中项例外（选中的完工 effort 照常平铺、切走才收）、展开态进渲染签名且刷新回落收起、零写请求')
+    foldDom3.window.close()
+    ok('切换条完工折叠（jsdom + 文件级）：按 chain.complete 分组（进行中平铺在前、完工收进折叠入口、纵览垫底）、计数文案中英双语、折叠入口可 Tab 到达且 aria-expanded 如实、展开/收起即时重画、选中项例外（选中的完工 effort 照常平铺、切走才收）、无可折叠者时不渲染入口、展开态进渲染签名且刷新回落收起、零写请求')
 
     // ── 项目总览弹窗（票 03 + 票 01 收编）：打开才单拍、坏行标注、行与行内按钮都开为标签页 ──
     const jsErrorsOv = []
@@ -3828,6 +3866,11 @@ async function runScenarios(tmp) {
     assert.equal(zpDoc.querySelectorAll('.stage .skillrow').length, 0, '链格内不再有技能按钮行')
     const chainQ = zpDoc.querySelector('.cardhead .chainq')
     assert.ok(chainQ, '「流程链」标题行右上角常驻一个「？」')
+    // 阻断冒泡为什么有意义的根：按钮在 .chain 的**兄弟**位置、不在任何 .stage 里。链格本体
+    // 可点复制指引词，只有「？」在 stage 内时两者才会互相干扰；现在结构上就碰不到，
+    // stopPropagation() 是留给日后的护栏（谁再往标题行加个点击处理也不会连带触发）。
+    assert.equal(chainQ.closest('.stage'), null, '「？」不在任何链格内（结构上就不可能误触链格的复制指引）')
+    assert.equal(zpDoc.querySelector('.cardhead.chainhead'), chainQ.parentNode, '「？」挂在链卡的标题行上')
     assert.equal(chainQ.textContent, '？', '中文态按钮文案是「？」')
     assert.equal(chainQ.tagName, 'BUTTON', '原生 button（可 Tab 到达、Enter/Space 有默认键盘行为）')
     chainQ.focus()
@@ -3864,7 +3907,9 @@ async function runScenarios(tmp) {
     assert.equal(deckHtml.indexOf("el('div', 'skillrow')"), -1, '链格不再渲染 skillrow 容器')
     // 标题行弹性布局：钉关键声明（jsdom 无布局，钉不了换行后的像素）
     assert.match(appCss, /\.cardhead\s*\{[^}]*display:\s*flex/, '标题行是弹性布局')
-    assert.match(appCss, /\.cardhead h2\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0/, '标题 flex:1 且 min-width:0（标题长了自换行、不顶住右侧按钮）')
+    assert.match(appCss, /\.cardhead h2\s*\{[^}]*flex:\s*1/, '标题 flex:1')
+    assert.match(appCss, /\.cardhead\.chainhead h2\s*\{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere/, '换行规则只加在链卡标题行上（min-width:0 + 允许断词），共享的 .cardhead h2 不被顺手改到')
+    assert.doesNotMatch(appCss, /\.cardhead h2\s*\{[^}]*overflow-wrap/, '共享的 .cardhead h2 上不留换行规则的全局副作用')
     assert.match(appCss, /\.cardhead button\s*\{[^}]*flex:\s*none/, '「？」flex:none（不参与拉伸，钉在行右侧）')
     assert.ok(deckHtml.indexOf("openSkillsModal(FLOWCHAIN_DOC)") > 0, '「？」定位的目标走 FLOWCHAIN_DOC 常量')
     assert.match(deckHtml, /var FLOWCHAIN_DOC = 'flowchain'/, '聚合页 slug 是一处具名常量（改名只改这一处 + 文件名）')

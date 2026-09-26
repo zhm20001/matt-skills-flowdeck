@@ -490,7 +490,7 @@ var UI_TEXT = {
   'tab.done.label': { zh: '✓ 完工 ({n})', en: '✓ Done ({n})' },
   'tab.done.expand.title': { zh: '展开这 {n} 个完工 effort', en: 'Expand these {n} finished efforts' },
   'tab.done.collapse.title': { zh: '收起完工 effort', en: 'Collapse the finished efforts' },
-  'tab.done.aria': { zh: '完工 effort 折叠入口（{n} 个）：点开逐个切过去。收起来只是显示偏好，它们的产物照旧计入迷雾、前沿票与通知', en: 'Finished efforts ({n}): click to open and switch to one. Collapsing is display-only — their artifacts still count toward fog, frontier tickets and notifications' },
+  'tab.done.aria': { zh: '完工 effort 折叠入口：共 {n} 个，点开逐个切过去。收起来只是显示偏好，它们的产物照旧计入迷雾、前沿票与通知', en: 'Finished efforts: {n} in total, click to open and switch to one. Collapsing is display-only — their artifacts still count toward fog, frontier tickets and notifications' },
   'tab.root': { zh: '根 .scratch/', en: '.scratch/ root' },
   'tickets.h2': { zh: '票（issues/）· 点一行可复制实现指引', en: 'Tickets (issues/) · click a row to copy its implementation prompt' },
   'tickets.none': { zh: '这个 effort 还没有票。', en: 'This effort has no tickets yet.' },
@@ -998,9 +998,10 @@ function renderTabs() {
   var doneFolded = []
   done.forEach(function (e) { (e.slug === selected ? doneShown : doneFolded).push(e) })
   active.concat(doneShown).forEach(function (e) { box.appendChild(effortTabBtn(e)) })
-  if (doneFolded.length) box.appendChild(doneFoldButton(doneFolded))
+  if (doneFolded.length) box.appendChild(doneFoldButton(done.length, doneFolded.length))
   if (doneFoldOpen) doneFolded.forEach(function (e) { box.appendChild(effortTabBtn(e)) })
   // 「全部」伪条目（票 02）：主区换跨 effort 汇总视图
+  // （超 12 个 effort 的复议已在本票落地：常驻条目数回到「进行中 + 1 折叠 + 1 全部」，不再随 effort 涨）
   var all = el('button', null, t('tab.all'))
   if (selected === ALL_VIEW) all.className = 'on'
   all.title = t('tab.all.title')
@@ -1016,12 +1017,16 @@ function effortTabBtn(e) {
   return b
 }
 
-/** 完工 effort 的折叠入口：文案带折叠内的计数，展开态由 aria-expanded 如实自报。 */
-function doneFoldButton(folded) {
-  var b = el('button', 'donefold', tf('tab.done.label', { n: folded.length }))
-  b.title = tf(doneFoldOpen ? 'tab.done.collapse.title' : 'tab.done.expand.title', { n: folded.length })
+/** 完工 effort 的折叠入口。
+ *  计数报的是**全部**完工 effort（total），不是折叠里那几个（folded）：那个数回答的是
+ *  「一共完工了几个」——用户故事里要的就是这份安心，它不该因为「正看着哪一个」而跳。
+ *  「眼下藏了几个」由按钮在不在场回答：折叠里空无一物时整枚按钮不渲染（见调用处）。
+ *  展开态由 aria-expanded 如实自报。 */
+function doneFoldButton(total, folded) {
+  var b = el('button', 'donefold', tf('tab.done.label', { n: total }))
+  b.title = tf(doneFoldOpen ? 'tab.done.collapse.title' : 'tab.done.expand.title', { n: folded })
   b.setAttribute('aria-expanded', doneFoldOpen ? 'true' : 'false')
-  b.setAttribute('aria-label', tf('tab.done.aria', { n: folded.length }))
+  b.setAttribute('aria-label', tf('tab.done.aria', { n: total }))
   b.addEventListener('click', function () { doneFoldOpen = !doneFoldOpen; render() })
   return b
 }
@@ -1032,7 +1037,7 @@ function renderChain(eff) {
   // 一整行只服务初学时的一两次点击，却四格各占一行；入口收成这一个，指向按四阶段串起各自技能的
   // 聚合导读页。布局纯走 .cardhead 的弹性排版：标题 flex: 1 自己换行，按钮 flex: none 钉在行右上角，
   // 不做 JS 测量。点击阻断冒泡，链格本体的复制指引词别被它带着触发。
-  var head = el('div', 'cardhead')
+  var head = el('div', 'cardhead chainhead')
   head.appendChild(el('h2', null, tf('chain.h2', { title: eff.title })))
   var q = el('button', 'chainq', t('chain.q.label'))
   q.title = t('chain.q.title')

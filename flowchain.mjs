@@ -18,8 +18,10 @@
  *  阶段名与副题的中英两列都在这张表里（english-ui 双轴评审收口：此前英文列放在界面词表、
  *  中文列在这里，同名两处靠漂移断言兜着——单一表加语言维度才是规格要的「不长第三份硬编码面」；
  *  表随 /api/state 的 stageNames 直通车下发，界面按键消费，不再自抄）。
- *  skills 是该阶段的对应技能（票 05 技能联动）：与指引词同源同漂移——硬编码在这里，
- *  指引卡「查看技能介绍」按它打开技能包弹窗定位该篇（docs/skill-intros/ 已核有这五篇介绍）。 */
+ *  skills 是该阶段的对应技能名：聚合导读篇 docs/skill-intros/flowchain.md 的技能名单与它同源
+ *  （那张聚合页按四阶段分节串起各阶段挂的技能，流程链卡标题行的「？」定位到它）。曾经它还兼一份
+ *  界面职责——链格内「{技能名} 介绍」大按钮行按它逐个开单篇；那排按钮已随 ui-declutter 票 02 退役，
+ *  界面不再消费这一格，但它作为「阶段 ↔ 技能」的唯一映射仍在载荷里。 */
 export const FLOW_STAGES = [
   { id: 'grill',     title: 'Grill 拷问',      titleEn: 'Grill',      subtitle: '想法 → 地图 map.md', subtitleEn: 'Idea → map.md',                 skills: ['grilling', 'wayfinder'] },
   { id: 'spec',      title: 'To-Spec 规格',    titleEn: 'To-Spec',    subtitle: '理解 → 规格 spec.md', subtitleEn: 'Understanding → spec.md',      skills: ['to-spec'] },
@@ -69,7 +71,7 @@ export function isFrontierTicket(ticket, closedSet) {
  *   counts.blocked 是前沿口径：open 且所列依赖中仍有未关闭者（依赖全结不再计阻塞）。
  *   stages 每项：{ id, title, subtitle, status: 'done'|'current'|'pending', evidence, hint, copyText,
  *                  inferred（完成是否来自后向推定）, inferLabel（推定标注文案，实证完成为空串）,
- *                  skills（本阶段的对应技能名，技能联动用）,
+ *                  skills（本阶段的对应技能名，聚合导读篇 flowchain.md 与它同源；界面不消费），
  *                  en: { title, subtitle, evidence, hint, copyText, inferLabel }
  *                    （同一分支的英文列，界面按语言取用；title/subtitle 出自 FLOW_STAGES 的 titleEn/subtitleEn） }。
  *   evidence 是「为什么判成这个状态」的人读证据；hint 是走到这步时下一步该干什么；
