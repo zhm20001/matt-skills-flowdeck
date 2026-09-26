@@ -36,7 +36,7 @@ Ticket and spec titles inside the shots are still Chinese: those are the tracked
 git clone https://github.com/zhm20001/matt-skills-flowdeck.git flowdeck   # or skip git: copy the directory into your project
 cd flowdeck
 cp config.example.json config.json   # optional: pre-configure from the template (runs fine without one, see below)
-npm start                            # or: node server.mjs
+npm start                            # or: node src/server.mjs
 ```
 
 Open the printed address (default `http://127.0.0.1:3210`). The server listens on the loopback interface only. Writes are guarded twice: POST endpoints require a custom `X-FlowDeck` header (other pages in your browser can't send it, which blocks cross-site writes), and while on loopback the server also validates the request's `Host` header — only `127.0.0.1` / `localhost` / `[::1]` pass. Without that check, a malicious page could DNS-rebind its domain to 127.0.0.1, become same-origin, and use the custom header freely to switch the tracked root or read arbitrary `.scratch` content. For LAN access set `host` in config.json (e.g. `0.0.0.0`): Host validation then relaxes, and every machine on the LAN can browse, switch roots, and read tracked content — set a `token` too (next section) to gate `/api/*` with a shared token.

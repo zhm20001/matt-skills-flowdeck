@@ -34,7 +34,7 @@
 git clone https://github.com/zhm20001/matt-skills-flowdeck.git flowdeck    # 也可以不走 git：直接把整个目录拷进目标项目
 cd flowdeck
 cp config.example.json config.json # 可选：要预配置就拷一份模板改（不拷也能跑，见下节）
-npm start                          # 或者 node server.mjs
+npm start                          # 或者 node src/server.mjs
 ```
 
 启动后打开终端打印的地址（默认 `http://127.0.0.1:3210`）。服务只监听本机回环地址，不对外网开放。写防护有两层：POST 接口要求自定义 `X-FlowDeck` 头（浏览器里别的网页发不出，挡跨站写）；回环监听时还校验请求的 Host 头，只认 `127.0.0.1` / `localhost` / `[::1]`——不校验的话，恶意页面把它的域名 DNS rebinding 到 127.0.0.1 后请求即同源，自定义头形同虚设，就能改追踪目录、读任意目录的 `.scratch` 内容。想局域网访问改 config.json 的 host（如 `0.0.0.0`）：此时 Host 校验自动放宽，局域网内任何机器都能访问、换目录、读被追踪目录的内容——建议同时设一个 `token`（见下节），给 `/api/*` 加一道共享令牌鉴权。

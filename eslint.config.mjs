@@ -22,9 +22,9 @@ export default [
     },
   },
   {
-    files: ['lib/**/*.mjs'],
+    files: ['src/lib/**/*.mjs'],
     rules: {
-      // lib/parse.mjs 的行为由 verify 夹具断言钉住，正则转义按原样保留，规则豁免。
+      // src/lib/parse.mjs 的行为由 verify 夹具断言钉住，正则转义按原样保留，规则豁免。
       'no-useless-escape': 'off',
     },
   },

@@ -1,5 +1,5 @@
 /**
- * flowdeck/lib/parse.mjs — 流程板自带的解析器（零依赖，单遍结构解析）。
+ * flowdeck/src/lib/parse.mjs — 流程板自带的解析器（零依赖，单遍结构解析）。
  *
  * 为什么自带：本目录要能整体拷到任何地方独立运行，解析器必须随行。
  * 标题规则与地图区块规则收进 parseDocStructure 的单遍实现，

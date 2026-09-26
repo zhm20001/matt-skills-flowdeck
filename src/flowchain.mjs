@@ -1,5 +1,5 @@
 /**
- * flowdeck/flowchain.mjs — 流程链推导（纯函数，零依赖）。
+ * flowdeck/src/flowchain.mjs — 流程链推导（纯函数，零依赖）。
  *
  * 它做什么：给定一个 effort（一个 .scratch/<特性名>/ 目录）的产物盘点
  * ——map（地图）、spec（规格）、tickets（票）三样东西各处于什么状态——

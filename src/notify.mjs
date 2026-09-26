@@ -1,5 +1,5 @@
 /**
- * flowdeck/notify.mjs — 盘点事件推导（纯函数，只引 flowchain.mjs 的阶段表）。
+ * flowdeck/src/notify.mjs — 盘点事件推导（纯函数，只引 flowchain.mjs 的阶段表）。
  *
  * 它做什么：给定前后两拍盘点（/api/state 的载荷或同构扫描快照），推导出「值得告诉用户」
  * 的变化事件——票开关态、各 effort 迷雾数、链当前步推进、新 effort 出现——各成一条人话。

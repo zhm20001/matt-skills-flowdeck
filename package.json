@@ -10,9 +10,9 @@
   "homepage": "https://github.com/zhm20001/matt-skills-flowdeck#readme",
   "bugs": "https://github.com/zhm20001/matt-skills-flowdeck/issues",
   "scripts": {
-    "start": "node server.mjs",
-    "verify": "node verify-standalone.mjs",
-    "test": "node verify-standalone.mjs",
+    "start": "node src/server.mjs",
+    "verify": "node test/verify-standalone.mjs",
+    "test": "node test/verify-standalone.mjs",
     "lint": "eslint ."
   },
   "engines": {

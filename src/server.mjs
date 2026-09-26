@@ -1,13 +1,13 @@
 /**
- * flowdeck/server.mjs — 流程板本地服务（零依赖，Node ≥ 18）。
+ * flowdeck/src/server.mjs — 流程板本地服务（零依赖，Node ≥ 18）。
  *
  * 这是什么：「追踪 .scratch 产物 + 流程链可视化」的通用本地 Web 服务。
  * 它不依赖任何 npm 包；任何 Agent（Claude Code / Cursor / 手写都行）
  * 只要把产物按约定写进 .scratch/，打开浏览器就能看到 grill → to-spec → to-tickets → implement
  * 走到了哪一步、下一步该干什么。
  *
- * 本目录是自包含的：整体拷到任何地方都能跑（node server.mjs 或 npm start），
- * 配置全部读本目录的 config.json，追踪目录既能在配置里写死，也能在网页右上角
+ * 本仓库是自包含的：整体拷到任何地方都能跑（node src/server.mjs 或 npm start），
+ * 配置全部读仓库根的 config.json，追踪目录既能在配置里写死，也能在网页右上角
  * 随时换（POST /api/config，改完立即生效并写回 config.json）。
  *
  * 路由：
@@ -65,14 +65,16 @@ import { FLOW_STAGES } from './flowchain.mjs'
 const execFile = promisify(execFileCb)
 
 const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
-const DEFAULT_CONFIG_PATH = nodePath.join(HERE, 'config.json')
+// 仓库根：config.json 与 docs/ 都住根目录，src/ 只是代码与界面资源； HERE 指 src/ 本身。
+const ROOT = nodePath.resolve(HERE, '..')
+const DEFAULT_CONFIG_PATH = nodePath.join(ROOT, 'config.json')
 const INDEX_HTML = nodePath.join(HERE, 'index.html')
 // 技能介绍文档目录（docs/skill-intros/，随仓库自包含）。只读这一目录下的 .md，没有路径穿越面。
-const SKILLS_DOCS_DIR = nodePath.join(HERE, 'docs', 'skill-intros')
+const SKILLS_DOCS_DIR = nodePath.join(ROOT, 'docs', 'skill-intros')
 /* 英文镜像目录（english-ui 票 03）：与中文篇同名一一对应，只翻 title/summary 与正文。
    中文目录是清单的唯一骨架——分类、顺序、开发中标一律以它为准，镜像不是第二套元数据；
    镜像缺篇时清单打 noEnglish 标注、单篇回退中文原文。 */
-const SKILLS_DOCS_EN_DIR = nodePath.join(HERE, 'docs', 'skill-intros-en')
+const SKILLS_DOCS_EN_DIR = nodePath.join(ROOT, 'docs', 'skill-intros-en')
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const SKILL_CATEGORY_RANK = { overview: 0, engineering: 1, productivity: 2, misc: 3, 'in-progress': 4 }
 // 界面引用的静态资源白名单：只放行 styles/ 里点名的文件，不做通用静态服务，也就没有路径穿越。
@@ -361,13 +363,13 @@ export function saveConfig(patch, configPath) {
  * 解析用户填的追踪目录：
  *   空        → 启动服务时的当前目录；
  *   ~/ 开头   → 展开成用户主目录；
- *   相对路径  → 按本目录（config.json 所在目录）解析，拷到哪里都行为一致。
+ *   相对路径  → 按仓库根（config.json 所在目录）解析，拷到哪里都行为一致。
  */
 export function resolveRoot(raw) {
   let s = String(raw === undefined || raw === null ? '' : raw).trim()
   if (!s) return process.cwd()
   if (s === '~' || s.startsWith('~/')) s = nodePath.join(os.homedir(), s.slice(1))
-  if (!nodePath.isAbsolute(s)) s = nodePath.join(HERE, s)
+  if (!nodePath.isAbsolute(s)) s = nodePath.join(ROOT, s)
   return nodePath.resolve(s)
 }
 

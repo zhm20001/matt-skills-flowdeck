@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * flowdeck/verify-standalone.mjs — 流程板独立验证（不依赖 npm 包；
+ * flowdeck/test/verify-standalone.mjs — 流程板独立验证（不依赖 npm 包；
  * jsdom 是可选的：仓库里装了就真跑界面，拷出去没装就自动跳过那一组）。
  *
  * 覆盖场景：
@@ -131,7 +131,7 @@
  *                                样式表不为它新开 id 选择器，config.example.json 与两份 README 讲清 guidesPrefix，
  *                                CONTEXT.md 有「前缀」词条且那句「唯一以…为身份」已改掉。
  *
- * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
+ * 跑法：node test/verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
 
 import assert from 'node:assert/strict'
@@ -142,10 +142,14 @@ import { spawn } from 'node:child_process'
 import os from 'node:os'
 import nodePath from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { scanWorkspace } from './scan.mjs'
-import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT, normalizeGuides, normalizeGuidesPrefix } from './server.mjs'
+import { scanWorkspace } from '../src/scan.mjs'
+import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT, normalizeGuides, normalizeGuidesPrefix } from '../src/server.mjs'
 
 const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
+// 仓库根与应用目录：verify 搬进 test/ 后，读仓库级文件（docs/、README、config.example.json）走 ROOT，
+// 读应用资源（index.html、styles/、server.mjs）走 APP；HERE 只是 test/ 自己。
+const ROOT = nodePath.resolve(HERE, '..')
+const APP = nodePath.join(ROOT, 'src')
 
 let passed = 0
 function ok(name) {
@@ -186,7 +190,7 @@ function rawHttp({ method, url, headers = {}, body = '' }) {
 /** 起一个真实 CLI 子进程（server.mjs 的命令行入口只有直接运行时才走，进程内测不到）。 */
 function runCli(args) {
   return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [nodePath.join(HERE, 'server.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const p = spawn(process.execPath, [nodePath.join(APP, 'server.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
     let out = ''
     let err = ''
     p.stdout.on('data', (d) => { out += d })
@@ -309,7 +313,7 @@ async function runScenarios(tmp) {
 
     // 唯一实现的等价断言：parseMd 的标题 = parseDocStructure 的标题（对任意输入逐字一致）；
     // parseMapBody 的区块 = parseDocStructure(normalizeBody) 的区块（输出形状不变是硬约束）。
-    const parseMod = await import('./lib/parse.mjs')
+    const parseMod = await import('../src/lib/parse.mjs')
     for (const text of [T1_B, T2_B, SPEC_B, MAP_B, '', '   \n\n  ', '# 只有正文没有区块\n\n段落一。\n', '导语在前\n\n# 后出现的标题\n', '#x 无空格井号\n']) {
       assert.deepEqual(parseMod.parseDocStructure(text).title, parseMod.parseMd(text, { key: '01', parentKey: '00' }).title, 'parseMd 标题必须出自 parseDocStructure：' + JSON.stringify(String(text).slice(0, 20)))
     }
@@ -469,14 +473,14 @@ async function runScenarios(tmp) {
       comments: [{ author: { login: 'eve' }, authorAssociation: '', body: '', createdAt: '2026-09-14T12:00:00Z', updatedAt: '2026-09-14T12:00:00Z' }],
     },
   ]
-  const cmParse = await import('./lib/parse.mjs')
+  const cmParse = await import('../src/lib/parse.mjs')
   for (const f of COMMENTS_FIXTURES) {
     assert.deepEqual(cmParse.parseMd(f.text, { key: '01', parentKey: '00' }).comments, f.comments, 'Comments 夹具「' + f.name + '」应解析出期望输出')
   }
   ok('Comments 夹具（本地断言）：作者—日期 / 中文作者全角破折号 / 半角连字符 / 无日期裸名 / 非ISO日期 / 多条收段 / --- 截断 / 空正文——八分支钉死')
 
   // ── 流程链是纯函数：同一输入两次推导结果一致（无隐藏状态）──
-  const { deriveChain, FLOW_STAGES } = await import('./flowchain.mjs')
+  const { deriveChain, FLOW_STAGES } = await import('../src/flowchain.mjs')
   const r1 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
   const r2 = deriveChain({ slug: 'x', map: { exists: true, destination: 'd', fogCount: 0 }, spec: { exists: true, contentLength: 10 }, tickets: [{ state: 'open', blockedBy: [] }] })
   assert.deepEqual(r1, r2)
@@ -516,7 +520,7 @@ async function runScenarios(tmp) {
   ok('链后向推定：spec/票推定 grill 与 spec 完成，无产物标「推定 · 无 map」「推定 · 无 spec」，早期 effort 零变化')
 
   // ── 前沿口径（票 02）：阻塞计数与前沿判定同口径——依赖未全结才算阻塞 ──
-  const { isFrontierTicket, closedKeySet } = await import('./flowchain.mjs')
+  const { isFrontierTicket, closedKeySet } = await import('../src/flowchain.mjs')
   // 依赖全结不计阻塞（旧口径「有 Blocked by 行就算」在此仍计 1，属有意修正）
   assert.equal(deriveChain({ slug: 'x', tickets: [
     { key: '01', state: 'open', blockedBy: ['02'] },
@@ -614,7 +618,7 @@ async function runScenarios(tmp) {
   //
   //    票行与收尾（implementDone）的「不提合并」负向钉**保留**但降级：回退后它们本就不含 git，而
   //    「合回 main / merge back」不经过 git 字样、规则①盖不住，留着防的就是「以后又织回来」。──
-  const gwHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+  const gwHtml = await fs.readFile(nodePath.join(APP, 'index.html'), 'utf8')
 
   // 扫的面：四阶段格（copyText 即 hint 逐字）× 场景全集，再加票行复制词与起步工作约定。
   // 场景刻意挑满：每格至少覆盖「已完工」与其未完工的各个分支，否则扫到的只是同一句话。
@@ -674,9 +678,9 @@ async function runScenarios(tmp) {
   }
   // ② 不点名 Matt 技能包以外的技能
   const gwSkillNames = new Set()
-  for (const f of await fs.readdir(nodePath.join(HERE, 'docs', 'skill-intros'))) {
+  for (const f of await fs.readdir(nodePath.join(ROOT, 'docs', 'skill-intros'))) {
     if (!f.endsWith('.md') || f === 'README.md') continue
-    const head = (await fs.readFile(nodePath.join(HERE, 'docs', 'skill-intros', f), 'utf8')).split('\n').slice(0, 12).join('\n')
+    const head = (await fs.readFile(nodePath.join(ROOT, 'docs', 'skill-intros', f), 'utf8')).split('\n').slice(0, 12).join('\n')
     const nm = /^name:\s*(\S+)/m.exec(head)
     if (nm) gwSkillNames.add(nm[1])
   }
@@ -706,7 +710,7 @@ async function runScenarios(tmp) {
   // 逐字重复，而英文那份已经漂过一次（"4. Implementation:" 少了 (implement)、"as each ticket finishes"
   // 与中文那句也对不上），没人发现。钉两件事——不带 git 字样、不再逐字复制权威原文。
   for (const readme of ['README.zh-CN.md', 'README.md']) {
-    const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+    const txt = await fs.readFile(nodePath.join(ROOT, readme), 'utf8')
     assert.doesNotMatch(txt, /git switch/, `${readme} 不含 \`git switch\` 字样（第 4 步已缩成指针）`)
     assert.doesNotMatch(txt, /逐票实现；每完成一张票|change its Status line to resolved/, `${readme} 不再逐字复制第 4 步原文（权威源只有产品内那份）`)
     assert.doesNotMatch(txt, /合回 main|merge back to main/, `${readme} 不含合回 main 措辞`)
@@ -716,7 +720,7 @@ async function runScenarios(tmp) {
   // ── 静态壳取词绑定（english-ui 票 02，票 04 实拍补的洞）：markup 的 data-i18n* 键不许悬空，
   //    写死的中文默认态不许与词表漂移。悬空键把标签擦成空白，而「零中文残留」照样通过——所以这一组
   //    在文件级钉：键都在词表里 + title/placeholder/aria 三条通道的 markup 默认值逐字等于中文列。──
-  const deckHtml = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+  const deckHtml = await fs.readFile(nodePath.join(APP, 'index.html'), 'utf8')
   const wlFrom = deckHtml.indexOf('var UI_TEXT = {')
   const wlTo = deckHtml.indexOf('\n}\n', wlFrom)
   assert.ok(wlFrom > 0 && wlTo > wlFrom, '词表要能从 index.html 定位（界面人话的单一来源）')
@@ -758,7 +762,7 @@ async function runScenarios(tmp) {
   ok('静态壳取词绑定（文件级）：data-i18n* 键不悬空，title/placeholder/aria 三通道与正文通道的 markup 中文默认态都与词表中文列逐字一致')
 
   // ── 流式缩放基座（ui-appearance 票 03）：jsdom 无布局能力，本组只钉「接线存在」，不断言像素尺寸 ──
-  const appCss = await fs.readFile(nodePath.join(HERE, 'styles', 'app.css'), 'utf8')
+  const appCss = await fs.readFile(nodePath.join(APP, 'styles', 'app.css'), 'utf8')
   assert.match(appCss, /--fluid-base:\s*clamp\(10px, 0\.5vw \+ 4\.6px, 11\.5px\)/, '流式基值声明在案（≤1080 视口落 10px 下限）')
   assert.match(appCss, /--ui-scale:\s*1;/, '缩放档倍率缺省 1（中档 = 与改造前一致）')
   assert.match(appCss, /html\s*\{\s*font-size:\s*calc\(var\(--fluid-base\) \* var\(--ui-scale\)\)/, '根字号 = 流式基值 × 缩放档（一个乘法管整个界面）')
@@ -846,7 +850,7 @@ async function runScenarios(tmp) {
   ok('项目标签纯函数（文件级）：emoji 派生同目录恒同图/池内无重复/不同名散开；开卡去重与上限 8；关卡右邻优先、无右邻落左邻、全关落空态；读回清洗与补位（满额换位）')
 
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
-  const { deriveEvents } = await import('./notify.mjs')
+  const { deriveEvents } = await import('../src/notify.mjs')
   const mkEffort = (slug, tickets, fogCount, currentId) => ({
     slug, title: slug,
     map: { fogCount },
@@ -854,8 +858,8 @@ async function runScenarios(tmp) {
     chain: { currentId },
     latestAt: '',
   })
-  const ROOT = '/tmp/fd-notify'
-  const snap = (efforts, extra = {}) => ({ root: ROOT, generatedAt: '2026-09-18T00:00:00Z', efforts, ...extra })
+  const NOTIFY_ROOT = '/tmp/fd-notify'
+  const snap = (efforts, extra = {}) => ({ root: NOTIFY_ROOT, generatedAt: '2026-09-18T00:00:00Z', efforts, ...extra })
   const ev = (prev, next) => deriveEvents(snap(prev), snap(next)).map((e) => e.text)
   // 各事件类：票关闭 / 票重开 / 迷雾增减 / 阶段推进 / 新 effort
   assert.deepEqual(
@@ -917,15 +921,15 @@ async function runScenarios(tmp) {
   // ── resolveRoot：配置里目录写法的解析规则 ──
   assert.equal(resolveRoot(''), process.cwd())
   assert.ok(resolveRoot('~/笔记').startsWith(os.homedir()))
-  assert.equal(resolveRoot('./sub'), nodePath.resolve(HERE, 'sub'))
+  assert.equal(resolveRoot('./sub'), nodePath.resolve(ROOT, 'sub'))
   assert.equal(resolveRoot('/tmp/abc'), nodePath.resolve('/tmp/abc'))
-  ok('resolveRoot：空=当前目录，~=主目录，相对=按本目录解析，绝对=原样')
+  ok('resolveRoot：空=当前目录，~=主目录，相对=按仓库根解析，绝对=原样')
 
   // ── 常用目录（recentRoots）：MRU 变换是导出的小纯函数 ──
   const homeRec = resolveRoot('~/flowdeck-verify-recent')
   assert.deepEqual(
     normalizeRecentRoots(['/tmp/fd-a', '/tmp/fd-a', '~/flowdeck-verify-recent', './neighbor', 42, '', null]),
-    ['/tmp/fd-a', homeRec, nodePath.resolve(HERE, 'neighbor')]
+    ['/tmp/fd-a', homeRec, nodePath.resolve(ROOT, 'neighbor')]
   )
   assert.deepEqual(normalizeRecentRoots(undefined), [])
   assert.deepEqual(normalizeRecentRoots('不是数组'), [])
@@ -1120,7 +1124,7 @@ async function runScenarios(tmp) {
     recentRoots: ['/tmp/fd-hand-b', '~/flowdeck-verify-recent', '/tmp/fd-hand-b', './neighbor', 7],
   }))
   const cfgHand = loadConfig(cfgHandPath)
-  assert.deepEqual(cfgHand.recentRoots, ['/tmp/fd-hand-b', resolveRoot('~/flowdeck-verify-recent'), nodePath.resolve(HERE, 'neighbor')])
+  assert.deepEqual(cfgHand.recentRoots, ['/tmp/fd-hand-b', resolveRoot('~/flowdeck-verify-recent'), nodePath.resolve(ROOT, 'neighbor')])
   ok('配置读入：config.json 里手写的 recentRoots 按 resolveRoot 归一去重后进入配置对象')
 
   const anotherProject = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'flowdeck-other-'))
@@ -1389,8 +1393,8 @@ async function runScenarios(tmp) {
   ok('技能文档接口：清单完整有序（总览最前、分类聚合）、单篇取原文 Markdown；未知/穿越/畸形转义一律 404')
 
   // ── 技能介绍英文（english-ui 票 03）：两条只读端点认 ?lang；不带参数的响应逐字节不变 ──
-  const ZH_DOCS = nodePath.join(HERE, 'docs', 'skill-intros')
-  const EN_DOCS = nodePath.join(HERE, 'docs', 'skill-intros-en')
+  const ZH_DOCS = nodePath.join(ROOT, 'docs', 'skill-intros')
+  const EN_DOCS = nodePath.join(ROOT, 'docs', 'skill-intros-en')
   /** 取中文篇 frontmatter 的某一格（测试自己读盘，与镜像对账用，不复用服务端解析器）。 */
   function fmField(raw, key) {
     const m = new RegExp('^' + key + ':[ \\t]*(.+)$', 'm').exec(raw.slice(4, raw.indexOf('\n---', 3)))
@@ -2084,7 +2088,7 @@ async function runScenarios(tmp) {
   assert.match(cliTail.err, /--host/)
 
   const cliOk = await new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [nodePath.join(HERE, 'server.mjs'), '--config', 'cli-ok.json', '--port', '0'], { cwd: tmp, stdio: ['ignore', 'pipe', 'inherit'] })
+    const p = spawn(process.execPath, [nodePath.join(APP, 'server.mjs'), '--config', 'cli-ok.json', '--port', '0'], { cwd: tmp, stdio: ['ignore', 'pipe', 'inherit'] })
     const timer = setTimeout(() => { p.kill(); reject(new Error('CLI 子进程 15 秒内没启动完')) }, 15000)
     let buf = ''
     p.stdout.on('data', (d) => {
@@ -2110,7 +2114,7 @@ async function runScenarios(tmp) {
     console.log('  ⊘ 跳过界面运行时验证（未安装 jsdom）')
   } else {
     const { VirtualConsole } = await import('jsdom')
-    const html = await fs.readFile(nodePath.join(HERE, 'index.html'), 'utf8')
+    const html = await fs.readFile(nodePath.join(APP, 'index.html'), 'utf8')
     const tick = () => new Promise((r) => setTimeout(r, 40))
     /* 界面夹具工厂：界面初始语言按浏览器语言判定，而 jsdom 的 navigator.languages 默认就是
        ['en-US','en']——既有中文态用例经此钉成中文浏览器，否则它们悄悄测的就不再是中文界面。
@@ -4467,9 +4471,9 @@ async function runScenarios(tmp) {
     // 文件级钉：三套 token 字面平级（各自 :root[data-theme=<名>]，无充当无条件 base 的主题），
     // 冷白保留自身色值（朱红 #b1413e，不对齐暖纸的 #b0413e）
     assert.match(deckHtml, /<html[^>]*data-theme="cold"/, '默认冷白是静态标记属性（无 JS / 存储抛错也命中）')
-    const coldCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-cold.css'), 'utf8')
-    const paperCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-paper.css'), 'utf8')
-    const darkCss = await fs.readFile(nodePath.join(HERE, 'styles', 'tokens-github-dark.css'), 'utf8')
+    const coldCss = await fs.readFile(nodePath.join(APP, 'styles', 'tokens-cold.css'), 'utf8')
+    const paperCss = await fs.readFile(nodePath.join(APP, 'styles', 'tokens-paper.css'), 'utf8')
+    const darkCss = await fs.readFile(nodePath.join(APP, 'styles', 'tokens-github-dark.css'), 'utf8')
     assert.match(coldCss, /:root\[data-theme="cold"\] \{/)
     assert.match(paperCss, /:root\[data-theme="paper"\] \{/)
     assert.match(darkCss, /:root\[data-theme="dark"\] \{/)
@@ -4548,7 +4552,7 @@ async function runScenarios(tmp) {
 
     // ── 界面缩放档（ui-appearance 票 04）：倍率数值只住 CSS，控件只设标记属性 + 记本浏览器偏好 ──
     // 文件级钉：档位值域两处必须同集——CSS 多一档是「有倍率没入口」，<option> 多一档是「选了没倍率」
-    const scaleCss = await fs.readFile(nodePath.join(HERE, 'styles', 'app.css'), 'utf8')
+    const scaleCss = await fs.readFile(nodePath.join(APP, 'styles', 'app.css'), 'utf8')
     const cssTiers = [...scaleCss.matchAll(/:root\[data-ui-scale="(\w+)"\] \{ --ui-scale: ([\d.]+); \}/g)]
       .map((m) => [m[1], m[2]])
     assert.deepEqual(cssTiers, [['sm', '0.9'], ['md', '1'], ['lg', '1.125'], ['xl', '1.25']], '四档倍率住在 CSS（JS 不碰数值）')
@@ -4923,7 +4927,7 @@ async function runScenarios(tmp) {
 
     // 文档面：config.example.json 与两份 README 的 config 段都得列出 guides 字段，
     // 否则「配置文档同步」这条只在代码里成立、文档那头没人知道这个字段存在。
-    const gdExCfg = JSON.parse(await fs.readFile(nodePath.join(HERE, 'config.example.json'), 'utf8'))
+    const gdExCfg = JSON.parse(await fs.readFile(nodePath.join(ROOT, 'config.example.json'), 'utf8'))
     assert.deepEqual(gdExCfg.guides, {}, 'config.example.json 有 guides 字段，且出厂是空对象（缺面 = 回落内置段）')
     const gdNote = gdExCfg['字段说明'] && gdExCfg['字段说明'].guides
     assert.ok(typeof gdNote === 'string' && gdNote.length > 40, 'config.example.json 的「字段说明」有 guides 条目')
@@ -4934,7 +4938,7 @@ async function runScenarios(tmp) {
       assert.ok(gdNote.includes(slot), `config.example.json 的 guides 说明点明票行那面的槽 ${slot}`)
     }
     for (const readme of ['README.zh-CN.md', 'README.md']) {
-      const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+      const txt = await fs.readFile(nodePath.join(ROOT, readme), 'utf8')
       assert.match(txt, /"guides":\s*\{\}/, `${readme} 的 config.json 段列出 guides 字段`)
     }
     ok('指引词可整段改写 · 五面铺开（custom-guides 02 + 03 · jsdom + 文件级 + 文档）：出厂五面各复制一次都落内置段；面下拉带空态（不默认落在某一面，未选面时输入框与恢复默认一并禁用）、切面即换内容与预览、下拉里四个阶段名读载荷 stageNames；五面各设自定义段各复制一次都走该面自己的段（互不串台）；票行那面 {key}/{path}/{title} 实填、其余四面无槽（段里的槽标记原样留着）；票行无自定义段回落内置段且内置段三槽照旧实填；只填中文时英文界面仍复制内置英文段；只敲全白等同没填（但有内容的边缘空白原样带出）、预览与复制同步回落；预填来自载荷、保存只提交变更字段（改动中英成对发、五面并存时只换当前面、其余面原样带回）、恢复默认只清当前面；「指引词」分区、面下拉与两个 textarea 在案，.frow textarea 与焦点环规则到位；config.example.json 与两份 README 的 config 段同步了 guides 字段')
@@ -5139,17 +5143,17 @@ async function runScenarios(tmp) {
     // 样式表那条字面量断言是三层里最脆的，保留它的理由只有一个：没有它「textarea 被谁又调高了」不会有人发现
     assert.match(appCss, /\.frow textarea \{[^}]*min-height: 6rem[^}]*resize: vertical/, 'styles/app.css 的 .frow textarea 最小高度降到位，且 resize: vertical 留着（要更高的人自己拖）')
     assert.doesNotMatch(appCss, /#setGuidesZh/, '样式表不为单个控件新开 id 选择器（规则保持通用）')
-    const gpExCfg = JSON.parse(await fs.readFile(nodePath.join(HERE, 'config.example.json'), 'utf8'))
+    const gpExCfg = JSON.parse(await fs.readFile(nodePath.join(ROOT, 'config.example.json'), 'utf8'))
     assert.deepEqual(gpExCfg.guidesPrefix, {}, 'config.example.json 有 guidesPrefix 字段，且出厂是空对象（不贴前缀）')
     const gpNote = gpExCfg['字段说明'] && gpExCfg['字段说明'].guidesPrefix
     assert.ok(typeof gpNote === 'string' && gpNote.length > 40, 'config.example.json 的「字段说明」有 guidesPrefix 条目')
     assert.ok(gpNote.includes('{ 面名: 字符串 }'), 'config.example.json 的 guidesPrefix 说明点明形状是 { 面名: 字符串 }（中英不分列）')
     for (const readme of ['README.zh-CN.md', 'README.md']) {
-      const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+      const txt = await fs.readFile(nodePath.join(ROOT, readme), 'utf8')
       assert.match(txt, /"guidesPrefix":\s*\{\}/, `${readme} 的 config.json 段列出 guidesPrefix 字段`)
       assert.match(txt, /^\s*-\s+\*\*.*`guidesPrefix`.*\*\*|^-\s+\*\*.*`guidesPrefix`.*\*\*/m, `${readme} 的 config 段落讲清了 guidesPrefix 的规则`)
     }
-    const ctxTxt = await fs.readFile(nodePath.join(HERE, 'CONTEXT.md'), 'utf8')
+    const ctxTxt = await fs.readFile(nodePath.join(ROOT, 'CONTEXT.md'), 'utf8')
     assert.ok(/^\*\*前缀（prefix）\*\*/m.test(ctxTxt), 'CONTEXT.md 的词表里有「前缀」词条')
     assert.ok(!/唯一以「是哪张票」为身份/.test(ctxTxt), 'CONTEXT.md 不再把票行说成唯一以「是哪张票」为身份的一面（四个阶段面的内置段同样以 effort 为身份）')
     ok('指引词前缀 · 文件级与文档（guides-prefix 01）：markup 有前缀输入行与「复制当前效果」按钮（标签无省略号）、两个 textarea 的行数与样式表最小高度都降到位且没有为它新开 id 选择器；config.example.json 与两份 README 都讲清了 guidesPrefix；CONTEXT.md 有「前缀」词条且那句「唯一以…为身份」已改掉')

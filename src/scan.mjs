@@ -1,5 +1,5 @@
 /**
- * flowdeck/scan.mjs — 工作区扫描（读 .scratch，产出流程板数据）。
+ * flowdeck/src/scan.mjs — 工作区扫描（读 .scratch，产出流程板数据）。
  *
  * 文件约定（单一真相，README「它读什么文件」一节同款）：
  *   - effort 目录 = .scratch/<特性名>/，判据是「至少有 map.md、spec.md、issues/ 票 三者之一」；
