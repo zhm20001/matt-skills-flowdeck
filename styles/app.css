@@ -76,8 +76,8 @@
   button:disabled { opacity: 0.55; cursor: default; }
   button.primary { background: var(--fd-btn-bg); border-color: var(--fd-btn-bg); color: var(--fd-accent-ink); }
   button.primary:hover { background: var(--fd-btn-bg-hover); border-color: var(--fd-btn-bg-hover); }
-  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 1px; }
-  input, select { font: inherit; color: var(--fd-ink-body); background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 0.4rem 0.8rem; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 1px; }
+  input, select, textarea { font: inherit; color: var(--fd-ink-body); background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 0.4rem 0.8rem; }
 
   /* ── 地址栏组合框：常用目录下拉（右缘 ▾ + 浮层菜单） ── */
   .rootbox { position: relative; }
@@ -271,6 +271,11 @@
   .frow label { color: var(--fd-ink-muted); font-size: 1.25rem; text-align: right; }
   .frow input { width: 100%; }
   .frow input[type="checkbox"] { width: auto; justify-self: start; }
+  /* 指引词编辑区（custom-guides 票 02）：本弹窗第一个 textarea。
+     高度走 rem 才跟着缩放档一起长缩（min-height 留在 rem 基准上），resize 留给使用者自己拖 */
+  .frow textarea { width: 100%; min-height: 9rem; resize: vertical; }
+  /* 生效预览：只读的一段长文，给一个自己的滚动区，免得一行长指引词把整窗撑到底 */
+  .frow .guide-preview { max-height: 14rem; overflow: auto; margin: 0; padding: 0.8rem 1rem; background: var(--fd-paper); border: 1px solid var(--fd-rule-soft); border-radius: var(--fd-radius-btn); font-family: var(--fd-font-mono); font-size: 1.2rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .frow .hint { grid-column: 2; color: var(--fd-ink-muted); font-size: 1.2rem; }
   .factions { display: flex; align-items: center; gap: 1.2rem; padding: 1.4rem 0 0; }
   .factions .hint { color: var(--fd-bad); font-size: 1.2rem; }

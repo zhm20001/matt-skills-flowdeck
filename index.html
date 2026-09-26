@@ -145,6 +145,27 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
           <label data-i18n="set.config.label">配置文件</label>
           <div class="hint" id="setConfigPath"></div>
         </div>
+        <div class="fcat" data-i18n="settings.guides">指引词</div>
+        <div class="frow">
+          <label for="setGuidesZh" data-i18n="set.guides.zh">Implement 指引词（中文）</label>
+          <textarea id="setGuidesZh" rows="7" spellcheck="false"></textarea>
+          <div class="hint" data-i18n="set.guides.zh.hint">留空 = 用内置文案；非空 = 整段取代它（不是接在前面）。这一列只在中文界面生效。</div>
+        </div>
+        <div class="frow">
+          <label for="setGuidesEn" data-i18n="set.guides.en">Implement 指引词（英文）</label>
+          <textarea id="setGuidesEn" rows="7" spellcheck="false"></textarea>
+          <div class="hint" data-i18n="set.guides.en.hint">同上，只管英文界面。只填中文不必管这一格——中英各判各的。</div>
+        </div>
+        <div class="frow">
+          <label data-i18n="set.guides.preview">保存后生效</label>
+          <pre id="setGuidesPreview" class="guide-preview"></pre>
+          <div class="hint" data-i18n="set.guides.preview.hint">按当前界面语言显示：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。</div>
+        </div>
+        <div class="frow">
+          <label></label>
+          <button id="setGuidesReset" data-i18n="set.guides.reset">恢复默认…</button>
+          <div class="hint" data-i18n="set.guides.reset.hint">清空 Implement 这面的中英两段，复制时回落内置文案（点「保存」才写盘）。</div>
+        </div>
         <div class="fcat" data-i18n="settings.appearance">外观</div>
         <div class="frow">
           <label for="setScale" data-i18n="settings.uiScale">界面缩放</label>
@@ -323,6 +344,17 @@ var UI_TEXT = {
   'scale.md': { zh: '中', en: 'Medium' },
   'scale.lg': { zh: '大', en: 'Large' },
   'scale.xl': { zh: '特大', en: 'Extra large' },
+  'settings.guides': { zh: '指引词', en: 'Guidance words' },
+  'set.guides.zh': { zh: 'Implement 指引词（中文）', en: 'Implement guidance (Chinese)' },
+  'set.guides.zh.hint': { zh: '留空 = 用内置文案；非空 = 整段取代它（不是接在前面）。这一列只在中文界面生效。', en: 'Empty means the built-in text; anything here replaces it wholesale (it is not prepended). This column applies to the Chinese interface only.' },
+  'set.guides.en': { zh: 'Implement 指引词（英文）', en: 'Implement guidance (English)' },
+  'set.guides.en.hint': { zh: '同上，只管英文界面。只填中文不必管这一格——中英各判各的。', en: 'Same, for the English interface only. If you only write Chinese you can leave this one alone — each language is judged on its own.' },
+  'set.guides.preview': { zh: '保存后生效', en: 'Takes effect on save' },
+  'set.guides.preview.hint': { zh: '按当前界面语言显示：输入框里有内容就显示它（保存后整段取代内置文案），空着显示内置的——只显示生效的那一份，不并列。', en: 'Shown for the current interface language: whatever is in the box once you save, otherwise the built-in text (only the one that takes effect, never both side by side).' },
+  'set.guides.preview.none': { zh: '（当前追踪目录还没有 effort，没有内置段可显示）', en: '(the tracked directory has no effort yet, so there is no built-in text to show)' },
+  'set.guides.reset': { zh: '恢复默认…', en: 'Restore default…' },
+  'set.guides.reset.hint': { zh: '清空 Implement 这面的中英两段，复制时回落内置文案（点「保存」才写盘）。', en: 'Clears both columns of the Implement surface so copying falls back to the built-in text (it reaches config.json when you press Save).' },
+  'set.guides.reset.confirm': { zh: '清空 Implement 的中英两段指引词？保存后复制将回到内置文案。', en: 'Clear both guidance columns for Implement? Once saved, copying falls back to the built-in text.' },
   'set.save.label': { zh: '保存', en: 'Save' },
   'set.field.pollMs': { zh: '轮询间隔', en: 'poll interval' },
   'set.field.pollMode': { zh: '轮询模式', en: 'poll mode' },
@@ -330,6 +362,7 @@ var UI_TEXT = {
   'set.field.port': { zh: '端口', en: 'port' },
   'set.field.token': { zh: '访问令牌', en: 'access token' },
   'set.field.root': { zh: '追踪目录', en: 'tracked directory' },
+  'set.field.guides': { zh: '指引词', en: 'guidance words' },
   'set.applied': { zh: '已生效：{fields}', en: 'Applied: {fields}' },
   'set.applied-restart': { zh: '重启后生效：{fields}', en: 'Applies after restart: {fields}' },
   'set.saved': { zh: '已保存', en: 'Saved' },
@@ -818,6 +851,30 @@ function ticketCopy(eff, tk) {
   })
 }
 
+/* ── 指引词自定义段（custom-guides 票 02，ADR-0004）──
+   规则一句话：某一面的自定义段非空即整段取代内置段，为空回落内置段——中英各判各的。
+   本票是纯 tracer bullet，只钉 implement 一面（链格与未完工的下一步卡按钮都走这里）；票行与
+   另外三面留给下一票，届时面名不写死、只多几处同样的接线。服务端只把 guides 原值搬下来，
+   不参与拼装——「服务端不造字」的纪律在这一格同样成立，取舍全在界面这一侧。 */
+var GUIDE_FACE = 'implement'
+/** 当前语言对应的自定义段列：中英各判各的判据就这一处。 */
+function guideLangKey() { return lang === 'en' ? 'en' : 'zh' }
+/** 自定义段取值：去首尾空白后为空 = 当没填（只敲了空白的等同没填）；有内容则**原样**返回——
+ *  粘出去的与 config.json 里存的逐字一致，「整段取代」里不该藏一步看不见的去空白。 */
+function guideOverrideValue(raw) {
+  var v = String(raw === undefined || raw === null ? '' : raw)
+  return v.trim() ? v : ''
+}
+function guideOverride(face) {
+  var g = (state && state.guides && state.guides[face]) || null
+  return guideOverrideValue((g && g[guideLangKey()]) || '')
+}
+/** 某一格当前生效的指引词：只有被改写的那一面吃自定义段，其余面照旧走内置段（按语言取列）。
+    链格复制与下一步卡按钮同走这一个函数——两处各判一次，迟早会漂移。 */
+function effectiveStageGuide(s) {
+  return s.id === GUIDE_FACE ? (guideOverride(GUIDE_FACE) || guideText(s, 'copyText')) : guideText(s, 'copyText')
+}
+
 /* ── triage 档位过滤（票 01）：六档单选 chip，点亮=只看该档、再点回全量 ──
    档位 = 五个 triage 角色（Status 行的值域）+ claimed；已关闭票不参与过滤。
    色板沿用 lib/parse.mjs 的 PALETTE 同款色值，claimed 补一中性色；
@@ -918,7 +975,7 @@ function renderChain(eff) {
     st.setAttribute('aria-label', inferLabel
       ? tf('stage.cell.aria-infer', { name: stageName, status: statusLabel, infer: inferLabel, note: inferNote(), hint: hint })
       : tf('stage.cell.aria', { name: stageName, status: statusLabel, hint: hint }))
-    clickable(st, function () { copyText(guideText(s, 'copyText')) })
+    clickable(st, function () { copyText(effectiveStageGuide(s)) })
     chain.appendChild(st)
   })
   card.appendChild(chain)
@@ -929,7 +986,9 @@ function renderChain(eff) {
   next.appendChild(el('div', 'txt', eff.chain.complete ? t('next.done-text') : (cur ? guideText(cur, 'hint') : '')))
   var btn = el('button', 'primary', t('next.copy'))
   btn.addEventListener('click', function () {
-    copyText(eff.chain.complete ? tf('next.done-copy', { title: eff.title }) : guideText(cur, 'copyText'))
+    // 完工后是另一段固定收尾文案（不可改写的那一面）；未完工走与链格同一个函数——
+    // 当前步若是 implement，这一步的复制就已经取自定义段了。
+    copyText(eff.chain.complete ? tf('next.done-copy', { title: eff.title }) : effectiveStageGuide(cur))
   })
   next.appendChild(btn)
   card.appendChild(next)
@@ -2398,11 +2457,29 @@ function settingsSnapshotInitial() {
     pollMode: state && state.pollMode ? state.pollMode : 'observe',
     host: state && state.host ? state.host : '',
     port: state && state.port !== undefined ? state.port : '',
+    guides: (state && state.guides) || {},
   }
 }
 
-/* 令牌区 + 配置文件行：随服务端盘点状态而变的几行文案。开窗时填一次，换语言时原地重挂
-   （表单里用户已输入的值不动，只换说明文字）。 */
+/* 两个 textarea 的 id 只有一个出处：预填、预览、差异收集、恢复默认、输入监听全从这里取，
+   键名散着写迟早串台（尤其是「提交时哪一列对哪一格」这种一旦错位就静默的配对）。 */
+var GUIDE_BOXES = { zh: 'setGuidesZh', en: 'setGuidesEn' }
+function guideBoxId(langKey) { return GUIDE_BOXES[langKey] }
+
+/** 指引词预览（票 02）：自定义段非空显示自定义段、为空显示内置段——只显示生效的那一份，不并列。
+    读的是**输入框里当前的值**而不是已存的那份：预览回答的是「点保存之后会复制出什么」，
+    所以改一个字就重画，不必等保存。语言跟着界面走（英文界面看英文列），这本身就是「中英各判各的」的样子。
+    标签因此写「保存后生效」而不是「当前生效」——存着的那份此刻确实还在生效，两处不能混说。 */
+function renderGuidesPreview() {
+  var box = document.getElementById('setGuidesPreview')
+  var eff = currentEffort()
+  var st = eff && eff.chain.stages.filter(function (s) { return s.id === GUIDE_FACE })[0]
+  var draft = guideOverrideValue(document.getElementById(guideBoxId(guideLangKey())).value)
+  box.textContent = draft || (st ? guideText(st, 'copyText') : t('set.guides.preview.none'))
+}
+
+/* 令牌区 + 配置文件行 + 指引词预览：随服务端盘点状态而变的几行文案。开窗时填一次，换语言时原地重挂
+   （表单里用户已输入的值不动，只换说明文字与预览）。 */
 function renderSettingsDynamic() {
   var tok = document.getElementById('setToken')
   var enabled = !!(state && state.tokenEnabled)
@@ -2414,6 +2491,7 @@ function renderSettingsDynamic() {
   document.getElementById('setConfigPath').textContent = state && state.configPath
     ? tf('set.config.path', { path: state.configPath })
     : t('set.config.unknown')
+  renderGuidesPreview()
 }
 
 function openSettings() {
@@ -2424,6 +2502,11 @@ function openSettings() {
   document.getElementById('setPollMode').value = settingsState.initial.pollMode
   document.getElementById('setHost').value = settingsState.initial.host
   document.getElementById('setPort').value = settingsState.initial.port
+  // 指引词（票 02）：预填 config.json 里现存的那一面（本票只有 implement），
+  // 缺面/空串即空输入框——出厂就是「复制内置段」
+  var initGuides = settingsState.initial.guides[GUIDE_FACE] || {}
+  document.getElementById(guideBoxId('zh')).value = initGuides.zh || ''
+  document.getElementById(guideBoxId('en')).value = initGuides.en || ''
   // 桌面通知（票 04）：浏览器本地偏好，即时生效——不进下面的保存补丁（不写 config.json）
   document.getElementById('setNotify').checked = notifyOn()
   // 界面缩放档（票 04）同样是本浏览器偏好：控件初值从 <html> 标记读（那里才是唯一真相）
@@ -2448,6 +2531,19 @@ function settingsChanges() {
   var tok = document.getElementById('setToken').value
   if (tok !== '') patch.token = tok
   if (settingsState.clearToken) patch.token = ''
+  // 指引词（票 02）：没动就不进补丁；动了就把这一面的中英两列一起发（恢复默认清的是两列，
+  // 发半边会给另一列留个旧值）。补丁以初值起底、只换当前这一面——别的面原样带回去，
+  // 本票只有一个面，下一票加面时这个形状不用改。
+  var gzh = document.getElementById(guideBoxId('zh')).value
+  var gen = document.getElementById(guideBoxId('en')).value
+  var g0 = settingsState.initial.guides[GUIDE_FACE] || {}
+  if (gzh !== (g0.zh || '') || gen !== (g0.en || '')) {
+    var faces = {}
+    var initFaces = settingsState.initial.guides
+    Object.keys(initFaces).forEach(function (f) { faces[f] = initFaces[f] })
+    faces[GUIDE_FACE] = { zh: gzh, en: gen }
+    patch.guides = faces
+  }
   return patch
 }
 
@@ -2503,6 +2599,18 @@ document.getElementById('setTokenClear').addEventListener('click', function () {
   document.getElementById('setToken').value = ''
   document.getElementById('setTokenClearRow').hidden = true
   document.getElementById('setTokenHint').textContent = t('set.token.cleared')
+})
+/* 指引词（票 02）：预览是「保存之后会复制出什么」，所以边打字边重画，不等保存。
+   两个输入框都挂同一个重画——两列里只有当前语言那列会被预览读到，另一个挂上是零成本的。 */
+;['zh', 'en'].forEach(function (k) {
+  document.getElementById(guideBoxId(k)).addEventListener('input', renderGuidesPreview)
+})
+/* 恢复默认：清空这一面的中英两列（与提交时「两列一起发」同形），二次确认挡住误点。
+   只清输入框、不直接写盘——设置弹窗的写入口只有「保存」一个，另有第二条路就说不清了。 */
+document.getElementById('setGuidesReset').addEventListener('click', function () {
+  if (!window.confirm(t('set.guides.reset.confirm'))) return
+  ;['zh', 'en'].forEach(function (k) { document.getElementById(guideBoxId(k)).value = '' })
+  renderGuidesPreview()
 })
 // 桌面通知开关（票 04）：开启即申请权限（权限时机由用户掌控，默认关）；被拒回落并提示
 // 补救路径（浏览器站点设置）；关闭即抹去本地偏好。全部走 localStorage，与保存按钮无关。

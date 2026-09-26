@@ -72,6 +72,15 @@
  *                                局限与 ADR 并列承认）。票行与收尾（implementDone）的「不提合并」负向钉
  *                                降级保留为回归防护；两份 README 的起步约定第 4 步已缩成指针，钉它不再
  *                                逐字复制权威原文。
+ *  34. 指引词可整段改写（custom-guides 02）→ config.json 的 guides 字段：逐形状校验（非法整体 400 且
+ *                                一个字不写盘、错误码稳定）、applied.immediate、手改下一拍生效、写盘保留
+ *                                「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，面上额外键
+ *                                剔除，缺面/空串/清空皆合法）；界面上：出厂两处复制都落内置段、自定义段
+ *                                非空则 Implement 阶段格与未完工的下一步卡按钮整段取代、只填中文时英文
+ *                                界面仍复制内置英文段、只敲全白等同没填（有内容的边缘空白原样带出）、预览与复制
+ *                                同步回落、预填来自载荷、
+ *                                保存只提交变更字段（改动中英成对发）、恢复默认二次确认后清空两列。
+ *                                必改的既有缺陷：设置弹窗焦点圈禁那条测试的选择器补上 textarea。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -85,7 +94,7 @@ import os from 'node:os'
 import nodePath from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { scanWorkspace } from './scan.mjs'
-import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT } from './server.mjs'
+import { startServer, loadConfig, resolveRoot, normalizeRecentRoots, touchRecentRoot, RECENT_ROOTS_LIMIT, normalizeGuides } from './server.mjs'
 
 const HERE = nodePath.dirname(fileURLToPath(import.meta.url))
 
@@ -803,6 +812,22 @@ async function runScenarios(tmp) {
   assert.deepEqual(touchRecentRoot(touchRecentRoot(['/tmp/fd-a'], '/tmp/fd-c'), '/tmp/fd-c'), ['/tmp/fd-c', '/tmp/fd-a'])
   ok('touchRecentRoot：新使用进头部；重复与 ~/ 写法归一移顶不重复；同输入同输出（幂等）')
 
+  // ── 指引词自定义段（custom-guides 票 02）：归一是导出的小纯函数，走单测而不是只从 HTTP 面验 ──
+  assert.deepEqual(normalizeGuides({ implement: { zh: '甲', en: '乙' } }), { implement: { zh: '甲', en: '乙' } })
+  assert.deepEqual(normalizeGuides({ implement: { zh: '' } }), { implement: { zh: '' } }, '空串留着——它就是「回落内置段」这一事实')
+  assert.deepEqual(normalizeGuides({ implement: {} }), { implement: {} }, '缺面合法')
+  assert.deepEqual(normalizeGuides({}), {})
+  // 面名原样透传（下一票扩到五面时服务端零改动）；面内只认 zh/en —— 多出来的键没有第二个消费者，
+  // 悄悄丢掉等于静默吞掉一个笔误，所以它是 400（与「结构非法整体拒」同一处置）
+  assert.deepEqual(normalizeGuides({ implement: { zh: '甲' }, ticket: { en: '丙' } }), { implement: { zh: '甲' }, ticket: { en: '丙' } })
+  for (const bad of [undefined, null, 'x', 7, [], { implement: 'x' }, { implement: [] }, { implement: { zh: 1 } }, { implement: { en: {} } }, { implement: { en: null } }, { implement: { zh: '甲', bogus: 1 } }, { implement: { bogus: 1 } }]) {
+    assert.equal(normalizeGuides(bad), undefined, '结构非法应回落 undefined（POST 据此 400）：' + JSON.stringify(bad))
+  }
+  // __proto__ 早拒的判据见 server.mjs normalizeGuides 的注释（读得到、又会被赋值走原型 setter，两头都不是「面」）
+  assert.equal(normalizeGuides(JSON.parse('{"__proto__":{"zh":"x"}}')), undefined, '__proto__ 不是面名，归一早拒')
+  assert.equal(Object.getPrototypeOf(normalizeGuides({ implement: { zh: '甲' } })), Object.prototype, '归一结果仍是普通对象（原型没被动过）')
+  ok('normalizeGuides：每面只取 {zh,en} 两列、面名原样透传、缺面/空串合法；非对象/面非对象/语言列非字符串/面内多余键与 __proto__ 一律回 undefined')
+
   const crowd = []
   for (let i = 0; i < RECENT_ROOTS_LIMIT + 10; i++) crowd.push('/tmp/fd-r' + i)
   const capped = touchRecentRoot(crowd, '/tmp/fd-new')
@@ -945,8 +970,8 @@ async function runScenarios(tmp) {
   }
 
   // ── 配置：config.json 的 root/pollMs 生效；缺文件用默认 ──
-  assert.deepEqual(loadConfig(nodePath.join(tmp, '不存在的配置.json')), { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', configPath: nodePath.resolve(nodePath.join(tmp, '不存在的配置.json')) })
-  ok('配置缺省：config.json 不存在时不报错，全部字段回落默认（含 token 空 = 不启用、pollMode 观测）')
+  assert.deepEqual(loadConfig(nodePath.join(tmp, '不存在的配置.json')), { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', guides: {}, configPath: nodePath.resolve(nodePath.join(tmp, '不存在的配置.json')) })
+  ok('配置缺省：config.json 不存在时不报错，全部字段回落默认（含 token 空 = 不启用、pollMode 观测、guides 空 = 复制内置段）')
 
   const cfgHandPath = nodePath.join(tmp, 'config-handwritten.json')
   await writeFile(cfgHandPath, JSON.stringify({
@@ -1598,6 +1623,69 @@ async function runScenarios(tmp) {
     await new Promise((r) => setServer.server.close(r))
   }
   ok('设置服务端：POST /api/config 收 pollMs/host/port/token（逐字段校验、applied 生效语义、非法不写盘）；pollMs/令牌即时生效，host/port 重启生效')
+
+  // ── 指引词服务端（custom-guides 票 02，ADR-0004）：guides 字段逐形状校验、immediate 生效、
+  //    手改下一拍跟上、写盘保留旁注，且服务端只搬原值不参与拼装（「服务端不造字」的纪律）。──
+  // 自建一个干净根目录：这一组要在真链格上验证「内置段没被拼进自定义段」，不能借别的用例的 tmp。
+  const gdRoot = nodePath.join(tmp, 'guides-root')
+  await fs.mkdir(nodePath.join(gdRoot, '.scratch', 'demo', 'issues'), { recursive: true })
+  await writeFile(nodePath.join(gdRoot, '.scratch', 'demo', 'spec.md'), '# 规格\n\n一段内容。\n')
+  const gdCfg = nodePath.join(tmp, 'config-guides.json')
+  const gdBase = { 说明: '整段保留', 字段说明: { root: '要追踪的项目目录' }, root: gdRoot, guides: { implement: { zh: '手写的自定义中文段' } } }
+  await writeFile(gdCfg, JSON.stringify(gdBase))
+  const gdServer = await startServer({ root: gdRoot, port: 0, configPath: gdCfg })
+  const gdRead = async () => (await fetch(gdServer.url + '/api/state')).json()
+  try {
+    let gdState = await gdRead()
+    assert.deepEqual(gdState.guides, { implement: { zh: '手写的自定义中文段' } }, 'guides 随 /api/state 原值下发（服务端不拼装）')
+    // 手改 config.json 下一拍生效：config 的 mtime+size 本就在指纹里，这条不靠新机制
+    await fs.writeFile(gdCfg, JSON.stringify(Object.assign({}, gdBase, { guides: { implement: { zh: '手改之后的段' } } })))
+    gdState = await gdRead()
+    assert.equal(gdState.guides.implement.zh, '手改之后的段', '手改 config.json 的 guides 下一拍即生效')
+    await fs.writeFile(gdCfg, JSON.stringify(Object.assign({}, gdBase, { guides: { implement: { zh: 42 } } })))
+    gdState = await gdRead()
+    assert.deepEqual(gdState.guides, {}, '手改写成坏形状回落空对象（读侧不抛也不整份丢弃）')
+
+    // 逐形状 400：非对象、面不是对象、zh/en 不是字符串、面内多余键。结构非法整体拒，一个字都不写盘。
+    await fs.writeFile(gdCfg, JSON.stringify(gdBase))
+    const gdBefore = await fs.readFile(gdCfg, 'utf8')
+    for (const bad of ['x', 123, null, [], { implement: 'x' }, { implement: [] }, { implement: { zh: 1 } }, { implement: { en: {} } }, { implement: { zh: 'ok', en: null } }, { implement: { zh: 'ok', bogus: 1 } }]) {
+      const r = await postJson(gdServer.url + '/api/config', { guides: bad })
+      assert.equal(r.status, 400, 'guides 结构非法应 400：' + JSON.stringify(bad))
+      assert.equal(r.data.code, 'config.guides', '错误码稳定（界面按 code 措辞）')
+    }
+    assert.equal(await fs.readFile(gdCfg, 'utf8'), gdBefore, '全非法请求一个字都不写盘（连格式都不动）')
+
+    // 合法保存：applied.immediate、写盘保留「说明」与「字段说明」、下一拍带上新值
+    const gdOk = await postJson(gdServer.url + '/api/config', { guides: { implement: { zh: '新中文段', en: '' } } })
+    assert.equal(gdOk.status, 200)
+    assert.deepEqual(gdOk.data.applied, { guides: 'immediate' }, 'guides 生效语义 immediate（写盘即生效）')
+    const gdSaved = JSON.parse(await fs.readFile(gdCfg, 'utf8'))
+    assert.deepEqual(gdSaved.guides, { implement: { zh: '新中文段', en: '' } }, 'guides 写进 config.json')
+    assert.equal(gdSaved['说明'], '整段保留', '写盘保留「说明」')
+    assert.deepEqual(gdSaved['字段说明'], { root: '要追踪的项目目录' }, '写盘保留「字段说明」')
+    gdState = await gdRead()
+    assert.deepEqual(gdState.guides, { implement: { zh: '新中文段', en: '' } }, '写盘后下一拍 /api/state 就带上新值')
+
+    // 「服务端不造字」：自定义段绝不进内置段。真链格上钉——内置段仍是服务端的原样推导结果。
+    const gdImpl = gdState.efforts.find((e) => e.slug === 'demo').chain.stages.find((s) => s.id === 'implement')
+    assert.doesNotMatch(gdImpl.copyText + gdImpl.en.copyText, /新中文段/, '自定义段不参与服务端拼装（内置段原样）')
+
+    // 面名不写死：归一原样透传每一面（下一票把面数从一扩到五时服务端零改动）
+    await postJson(gdServer.url + '/api/config', { guides: { implement: { zh: '甲' }, ticket: { zh: '乙' } } })
+    assert.deepEqual((await gdRead()).guides, { implement: { zh: '甲' }, ticket: { zh: '乙' } }, '面名不写死原样透传（票行那面随票 03 接上，先存着不丢）')
+
+    // 缺面与空串都合法——那正是「回落内置段」这一事实本身
+    const gdEmpty = await postJson(gdServer.url + '/api/config', { guides: { implement: { zh: '' } } })
+    assert.equal(gdEmpty.status, 200, '空串合法（= 回落内置段）')
+    assert.deepEqual((await gdRead()).guides, { implement: { zh: '' } }, '空串原样下发，由界面按非空判定')
+    assert.equal((await postJson(gdServer.url + '/api/config', { guides: { implement: {} } })).status, 200, '缺面合法')
+    assert.equal((await postJson(gdServer.url + '/api/config', { guides: {} })).status, 200, '整份清空合法')
+    assert.deepEqual((await gdRead()).guides, {}, '清空后载荷为空对象（出厂：五面全走内置段）')
+  } finally {
+    await new Promise((r) => gdServer.server.close(r))
+  }
+  ok('指引词服务端（custom-guides 02）：guides 逐形状校验（非法含面内多余键一律整体 400 且一个字不写盘、错误码稳定）、applied.immediate、手改 config 下一拍生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装；面名不写死原样透传、缺面/空串/清空皆合法')
 
   // ── 错误码（english-ui 票 02）：JSON 错误响应带稳定 code，原人话照旧留着供日志 ──
   const codeCfg = nodePath.join(tmp, 'config-codes.json')
@@ -2297,12 +2385,15 @@ async function runScenarios(tmp) {
     assert.equal(postsA[0].root, '/tmp/fd-a11y-old')
     assert.equal(aDoc.getElementById('rootMenu').hasAttribute('hidden'), true, 'Enter 切换后收起下拉')
 
-    // 焦点圈禁（makeModal 第六件）：弹窗内 Tab 循环不外逃
+    // 焦点圈禁（makeModal 第六件）：弹窗内 Tab 循环不外逃。
+    // 选择器必须与 makeModal 里的那份同集（button/[href]/input/select/textarea/[tabindex]）——
+    // 少写一个元素类型，新控件就静默逃出覆盖：加指引词的 textarea 时正是漏在这里（票 02 必改项）。
     aDoc.getElementById('settingsBtn').dispatchEvent(new aWin.Event('click', { bubbles: true }))
     await tick()
     const setBox = aDoc.getElementById('settingsModal')
     assert.ok(setBox.contains(aDoc.activeElement), '开窗即把焦点放进弹窗')
-    const focusIn = () => Array.from(setBox.querySelectorAll('button, input, select')).filter((n) => !n.disabled && !n.closest('[hidden]'))
+    const focusIn = () => Array.from(setBox.querySelectorAll('button, input, select, textarea')).filter((n) => !n.disabled && !n.closest('[hidden]'))
+    assert.ok(focusIn().some((n) => n.tagName === 'TEXTAREA'), '指引词两个 textarea 在焦点序里（选择器没漏 textarea）')
     const firstF = focusIn()[0]
     const lastF = focusIn()[focusIn().length - 1]
     aKey(lastF, 'Tab')
@@ -3421,6 +3512,174 @@ async function runScenarios(tmp) {
       Object.keys(SHELL_TEXT).filter((k) => /^stage\.(grill|spec|tickets|implement)\./.test(k)), [],
       '四个阶段名/副题不再进界面词表（单一来源在 FLOW_STAGES，经 stageNames 与 chain.stages.en 下发）')
     ok('阶段名单一来源（jsdom）：界面词表撤四阶段名/副题的第二份拷贝，链格/全部视图/通知/项目总览取词全走载荷下发列')
+
+    // ── 指引词自定义段（custom-guides 票 02，ADR-0004）：config → 服务端 → 界面 → 复制 这条窄路 ──
+    // 本票只钉 implement 一面（票行与另外三面留给下一票）。规则一句话：自定义段非空整段取代内置段，
+    // 为空回落内置段，中英各判各的。这组只钉接线，不碰像素（jsdom 无布局能力）。
+    const gdTk = { key: '01', fileName: '01-guides.md', title: '指引票', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' }
+    const gdEffort = {
+      slug: 'demo', title: '指引词 demo', git: null, latestAt: '2026-09-18T00:00:00Z',
+      map: { exists: true, title: '', destination: 'Ship it', fog: [], decisions: [], outOfScope: [], fogCount: 0, progress: null, formatWarnings: [] },
+      spec: { exists: true, title: '', contentLength: 12, content: '# 规格\n\n一段内容。\n', formatWarnings: [] },
+      tickets: [gdTk],
+      chain: deriveChain({ slug: 'demo', map: { exists: true, destination: 'Ship it', fogCount: 0 }, spec: { exists: true, contentLength: 12 }, tickets: [gdTk] }),
+    }
+    // guides 就是载荷里那份原值（服务端不拼装，见服务端那组）：测试自己造，不从 config.json 读回来绕一圈
+    const gdPayload = (guides) => ({
+      root: '/tmp/fd-guides', rootName: 'fd-guides', generatedAt: '2026-09-18T00:00:00Z', scratchExists: true,
+      pollMs: 60000, pollMode: 'manual', configPath: '/tmp/config-guides.json', recentRoots: [], stageNames: STAGE_TABLE,
+      efforts: [JSON.parse(JSON.stringify(gdEffort))], guides,
+    })
+    /** 夹具：带剪贴板（复制内容落 copies）、confirm（恢复默认的二次确认）与 /api/config POST 记录。 */
+    function guidesDom(port, guides, langStored) {
+      const errs = []
+      const copies = []
+      const posts = []
+      const payload = gdPayload(guides)
+      const vcG = new VirtualConsole()
+      vcG.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
+      const d = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:' + port + '/',
+        pretendToBeVisual: true,
+        virtualConsole: vcG,
+        beforeParse(window) {
+          if (langStored) window.localStorage.setItem('flowdeck-lang', langStored)
+          window.confirm = () => true
+          Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: (x) => { copies.push(x); return Promise.resolve() } } })
+          window.fetch = fetchRouter([
+            ['/api/config', (url, opts) => {
+              const sent = JSON.parse(opts.body)
+              posts.push(sent)
+              const applied = {}
+              for (const k of Object.keys(sent)) applied[k] = 'immediate'
+              return Promise.resolve({ ok: true, json: async () => ({ ok: true, applied }) })
+            }],
+            ['/api/state', () => Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(payload)) })],
+          ], '指引词用例不该请求别的接口')
+        },
+      })
+      return { d, errs, copies, posts }
+    }
+    const gdSettle = async () => { await new Promise((r) => setTimeout(r, 150)) }
+    const gdDoc = (c) => c.d.window.document
+    const gdOpenSettings = async (c) => {
+      gdDoc(c).getElementById('settingsBtn').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      await tick()
+    }
+    const gdSave = async (c) => {
+      gdDoc(c).getElementById('settingsSave').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      await tick()
+      await tick()
+    }
+    const gdCopyStage = (c, i) => {
+      const cell = gdDoc(c).querySelectorAll('.stage')[i]
+      cell.dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      return c.copies[c.copies.length - 1]
+    }
+    const gdCopyNext = (c) => {
+      gdDoc(c).querySelector('.card.next button').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      return c.copies[c.copies.length - 1]
+    }
+    const gdBuiltin = gdEffort.chain.stages[3].copyText
+
+    // 出厂（载荷不带 guides）：两处复制都落内置段，中英各一
+    const factory = guidesDom(39370, undefined)
+    await gdSettle()
+    assert.equal(gdCopyStage(factory, 3), gdBuiltin, '出厂：implement 阶段格复制出内置段')
+    assert.equal(gdCopyNext(factory), gdBuiltin, '出厂：未完工的下一步卡按钮也是内置段')
+    assert.notEqual(gdCopyStage(factory, 2), gdBuiltin, '出厂：另外三面不受影响（tickets 面照旧走内置段）')
+    await gdOpenSettings(factory)
+    assert.equal(gdDoc(factory).getElementById('setGuidesZh').value, '', '出厂：中文 textarea 空（回落内置段）')
+    assert.equal(gdDoc(factory).getElementById('setGuidesEn').value, '', '出厂：英文 textarea 空')
+    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent, gdBuiltin, '预览为空时显示内置段')
+    assert.deepEqual(factory.errs, [])
+    factory.d.window.close()
+
+    // 自定义段非空：阶段格与下一步卡按钮都取自定义段，逐字相等（整段取代，不是接在前面）
+    const custom = guidesDom(39371, { implement: { zh: '自定义中文段：请在隔离工作树里实现这张票。', en: 'Custom English segment.' } })
+    await gdSettle()
+    assert.equal(gdCopyStage(custom, 3), '自定义中文段：请在隔离工作树里实现这张票。', '阶段格复制走中文自定义段（整段取代）')
+    assert.equal(gdCopyNext(custom), '自定义中文段：请在隔离工作树里实现这张票。', '未完工的下一步卡按钮同走自定义段')
+    await gdOpenSettings(custom)
+    assert.equal(gdDoc(custom).getElementById('setGuidesZh').value, '自定义中文段：请在隔离工作树里实现这张票。', '预填：中文 textarea 来自 /api/state 的 guides')
+    assert.equal(gdDoc(custom).getElementById('setGuidesEn').value, 'Custom English segment.', '预填：英文 textarea 来自同一份载荷')
+    assert.equal(gdDoc(custom).getElementById('setGuidesPreview').textContent, '自定义中文段：请在隔离工作树里实现这张票。', '预览显示自定义段')
+    assert.deepEqual(gdDoc(custom).getElementById('setGuidesPreview').textContent.indexOf(gdBuiltin), -1, '被取代的内置段不并列显示')
+    assert.deepEqual(custom.errs, [])
+    custom.d.window.close()
+
+    // 中英各判各的：只填中文时，英文界面复制出的仍是内置英文段（不串台）
+    const zhOnly = guidesDom(39372, { implement: { zh: '只有中文有自定义段' } }, 'en')
+    await gdSettle()
+    assert.equal(gdCopyStage(zhOnly, 3), gdEffort.chain.stages[3].en.copyText, '只填中文 → 英文界面复制出内置英文段')
+    await gdOpenSettings(zhOnly)
+    assert.equal(gdDoc(zhOnly).getElementById('setGuidesPreview').textContent, gdEffort.chain.stages[3].en.copyText, '英文界面预览内置英文段（不拿中文那份顶上）')
+    assert.equal(gdDoc(zhOnly).getElementById('setGuidesEn').value, '', '英文 textarea 留空（缺面即回落）')
+    assert.deepEqual(zhOnly.errs, [])
+    zhOnly.d.window.close()
+
+    // 「整段取代」是逐字的：边缘空白原样带出去，粘出来的与 config.json 里存的同一个字符串
+    const spaced = guidesDom(39376, { implement: { zh: '  前后留白也算内容  ' } })
+    await gdSettle()
+    assert.equal(gdCopyStage(spaced, 3), '  前后留白也算内容  ', '边缘空白原样带出（取用时不悄悄去空白，粘出去的与存盘的逐字一致）')
+    await tick() // 剪贴板那声 toast 走 Promise，等它落地再关窗（关早了回调里 document 已经没了）
+    assert.deepEqual(spaced.errs, [])
+    spaced.d.window.close()
+
+    // 清空 = 回落：已存的值只剩空白等同没填（取用时去首尾空白）
+    const blank = guidesDom(39373, { implement: { zh: '   \n  ' } })
+    await gdSettle()
+    assert.equal(gdCopyStage(blank, 3), gdBuiltin, '只存了空白等同没填 → 复制回落内置段')
+    assert.equal(gdCopyNext(blank), gdBuiltin, '下一步卡按钮同样回落内置段')
+    // 预览读的是输入框里的草稿：敲进空白也该立刻回落，不必等保存
+    await gdOpenSettings(blank)
+    gdDoc(blank).getElementById('setGuidesZh').value = '   \n  '
+    gdDoc(blank).getElementById('setGuidesZh').dispatchEvent(new blank.d.window.Event('input', { bubbles: true }))
+    assert.equal(gdDoc(blank).getElementById('setGuidesPreview').textContent, gdBuiltin, '草稿只剩空白 → 预览同步回落内置段')
+    assert.deepEqual(blank.errs, [])
+    blank.d.window.close()
+
+    // 保存：没动不进补丁；只动中文就发中英两列（恢复默认清的是两列，发半边会给另一列留旧值）
+    const saver = guidesDom(39374, { implement: { zh: '旧中文', en: 'Old English' } })
+    await gdSettle()
+    await gdOpenSettings(saver)
+    await gdSave(saver)
+    assert.deepEqual(saver.posts, [], '一字未改时不提交任何字段（沿用 settingsChanges 的差异收集）')
+    await gdOpenSettings(saver)
+    gdDoc(saver).getElementById('setGuidesZh').value = '新中文'
+    await gdSave(saver)
+    assert.deepEqual(saver.posts[saver.posts.length - 1], { guides: { implement: { zh: '新中文', en: 'Old English' } } }, '只改中文也把英文原样带回（不丢另一列）')
+    assert.match(gdDoc(saver).getElementById('toast').textContent, /已生效：指引词/, 'toast 的字段名走 set.field.guides')
+    assert.deepEqual(saver.errs, [])
+    saver.d.window.close()
+
+    // 恢复默认：二次确认后清空当前面的中英两列（只清输入框，写盘仍由「保存」触发）
+    const reset = guidesDom(39375, { implement: { zh: '要恢复的中文', en: 'English to restore' } })
+    await gdSettle()
+    await gdOpenSettings(reset)
+    let gdConfirmText = ''
+    reset.d.window.confirm = (msg) => { gdConfirmText = msg; return true }
+    gdDoc(reset).getElementById('setGuidesReset').dispatchEvent(new reset.d.window.Event('click', { bubbles: true }))
+    assert.equal(gdConfirmText, SHELL_TEXT['set.guides.reset.confirm'].zh, '恢复默认走二次确认')
+    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '', '恢复默认清空中文段')
+    assert.equal(gdDoc(reset).getElementById('setGuidesEn').value, '', '恢复默认清空英文段')
+    assert.equal(gdDoc(reset).getElementById('setGuidesPreview').textContent, gdBuiltin, '恢复后预览回落内置段')
+    await gdSave(reset)
+    assert.deepEqual(reset.posts[reset.posts.length - 1], { guides: { implement: { zh: '', en: '' } } }, '保存把两列一起清空（= 复制回落内置段）')
+    assert.deepEqual(reset.errs, [])
+    reset.d.window.close()
+
+    // 文件级钉：设置弹窗的「指引词」分区与两个 textarea 真在 markup 里（jsdom 那几组是接线面，
+    // 控件本身没了它们会一起「安静地绿」——所以分区与控件各钉一次）
+    const guidesCat = deckHtml.match(/<div class="fcat" data-i18n="settings\.guides">([\s\S]*?)<\/div>/)
+    assert.ok(guidesCat, '设置弹窗有「指引词」分区（.fcat 标题）')
+    assert.equal(guidesCat[1], SHELL_TEXT['settings.guides'].zh, '分区标题的 markup 默认态与词表中文列一致')
+    assert.equal(deckHtml.match(/<textarea id="setGuides(\w+)"/g).length, 2, '指引词分区里有两个 textarea（中英各一）')
+    assert.ok(deckHtml.includes('<label for="setGuidesZh"'), 'textarea 有配对的 <label for>（点标签能聚焦）')
+    assert.match(appCss, /\.frow textarea \{[^}]*min-height:/, 'styles/app.css 补了 .frow textarea 规则（设置弹窗第一个 textarea）')
+    assert.match(appCss, /textarea:focus-visible/, 'textarea 进得了焦点环（漏了就只靠浏览器默认，键盘用户看不见焦点）')
+    ok('指引词可整段改写（custom-guides 02 · jsdom + 文件级）：出厂两处复制都落内置段；自定义段非空则阶段格与未完工的下一步卡按钮整段取代（逐字相等）；只填中文时英文界面仍复制内置英文段（不串台）；只敲全白等同没填（但有内容的边缘空白原样带出，粘出去的与存盘逐字一致）、预览与复制同步回落；预填来自载荷、保存只提交变更字段（改动中英成对发）、恢复默认清空两列；「指引词」分区与两个 textarea 在案，.frow textarea 与焦点环规则到位')
 
     // ── 英文态整页无残留（english-ui 票 02）：真跑界面，逐视图扫中文残留 ──
     /** 界面夹具用的英文用户数据：票标题、地图小节、规格正文全 ASCII——判据字段名（Status /
