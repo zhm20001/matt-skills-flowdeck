@@ -101,6 +101,18 @@
  *                                且阻断冒泡、聚合页在导航里是总览分类下的普通条目；聚合页与英文镜像
  *                                文件级钉（overview 归类、次序紧跟总览篇、slug 过名字白名单、按四阶段
  *                                分节并内链各阶段技能、镜像只译 title/summary 与正文不带分类与次序）。
+ *  39. 挂起与恢复的刷新语义（project-tabs 02）→ jsdom：挂起卡零请求（fetch 桩按发出时的追踪目录
+ *                                记账，挂起期间每一个 /api/state 都属于活跃卡，展示档亦不破例）、
+ *                                卡面摆出离开那一刻的最近刷新时间且挂起期间原样不动；切回挂起卡逐段
+ *                                断言中间态——先呈现旧内容与旧「最近刷新」→ toast「已恢复刷新」→
+ *                                立即补上一拍最新内容；挂着两张卡时刷新模式三档行为不受扰；全关即
+ *                                全挂起（三档下零定时器零请求零桌面通知；「全关」是使用者明说
+ *                                「我不想它在动了」，连手动「立即刷新」一并停用、强行触发也零请求，
+ *                                空态把这个决定说出口，开一张标签即收回；空态也不被任何一拍——含
+ *                                主动刷新与迟到的那一拍——自动摆回来）；失效目录不主动探测磁盘、
+ *                                切回失败沿用既有失败提示并停留原卡且不谎报恢复；换根落定前发出、
+ *                                落定后回来的那一拍整拍丢弃；追踪目录被别处换掉而留在挂起的那张，
+ *                                同样按离开时原样存下内容与时刻。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -3332,6 +3344,311 @@ async function runScenarios(tmp) {
     assert.deepEqual(after.errs, [])
     after.d.window.close()
     ok('项目标签条两处竞态（jsdom）：关活跃卡落右邻时不覆盖落点卡自己的界面状态分桶；切换之前发出、落定之后才回来的旧载荷不参与补位、活跃卡不倒退，且换过根之后补位照常工作')
+
+    // ── 挂起与恢复的刷新语义（project-tabs 票 02）：挂起零请求零通知、切回先示旧再补拍、三档不受扰 ──
+    // 夹具比 tabStripDom 多两件事，都为「请求/通知为零」这类断言而存在：
+    //   ① 请求按发出时的追踪目录记账（calls 记 {url, root}）——「这张卡一个请求都没有」得以数出来；
+    //      载荷内容在请求发出那一刻就定死（hold.gateState 扣住的那一拍因此仍报旧目录）。
+    //   ② Notification 桩记账（零通知得以数出来）。
+    // 载荷随 gen 递增而变：标题换成「<项目> 旧/新数据」好断言主区此刻显示的是哪个项目的内容，
+    // 迷雾数跟着递增好造出真的会触发通知的 diff（否则「零通知」是空断言）。
+    const SUS_A = '/tmp/fd-susp-alpha'
+    const SUS_B = '/tmp/fd-susp-beta'
+    const SUS_C = '/tmp/fd-susp-gamma'
+    const SUS_DEAD = '/tmp/fd-susp-deleted'
+    function suspDom(port, stored, servedRoot, opts) {
+      const o = opts || {}
+      const errs = []
+      const vcS = new VirtualConsole()
+      vcS.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
+      const calls = []            // 每一次请求都记下它发出时服务端在追哪个目录
+      const notes = []            // 桌面通知实例
+      const posts = []
+      let served = servedRoot
+      let gen = 0                 // 递增即「项目文件变了」
+      const hold = { on: false, release: null, gateState: false, flushState: null }
+      function payload() {
+        const name = nodePath.basename(served)
+        return {
+          ...ws,
+          root: served,
+          rootName: name,
+          pollMs: 1000,
+          pollMode: o.pollMode || 'display',
+          configPath: '/tmp/config.json',
+          recentRoots: [{ path: served, exists: true }, { path: SUS_A, exists: true }, { path: SUS_B, exists: true }],
+          efforts: (ws.efforts || []).map((e, i) => {
+            if (i !== 0) return e
+            const fog = e.map.fogCount + gen
+            return {
+              ...e,
+              title: name + (gen ? ' 新数据' : ' 旧数据'),
+              map: { ...e.map, fogCount: fog },
+              chain: deriveChain({ slug: e.slug, map: { exists: e.map.exists, destination: e.map.destination, fogCount: fog }, spec: { exists: e.spec.exists, contentLength: e.spec.contentLength }, tickets: e.tickets }),
+            }
+          }),
+        }
+      }
+      function FakeNotification(title, nopts) {
+        const inst = { title, body: nopts && nopts.body, clicks: [] }
+        inst.addEventListener = (ev, fn) => { if (ev === 'click') inst.clicks.push(fn) }
+        notes.push(inst)
+        return inst
+      }
+      FakeNotification.permission = 'granted'
+      FakeNotification.requestPermission = () => Promise.resolve('granted')
+      const d = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:' + port + '/',
+        pretendToBeVisual: true,
+        virtualConsole: vcS,
+        beforeParse(window) {
+          window.Notification = FakeNotification
+          if (stored) window.localStorage.setItem('flowdeck-tabs', JSON.stringify(stored))
+          if (o.notify) window.localStorage.setItem('flowdeck-notify', '1')
+          window.fetch = (u, ropts) => {
+            const url = String(u)
+            if (url.indexOf('/api/state') >= 0) {
+              calls.push({ url, root: served })   // 记账用的是请求发出时的追踪目录
+              const body = payload()              // 这一拍的目录在发请求时就定下了
+              if (hold.gateState) {
+                hold.gateState = false
+                return new Promise((res) => { hold.flushState = () => res({ ok: true, json: async () => JSON.parse(JSON.stringify(body)) }) })
+              }
+              return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(body)) })
+            }
+            if (url.indexOf('/api/config') >= 0 && ropts && ropts.method === 'POST') {
+              const want = JSON.parse(ropts.body).root
+              if (want === SUS_DEAD) {
+                return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: '这个目录不存在或不是目录。', code: 'config.root-missing' }) })
+              }
+              posts.push(want)
+              served = want
+              return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: served }) })
+            }
+            return Promise.reject(new Error('挂起语义用例不该请求别的接口：' + url))
+          }
+        },
+      })
+      return { d, errs, calls, notes, posts, hold, setServed: (p) => { served = p }, bump: () => { gen++ } }
+    }
+    const susCards = (c) => Array.from(c.d.window.document.querySelectorAll('#tabStrip .tabcard'))
+    const susStamp = (c, i) => (susCards(c)[i].querySelector('.tstamp') || { textContent: null, title: null })
+    const stampWhen = (c, i) => ((susStamp(c, i).title || '').match(/\d\d:\d\d:\d\d/) || [null])[0]   // 完整时刻在 title 里
+    const callsFor = (c, path) => c.calls.filter((x) => x.root === path)
+    const susMain = (c) => c.d.window.document.getElementById('main').textContent
+    const susMeta = (c) => c.d.window.document.getElementById('meta').textContent
+    const susToast = (c) => c.d.window.document.getElementById('toast').textContent
+    const susActive = (c) => c.d.window.document.querySelector('#tabStrip .tabcard.on .tname').textContent
+    const susOpen = async (c, path) => {
+      const w = c.d.window
+      w.document.getElementById('newTabBtn').dispatchEvent(new w.Event('click', { bubbles: true }))
+      const f = w.document.getElementById('newTabPath')
+      f.value = path
+      f.dispatchEvent(new w.Event('input', { bubbles: true }))
+      f.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      await tick(); await tick()
+    }
+    const susClick = async (c, i) => {
+      susCards(c)[i].dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      await tick(); await tick()
+    }
+    const susRefresh = async (c) => {
+      c.d.window.document.getElementById('refreshBtn').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      await tick(); await tick()
+    }
+    const closeAllTabs = async (c) => {
+      for (let guard = 0; susCards(c).length && guard < 10; guard++) {
+        susCards(c)[0].querySelector('button.tclose').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+        await tick()
+      }
+      await tick()
+    }
+    const POLL_WAIT = 1300   // pollMs=1000：等过一轮多一点，自动拍该发的都发了
+    const SUS_MODES = ['display', 'observe', 'manual']
+
+    // (1) 挂起卡零请求：A 挂起期间，每一个 /api/state 都只属于活跃的那张卡（B）
+    const susp = suspDom(39380, null, SUS_A, { pollMode: 'display' })
+    await settleTabs()
+    await susOpen(susp, SUS_B)                                  // A 挂起、B 活跃
+    assert.equal(susActive(susp), 'fd-susp-beta')
+    assert.match(susStamp(susp, 0).textContent, /^\d\d:\d\d$/, '挂起卡摆出离开那一刻的最近刷新时间')
+    assert.match(susStamp(susp, 0).title, /挂起中/, '时间戳说清「数据停在这一拍」')
+    assert.equal(susStamp(susp, 1).textContent, null, '活跃卡不摆时间戳（顶栏状态行报的是实时的）')
+    const markSuspend = susp.calls.length
+    susp.bump()                                                  // 项目文件在这期间变了：A 那边也有新内容
+    await new Promise((r) => setTimeout(r, POLL_WAIT))           // 展示档轮了一轮不止
+    const whileSuspended = susp.calls.slice(markSuspend)
+    assert.ok(whileSuspended.length >= 1, '展示档下活跃卡照常轮询（挂起那段时间里发了 ' + whileSuspended.length + ' 拍）')
+    assert.deepEqual([...new Set(whileSuspended.map((x) => x.root))], [SUS_B],
+      '挂起期间每一个请求都属于活跃卡（挂起卡 A 的请求数为零，不因刷新模式是「展示」而破例）')
+    const frozenStamp = susStamp(susp, 0).textContent
+    await new Promise((r) => setTimeout(r, POLL_WAIT))
+    assert.equal(susStamp(susp, 0).textContent, frozenStamp, '挂起期间那张卡的刷新时间原样不动（没有伪装刷新）')
+    assert.doesNotMatch(susMain(susp), /fd-susp-alpha/, '挂起卡的内容不顶到主区（那属于另一张卡）')
+    assert.deepEqual(susp.errs, [])
+    susp.d.window.close()
+    ok('挂起卡零请求（jsdom）：展示档下活跃卡照常轮询，而挂起卡的请求数恒为零；卡面摆出离开那一刻的最近刷新时间，挂起期间内容与该时间原样不动（不发起任何伪装刷新）')
+
+    // (2) 切回流程：先呈现离开时的旧内容与旧「最近刷新」→ toast「已恢复刷新」→ 立即补一拍
+    const res = suspDom(39381, null, SUS_A, { pollMode: 'display' })
+    await settleTabs()
+    res.d.window.document.getElementById('main').children[0].scrollTop = 77   // A 名下滚到某处
+    await susOpen(res, SUS_B)                                   // A 挂起（分桶存下它离开时的样子），B 活跃
+    const whenA = stampWhen(res, 0)
+    assert.ok(whenA, 'A 的分桶记下了离开那一刻的完整刷新时刻')
+    res.bump()                                                   // A 的文件在这期间变了
+    res.hold.gateState = true                                   // 扣住切回后紧接着发出的那一拍补拍
+    await susClick(res, 0)                                      // 切回挂起的 A
+    assert.ok(res.hold.flushState, '切回后立刻补了一拍（在途，先不落地）')
+    assert.equal(susActive(res), 'fd-susp-alpha')
+    assert.match(susMain(res), /fd-susp-alpha 旧数据/, '切回瞬间先看到离开时的旧内容（不是白屏，也不是别张卡的内容）')
+    assert.match(susToast(res), /已恢复 .*的刷新/, '弹「已恢复刷新」轻提示（走既有 toast 机制）')
+    assert.match(susToast(res), /旧内容/, '提示里说清刚才显示的是离开时的旧内容')
+    assert.match(susMeta(res), new RegExp('已刷新 ' + whenA), '「最近刷新」先停在离开时那一拍（不把旧内容伪装成新的）')
+    assert.equal(res.d.window.document.getElementById('main').children[0].scrollTop, 77, '滚动位置也一并装回（切走再切回接着干）')
+    res.hold.flushState()                                        // 补拍此刻才落地
+    await tick(); await tick()
+    assert.match(susMain(res), /fd-susp-alpha 新数据/, '补拍落地后是最新的内容')
+    assert.equal(res.d.window.document.getElementById('main').children[0].scrollTop, 77, '补拍重画后滚动位置照样保住')
+    assert.match(susMeta(res), /已刷新 \d\d:\d\d:\d\d/, '补拍后「最近刷新」照常报实时的时刻')
+    assert.deepEqual(res.errs, [])
+    res.d.window.close()
+    ok('切回挂起卡（jsdom）：先呈现离开时的旧内容、旧「最近刷新」时间与滚动位置 → toast「已恢复刷新」→ 立即补上一拍最新内容（中间态逐段断言，不是只看终态）')
+
+    // (3) 三档行为不受扰：挂着两张卡，活跃那张仍按选定的刷新模式行事
+    for (const [i, mode] of SUS_MODES.entries()) {
+      const m = suspDom(39382 + i, null, SUS_A, { pollMode: mode })
+      await settleTabs()
+      await susOpen(m, SUS_B)
+      const afterBoot = m.calls.length
+      await susRefresh(m)
+      assert.equal(m.calls.length, afterBoot + 1, mode + ' 档：主动刷新永远一拍（挂起不改变这一条）')
+      const base = m.calls.length
+      if (mode === 'manual') {
+        await new Promise((r) => setTimeout(r, POLL_WAIT))
+        assert.equal(m.calls.length, base, '惰性档：活跃卡也是零自动请求')
+      } else if (mode === 'observe') {
+        Object.defineProperty(m.d.window.document, 'hidden', { value: true, configurable: true })
+        m.d.window.document.dispatchEvent(new m.d.window.Event('visibilitychange'))
+        await new Promise((r) => setTimeout(r, POLL_WAIT))
+        assert.equal(m.calls.length, base, '观测档：页面不可见时活跃卡也停表')
+        Object.defineProperty(m.d.window.document, 'hidden', { value: false, configurable: true })
+        m.d.window.document.dispatchEvent(new m.d.window.Event('visibilitychange'))
+        await tick(); await tick()
+        assert.equal(m.calls.length, base + 1, '观测档：回前台立即补一拍')
+      } else {
+        await new Promise((r) => setTimeout(r, POLL_WAIT))
+        assert.ok(m.calls.length > base, '展示档：活跃卡按间隔定时轮询')
+      }
+      assert.deepEqual([...new Set(m.calls.slice(afterBoot).map((x) => x.root))], [SUS_B], mode + ' 档：挂起之后全程只有活跃卡的请求')
+      assert.deepEqual(m.errs, [])
+      m.d.window.close()
+    }
+    ok('刷新模式三档不受标签条扰动（jsdom）：挂着两张卡时，活跃卡仍分别是常轮（展示）/ 不可见停表、回前台补拍（观测）/ 零自动请求只手动（惰性），手动刷新三档都一拍')
+
+    // (4) 全关 = 全挂起：零定时器、零请求、零通知，且空态不被任何一拍自动摆回来
+    for (const [i, mode] of SUS_MODES.entries()) {
+      const c = suspDom(39385 + i, { list: [SUS_A, SUS_B], active: 1, collapsed: false }, SUS_B, { pollMode: mode, notify: true })
+      await settleTabs()
+      c.bump()                                                   // 造出真的会触发通知的 diff
+      // 一拍定时拍在途（惰性档本来就没有自动拍，那档走下面的零请求那一半）
+      c.hold.gateState = mode !== 'manual'
+      if (c.hold.gateState) await new Promise((r) => setTimeout(r, 1100))
+      const inFlight = !!c.hold.flushState
+      if (mode !== 'manual') assert.ok(inFlight, mode + ' 档：有一拍定时拍在途')
+      await closeAllTabs(c)
+      assert.equal(susCards(c).length, 0, mode + ' 档：全关后一张卡都不剩')
+      if (c.hold.flushState) c.hold.flushState()                 // 那一拍此刻才回来
+      await tick(); await tick()
+      assert.equal(c.notes.length, 0, mode + ' 档：全关后迟到的定时拍不弹桌面通知（挂起即零通知）')
+      assert.equal(susCards(c).length, 0, mode + ' 档：迟到的那一拍也不把空态的卡摆回来')
+      // 「全关」是使用者明说了「我不想它在动了」：连主动的「立即刷新」也一并停手（票 02 补）
+      const btn = c.d.window.document.getElementById('refreshBtn')
+      assert.equal(btn.disabled, true, mode + ' 档：全关之后「立即刷新」按钮停用（不能看着能点、点了没反应）')
+      assert.match(btn.title, /不发请求/, mode + ' 档：停用原因写在按钮 title 上')
+      assert.match(c.d.window.document.getElementById('tabStrip').textContent, /连「立即刷新」也一并停手/,
+        mode + ' 档：空态把这个决定说出口（禁用按钮的 title 各浏览器不一定出得来）')
+      const base = c.calls.length
+      await susRefresh(c)                                        // 按钮已停用；jsdom 仍会派发被强行构造的 click，闸口必须兜住
+      await tick()
+      assert.equal(c.notes.length, 0, mode + ' 档：全关期间零桌面通知')
+      assert.equal(susCards(c).length, 0, mode + ' 档：空态不会被任何一拍摆回来（关掉的浏览视图不被一拍复活）')
+      assert.equal(c.calls.length, base, mode + ' 档：主动按「立即刷新」也是零请求（不只是没有定时器）')
+      await new Promise((r) => setTimeout(r, POLL_WAIT))
+      assert.equal(c.calls.length, base, mode + ' 档：过了轮询周期仍零自动请求（没有活跃卡就不排表）')
+      // 开一张标签即收回那个表态：按钮恢复、闸口放行、刷新照旧
+      await susOpen(c, SUS_A)
+      assert.equal(btn.disabled, false, mode + ' 档：开一张标签后「立即刷新」恢复可用')
+      assert.doesNotMatch(btn.title, /不发请求/, mode + ' 档：停用原因也一并收回')
+      const back = c.calls.length
+      await susRefresh(c)
+      assert.equal(c.calls.length, back + 1, mode + ' 档：有前台项目了，刷新照旧发请求')
+      assert.deepEqual(c.errs, [])
+      c.d.window.close()
+    }
+    ok('全关即全挂起（jsdom）：三档（观测/展示/惰性）下都零定时器、零请求、零桌面通知；「立即刷新」一并停用且即便强行触发也零请求，空态把这个决定说出口（关掉的浏览视图不会被任何一拍复活）')
+
+    // (5) 失效目录：挂起卡不探测磁盘；切回时换根失败走既有失败提示、停留原卡，且不谎报恢复
+    const deadSus = suspDom(39388, { list: [SUS_A, SUS_DEAD], active: 0, collapsed: false }, SUS_A, { pollMode: 'display' })
+    await settleTabs()
+    await new Promise((r) => setTimeout(r, POLL_WAIT))
+    assert.equal(callsFor(deadSus, SUS_DEAD).length, 0, '挂起卡不主动探测磁盘：指向失效目录也零请求')
+    assert.ok(callsFor(deadSus, SUS_A).length >= 1, '活跃卡的轮询照常（请求确实在发，才谈得上「失效卡那一份是零」）')
+    const deadPosts = deadSus.posts.length
+    await susClick(deadSus, 1)
+    assert.match(deadSus.d.window.document.getElementById('err').textContent, /换目录失败/, '切到失效目录沿用既有失败提示')
+    assert.doesNotMatch(susToast(deadSus), /已恢复/, '失败不弹「已恢复刷新」——刷新压根没恢复')
+    assert.equal(susActive(deadSus), 'fd-susp-alpha', '失败后停留原卡片')
+    assert.match(susMain(deadSus), /fd-susp-alpha/, '主区仍是原来那张卡的内容（失效卡的内容没顶上来）')
+    assert.equal(deadSus.posts.length, deadPosts, '失败的那次不写盘')
+    assert.deepEqual(cardNames(deadSus), ['fd-susp-alpha', 'fd-susp-deleted'], '失效卡不消失、也不被静默吞掉')
+    assert.deepEqual(deadSus.errs, [])
+    deadSus.d.window.close()
+    ok('失效目录（jsdom）：挂起卡不主动探测磁盘（零请求）；切回时换根失败走既有失败提示、停留原卡片、主区内容不串台，且不谎报「已恢复刷新」')
+
+    // (6) 换根落定之前发出、落定之后才回来的那一拍整拍丢弃：不冒充当前项目
+    const race2 = suspDom(39389, null, SUS_A, { pollMode: 'display' })
+    await settleTabs()
+    await susOpen(race2, SUS_B)                                 // A 挂起、B 活跃
+    race2.hold.gateState = true
+    await susRefresh(race2)                                      // 有一拍在途（它发出去时服务端还在追 B）
+    assert.ok(race2.hold.flushState, '有一拍状态在途（模拟轮询那一拍正好在切换前发出）')
+    await susClick(race2, 0)                                    // 切回 A
+    await tick(); await tick()
+    assert.equal(susActive(race2), 'fd-susp-alpha')
+    assert.match(susMain(race2), /fd-susp-alpha/, '主区显示的是 A 的内容')
+    race2.hold.flushState()                                     // 那一拍现在才回来——它报的还是 B
+    await tick(); await tick()
+    assert.equal(susActive(race2), 'fd-susp-alpha', '迟到的那一拍不参与补位、活跃卡不倒退')
+    assert.doesNotMatch(susMain(race2), /fd-susp-beta/, '迟到的那一拍整拍丢弃：已挂起卡的数据不冒充当前项目')
+    assert.deepEqual(race2.errs, [])
+    race2.d.window.close()
+    ok('挂起边界上的迟到载荷（jsdom）：切换之前发出、落定之后才回来的那一拍整拍丢弃——不拿已挂起那张卡的数据冒充当前项目')
+
+    // (7) 服务端把追踪目录换到别处（手改 config.json / 另一个浏览器）而离开的那张卡：
+    //     它同样是被挂起的那张，内容与刷新时间也得按离开时原样存下
+    const ext = suspDom(39390, null, SUS_A, { pollMode: 'display' })
+    await settleTabs()
+    await susOpen(ext, SUS_B)                                  // A 挂起、B 活跃
+    const whenB = (susMeta(ext).match(/已刷新 (\d\d:\d\d:\d\d)/) || [null, null])[1]   // B 此刻的「最近刷新」
+    assert.ok(whenB, 'B 正在前台，状态行报着它这一拍的刷新时刻')
+    ext.setServed(SUS_C)                                       // 别处把追踪目录改到 C
+    await susRefresh(ext)
+    assert.deepEqual(cardNames(ext), ['fd-susp-alpha', 'fd-susp-beta', 'fd-susp-gamma'], '跟上新追踪目录：补开一张 C')
+    assert.equal(susActive(ext), 'fd-susp-gamma')
+    assert.equal(susStamp(ext, 1).textContent, whenB.slice(0, 5), '被留下的那张 B 也按离开时原样记着刷新时刻')
+    ext.bump()                                                 // 三个项目的文件都变了
+    ext.hold.gateState = true
+    await susClick(ext, 1)                                    // 切回 B
+    assert.ok(ext.hold.flushState, '切回后立刻补了一拍（在途）')
+    assert.match(susMain(ext), /fd-susp-beta 旧数据/, '被服务端换根留下的那张，切回来同样是先看到离开时的旧内容')
+    ext.hold.flushState()
+    await tick(); await tick()
+    assert.match(susMain(ext), /fd-susp-beta 新数据/, '补拍落地后跟上最新内容')
+    assert.deepEqual(ext.errs, [])
+    ext.d.window.close()
+    ok('服务端换根留下的卡（jsdom）：追踪目录被别处改掉而被留在挂起的那张，同样按离开时原样存下内容与刷新时刻，切回照样先示旧再补拍')
 
     // 旧控件退役：界面上不再有「换目录」按钮与单目录输入框，换目录心智只有标签条一套
     assert.equal(deckHtml.indexOf('id="switchBtn"'), -1, '「换目录」按钮已退役')

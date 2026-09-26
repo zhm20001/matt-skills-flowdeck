@@ -314,6 +314,8 @@ var UI_TEXT = {
   'theme.paper': { zh: '暖纸', en: 'Warm paper' },
   'theme.dark': { zh: 'GitHub 暗', en: 'GitHub dark' },
   'refresh.btn.label': { zh: '立即刷新', en: 'Refresh' },
+  'refresh.btn.title': { zh: '手动取最新的一拍（不受刷新模式与标签条影响；标签全关时它一并停手）', en: 'Fetch the latest tick by hand (unaffected by the poll mode and the tab strip; it stops too once every tab is closed)' },
+  'refresh.btn.suspended.title': { zh: '标签全关了：没有前台项目可刷，按这个不发请求——先开一张标签', en: 'Every tab is closed: there is no project in front, so this sends no request — open a tab first' },
   'snapshot.btn.label': { zh: '导出快照', en: 'Export snapshot' },
   'snapshot.btn.title': { zh: '把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档', en: 'Export the raw body of the latest scan as a timestamped JSON file (to archive or hand to another agent). Ticket bodies are excluded — they load on click; a snapshot is a scan archive' },
   'settings.btn.label': { zh: '设置', en: 'Settings' },
@@ -438,10 +440,18 @@ var UI_TEXT = {
   'tabs.collapse.aria': { zh: '标签条已折叠，点一下展开。当前项目：{name}', en: 'The tab strip is collapsed; click to expand. Current project: {name}' },
   'tabs.expand.aria': { zh: '展开标签条。当前项目：{name}', en: 'Expand the tab strip. Current project: {name}' },
   'tabs.empty.hint': { zh: '标签全关了——项目文件一个没动，服务仍在追踪原目录。开一张标签就能接着看。', en: 'Every tab is closed — no project file was touched and the server still tracks the same directory. Open a tab to carry on.' },
+  'tabs.empty.suspended': { zh: '全关之后连「立即刷新」也一并停手：这时按它同样不发请求（真要刷新，先开一张标签）。', en: 'With every tab closed, "Refresh now" stops too: pressing it sends no request either (open a tab first if you do want a refresh).' },
   'tabs.empty.open': { zh: '打开目录', en: 'Open a directory' },
   'tabs.empty.open.title': { zh: '为某个项目目录开一张标签（粘贴路径或挑一个常用目录）', en: 'Open a tab for a project directory (paste a path or pick a recent one)' },
   'tabs.limit': { zh: '标签最多 {n} 张：先关一张再开新的', en: 'At most {n} tabs: close one before opening another' },
   'tabs.opened': { zh: '已开新标签：{name}', en: 'New tab opened: {name}' },
+
+  // 项目标签条 · 刷新语义（project-tabs 票 02）：挂起期间的诚实标示与切回的恢复提示。
+  // 挂起时间戳刻意不带「已刷新」字样——它记的是离开那一刻的刷新时刻，不是挂起期间发生过的事。
+  'tabs.stamp.title': { zh: '挂起中：停在这一刻的内容与 {when} 那次刷新（切回来立刻补最新的一拍）', en: 'Suspended: frozen at this content and the refresh at {when} (the latest tick lands as soon as you come back)' },
+  'tabs.stamp.aria': { zh: '挂起时的最近刷新时间 {when}', en: 'last refreshed at {when} before suspending' },
+  'tabs.resume': { zh: '已恢复 {name} 的刷新：刚才显示的是离开时的旧内容（{when}），正在补最新的一拍', en: 'Refresh resumed for {name}: what you saw was the old content from {when} — fetching the latest tick now' },
+  'tabs.resume.bare': { zh: '已恢复 {name} 的刷新：正在补最新的一拍', en: 'Refresh resumed for {name}: fetching the latest tick now' },
   'menu.empty': { zh: '切换过的目录会出现在这里', en: 'Directories you switch to show up here' },
   'menu.no-match': { zh: '没有匹配的常用目录', en: 'No matching recent directory' },
   'menu.current': { zh: '当前', en: 'Current' },
@@ -1498,9 +1508,12 @@ function renderMeta(ok) {
 /* 按模式排表（票 06 三档）：
    惰性——不排表（零自动请求，只靠「立即刷新」按钮与操作后自动一拍）；
    观测——页面不可见时熄火（回前台由 visibilitychange 立即补一拍，再由此续表）；
-   展示——保持原定时行为（不可见时 refresh 跳过请求，但表照排）。 */
+   展示——保持原定时行为（不可见时 refresh 跳过请求，但表照排）。
+   挂起优先于三档（票 02）：一张卡都没开时没有前台项目可刷，直接不排表——
+   「挂起即省」不因刷新模式选了哪一档而破例。 */
 function schedulePoll() {
   clearTimeout(pollTimer)
+  if (tabActive < 0) return
   if (pollMode === 'manual') return
   if (pollMode === 'observe' && document.hidden) return
   pollTimer = setTimeout(function () { refresh(false) }, pollMs)
@@ -1600,6 +1613,7 @@ function fireNotification(body, effortSlug) {
    补拍（回前台）聚合成一条；其余（可见期间的定时拍）逐条出。 */
 function dispatchNotifications(prev, next, opts) {
   if (!notifyOn() || !prev) return
+  if (tabActive < 0) return            // 全关：没有前台项目，通知一并静默（挂起即零通知）
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
   if (opts.forced) return
   var evts = deriveNotifyEvents(prev, next)
@@ -1613,8 +1627,14 @@ function dispatchNotifications(prev, next, opts) {
 
 function refresh(force) {
   if (document.hidden && !force) { schedulePoll(); return }
-  // 记下这一拍是「第几次换根之后」发出去的：换根在途时发出去的拍，回来时必然还带着旧目录，
-  // 拿它对齐会把刚点开的卡又拉回去（旧载荷只更新主区，不参与补位——到下一拍自会归位）
+  // 挂起即零请求（票 02）：一张卡都没开时全是挂起，没有前台项目可刷——自动拍直接不发生。
+  // 「全关」比这更进一步：那不只是「没有前台项目」，是使用者明说了「我不想它在动了」，
+  // 于是连主动拍的 force 也一并拦下，零请求零通知（tabClosedAll 记的就是这个表态，只管本次
+  // 会话——重开页面是重新开始，服务端追踪目录仍是真相，该补位照补）。
+  // 首屏那一拍是唯一的例外：此刻还没有「全关」表态，靠它把标签条从追踪目录补出来。
+  if (tabActive < 0 && (tabClosedAll || !force)) return
+  // 记下这一拍是「第几次换根之后」发出去的：换根在途时发出去的拍，回来时必然还带着旧目录——
+  // 那属于一张已经挂起的卡，装进 state 就等于拿它的旧数据冒充当前项目（票 02），整拍丢弃
   var sentEpoch = tabEpoch
   apiFetch('/api/state', { etag: lastEtag || undefined, rawBody: true }).then(function (res) {
     if (res.status === 304) return null // 内容编号没变（服务端指纹短路的那拍）：本地 state 就是最新，不重解析
@@ -1623,6 +1643,9 @@ function refresh(force) {
     if (res.raw) { lastSnapshot = res.raw; updateSnapshotBtn() } // 原始响应体顺路存下：快照的「最近一拍」
     return res.data
   }).then(function (data) {
+    // 换根落定之前就发出去、落定之后才回来的那一拍：整拍不消费。补位、装回、通知全都跳过，
+    // 只在 finally 里续表——切过去那张卡自己那一拍马上就跟上了，不差这一拍的数据。
+    if (sentEpoch !== tabEpoch) return
     var d = new Date()
     lastOk = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0')
     document.getElementById('err').className = 'banner'
@@ -1630,18 +1653,22 @@ function refresh(force) {
       var prev = state
       var backlog = notifyBacklog
       notifyBacklog = false
+      // 服务端把追踪目录换到了别处（手改 config.json / 另一个浏览器）时，这一拍就是刚才那张活跃卡的
+      // 最后一次亮相：先把那一刻的内容存进分桶，它挂起期间就停在这里。必须在 state 被覆盖之前。
+      if (data.root && data.root !== activeTabPath()) snapshotActiveTab()
       state = data
       if (data.pollMs && data.pollMs !== pollMs) pollMs = data.pollMs
       if (data.pollMode) pollMode = data.pollMode // 模式跟服务端配置走（跨浏览器一致；不存 localStorage）
       // 补位（票 01）：以服务端追踪目录为真相对齐活跃卡，缺卡就补开一张（满额时占掉活跃那张）。
       // 放这里而不是页面加载，是因为 config.json 随时可能被手改——每拍都对齐才不丢。
-      // 这一拍若是换根完成之前就发出去的，它报的还是旧目录：拿它对齐会把刚点开的卡拉回去（tabEpoch 对不上就只更新主区）。
-      if (sentEpoch === tabEpoch) {
+      // 「全关」的空态除外：那是使用者主动收起的浏览视图，不被任何一拍自动摆回来（见 tabClosedAll）。
+      if (!tabClosedAll) {
         var aligned = tabAlign(state.root, tabList, tabActive)
         if (aligned.added || aligned.active !== tabActive) {
           tabList = aligned.list
           tabActive = aligned.active
           saveTabs()
+          pruneTabMemory()   // 满额换位换掉的那张不再挂在标签条上，它的分桶一并清掉
           renderTabStrip()
         }
       }
@@ -1681,16 +1708,24 @@ function refresh(force) {
    缺卡就补开一张（沿常用目录「当前目录置顶补位」先例）。
    标签条自身（卡列表/顺序/活跃索引/折叠态）只存本浏览器（flowdeck- 前缀键，与主题/缩放同族），
    绝不进 config.json——那是跨浏览器一致的服务状态。每卡的界面状态（选中项/票筛选/滚动位置）
-   内存级按目录分桶，切走存、切回调；页面重载只恢复标签条本身。 */
+   内存级按目录分桶，切走存、切回调；页面重载只恢复标签条本身。
+   刷新语义（票 02）：挂起卡完全停止后台刷新——零定时器、零请求、零通知，不因刷新模式三档破例；
+   代价是它停在离开时的样子，所以离开时的内容与最近刷新时间也按目录存下（tabData），
+   切回时先原样装回再补最新的一拍。 */
 
 var TABS_KEY = 'flowdeck-tabs'
 var tabList = []        // 卡的目录路径；顺序即开卡顺序（拖拽排序是 Out of Scope）
 var tabActive = -1      // 活跃卡下标；-1 = 一张都没开（全关空态）
 var tabCollapsed = false
 var tabUi = {}          // 目录 → { selected, filter, scroll }：每卡的界面状态，内存级
+var tabData = {}        // 目录 → { state, lastOk }：每张卡离开那一刻的盘点快照与最近刷新时间
+                        // 挂起期间原样保留（不刷新、不伪装成新的），切回时先装回它再补最新一拍
 var tabPendingScroll = null   // 切回某张卡时它离开时的滚动位置（render 之后装回）
 var tabRestoredPath = null    // 已装回界面状态的那张卡：只有换卡才装回，轮询不覆盖你刚点的 effort
 var tabEpoch = 0              // 换根代数：每次换根 +1，识别「这一拍是不是换根之前发出去的」
+var tabClosedAll = false      // 「全关」是使用者的显式表态：空态就该一直是空态。补位（以服务端追踪
+                              // 目录为真相对齐）不把它自动摆回来——否则点一下「立即刷新」就凭空
+                              // 冒出一张卡，空态的话当场说谎。开新标签自然清掉这个标记。
 
 /* TAG_FN_BEGIN —— 项目标签纯函数。verify 直测这一段（不复制第二份，源就在这里） */
 var TAB_LIMIT = 8
@@ -1809,10 +1844,73 @@ function restoreActiveTabUi() {
   tabPendingScroll = ui.scroll
 }
 
+/* ── 挂起与恢复的内容语义（票 02）──
+   挂起 = 完全停止后台刷新：零定时器、零请求、零桌面通知。它的代价是那张卡停在离开时的样子，
+   所以「离开时的样子」本身得如实存下来：内容（state）与最近刷新时间（lastOk）按目录存进分桶，
+   切回时先原样装回——旧数据被标成旧数据，不伪装成新的——再补最新的一拍。
+   分两个时机：用户切走（suspendActiveTab，界面状态与内容一起存）与服务端把追踪目录换掉
+   （refresh 里 state 被覆盖之前那一行，见调用处）——后者只存内容，界面状态由同一拍的
+   tabRestoredPath 分支装回。 */
+
+/** 把这一刻活跃卡看到的内容与最近刷新时间存进分桶。必须在 state 被新载荷覆盖之前调用，
+    否则存进去的是新目录的内容。 */
+function snapshotActiveTab() {
+  var path = activeTabPath()
+  if (path) tabData[path] = { state: state, lastOk: lastOk }
+}
+
+/** 用户切走一张卡（切卡 / 开新卡 / 关卡）：界面状态与内容快照一起存下——都是「离开时的样子」。 */
+function suspendActiveTab() {
+  rememberActiveTabUi()
+  snapshotActiveTab()
+}
+
+/** 卡列表变化后清掉不再挂在标签条上的分桶（关掉的卡、满额补位换掉的那张），
+    免得 tabData / tabUi 变成看不见的孤儿。 */
+function pruneTabMemory() {
+  Object.keys(tabData).forEach(function (p) { if (tabList.indexOf(p) < 0) delete tabData[p] })
+  Object.keys(tabUi).forEach(function (p) { if (tabList.indexOf(p) < 0) delete tabUi[p] })
+}
+
+/** 切回一张挂起卡：先装回它离开时的内容与最近刷新时间并重画主区（视觉连续，瞬时到位），
+    再弹「已恢复刷新」轻提示——暂停这件事被明确告知过，不靠一闪而过的内容区徽标。
+    选中项、票筛选与滚动位置在这一趟一并装回（记忆里有的滚到哪就滚到哪，没有的落回顶部）：
+    留给下一拍装是不成的——数据没变时主区根本不重画，位置会一直停在顶部，「切走再切回接着干」就断了。
+    从没被挂起过（没有分桶）的卡不预渲染：此刻手上的 state 是别张卡的内容，宁可等一拍也不串台。
+    返回是否真装回了快照，调用方据此决定 toast 的说法。 */
+function resumeActiveTab() {
+  var path = activeTabPath()
+  var snap = path ? tabData[path] : null
+  if (!snap) return false
+  state = snap.state
+  lastOk = snap.lastOk
+  var ui = tabUi[path]
+  tabRestoredPath = path        // 这一趟就装完了，别等下一拍再装一遍
+  selected = ui ? ui.selected : null
+  ticketFilter = ui ? ui.filter : null
+  render()
+  if (ui && ui.scroll) restoreScrolls(document.getElementById('main'), ui.scroll)
+  renderMeta(!!lastOk)
+  toast(snap.lastOk ? tf('tabs.resume', { name: tabName(path), when: snap.lastOk })
+    : tf('tabs.resume.bare', { name: tabName(path) }))
+  return true
+}
+
+/** 「立即刷新」的可用态（票 02）：标签全关之后，按下去也是零请求——那按钮就不能看着能点。
+    判据取 tabClosedAll（「使用者把卡全关了」这个表态）而不是 tabActive < 0：首屏那一刻
+    还没有任何卡，首拍正在路上、也可能失败，那时的「立即刷新」正是重试的手，不该被停用。 */
+function applyRefreshBtnState() {
+  var b = document.getElementById('refreshBtn')
+  if (!b) return
+  b.disabled = tabClosedAll
+  b.title = tabClosedAll ? t('refresh.btn.suspended.title') : t('refresh.btn.title')
+}
+
 /** 标签条渲染：展开态是卡行 + 折叠把手，折叠态整条就是一把把手（细线），空态出「打开目录」大入口。 */
 function renderTabStrip() {
   var box = document.getElementById('tabStrip')
   if (!box) return
+  applyRefreshBtnState()   // 卡面状态与「立即刷新」的可用态同源：两者都答「现在有没有前台项目」
   box.textContent = ''
   box.className = 'tabstrip' + (tabCollapsed ? ' collapsed' : '') + (tabList.length ? '' : ' empty')
   box.setAttribute('aria-label', t('tabs.strip.aria'))
@@ -1822,6 +1920,9 @@ function renderTabStrip() {
     open.addEventListener('click', function () { openNewTabMenu() })
     box.appendChild(open)
     box.appendChild(el('div', 'sub', t('tabs.empty.hint')))
+    // 「全关」专属的第三行：这时连「立即刷新」都被拦下了，空态得把这件事说出口——
+    // 按钮已停用，再说明为什么（禁用按钮的 title 各浏览器不一定出得来）。
+    if (tabClosedAll) box.appendChild(el('div', 'sub', t('tabs.empty.suspended')))
   }
   if (!tabCollapsed) {
     tabList.forEach(function (path, i) { box.appendChild(tabCard(path, i)) })
@@ -1845,6 +1946,18 @@ function tabCard(path, i) {
   mark.setAttribute('aria-hidden', 'true')
   card.appendChild(mark)
   card.appendChild(el('span', 'tname', name))
+  // 挂起卡把离开那一刻的最近刷新时间摆在卡面上（票 02）：数据停在旧拍这件事得被看见，
+  // 而不是靠切回去才知道。时刻取自真实刷新状态（分桶里的 lastOk），挂起期间原样不动——
+  // 它记的是离开时的刷新，不是挂起期间发生过的事。活跃卡不摆（顶栏状态行就在那儿报实时的）。
+  if (!on) {
+    var when = (tabData[path] || {}).lastOk
+    if (when) {
+      var stamp = el('span', 'tstamp', when.slice(0, 5))   // 卡面只摆到分，完整时刻进 title
+      stamp.title = tf('tabs.stamp.title', { when: when })
+      stamp.setAttribute('aria-label', tf('tabs.stamp.aria', { when: when }))
+      card.appendChild(stamp)
+    }
+  }
   var x = el('button', 'tclose', '✕')
   x.title = t('tabs.close.title')
   x.setAttribute('aria-label', tf('tabs.close.aria', { name: name }))
@@ -1888,7 +2001,9 @@ function switchRootTo(path, onOk) {
 }
 
 /** 换到一张已开好的卡：POST 成功后才把活跃卡挪过去（失败停留原卡）。不碰界面状态分桶——
-    记住「切走前那张卡什么样」是调用方的责任（关卡时它已经自己记过了）。 */
+    记住「切走前那张卡什么样」是调用方的责任（关卡时它已经自己记过了）。
+    成功之后先 resumeActiveTab()（装回那张卡离开时的旧内容与旧刷新时间、弹恢复提示），
+    再立刻补一拍——本地体感是「瞬时」，暂停这件事也被明确告知过。 */
 function switchToIndex(i) {
   if (i < 0 || i >= tabList.length) return
   var path = tabList[i]
@@ -1897,6 +2012,7 @@ function switchToIndex(i) {
     tabActive = i
     saveTabs()
     renderTabStrip()
+    if (resumeActiveTab()) { refresh(true); return }
     toast(tf('switch.ok', { root: root }))
     refresh(true)
   })
@@ -1905,7 +2021,7 @@ function switchToIndex(i) {
 /** 点卡切换：已开好的卡之间来回跳，复用同一套换根请求。 */
 function activateTabAt(i) {
   if (i < 0 || i >= tabList.length) return
-  rememberActiveTabUi()
+  suspendActiveTab()
   switchToIndex(i)
 }
 
@@ -1920,23 +2036,30 @@ function openTabFor(raw) {
   }
   var r = tabOpen(tabList, path)
   if (r.limited) { showErr(tf('tabs.limit', { n: TAB_LIMIT })); return }
+  tabClosedAll = false          // 开卡即收回「全关」表态：空态只由关卡造成，不由开卡造成
   if (state && state.root === path) {
+    // 服务端已经在追这个目录：不写盘，但落到的可能是另一张卡——那仍是一次「切回挂起卡」，
+    // 该走的还是恢复流程（装回旧内容 + 恢复提示）
+    if (r.index !== tabActive) suspendActiveTab()
     tabList = r.list
     tabActive = r.index
     saveTabs()
     closeNewTabMenu()
     renderTabStrip()
-    if (r.added) toast(tf('tabs.opened', { name: tabName(path) }))
+    if (r.added) { toast(tf('tabs.opened', { name: tabName(path) })); return }
+    resumeActiveTab()
     return
   }
-  rememberActiveTabUi()
+  suspendActiveTab()
   switchRootTo(path, function (root) {
     tabList = r.list
     tabActive = r.index
     saveTabs()
     closeNewTabMenu()
     renderTabStrip()
-    toast(r.added ? tf('tabs.opened', { name: tabName(root || path) }) : tf('switch.ok', { root: root }))
+    if (r.added) { toast(tf('tabs.opened', { name: tabName(root || path) })); refresh(true); return }
+    if (resumeActiveTab()) { refresh(true); return }   // 切回一张已开过的卡：走恢复流程
+    toast(tf('switch.ok', { root: root }))
     refresh(true)
   })
 }
@@ -1947,15 +2070,19 @@ function closeTabAt(i) {
   if (i < 0 || i >= tabList.length) return
   var closing = tabList[i]
   var wasActive = i === tabActive
-  if (wasActive) rememberActiveTabUi()
+  if (wasActive) suspendActiveTab()
   delete tabUi[closing]
+  delete tabData[closing]
   var r = tabClose(tabList, tabActive, i)
   tabList = r.list
   tabActive = r.active
+  // 「全关」的表态要在重画之前落定：标签条一重画就顺带把「立即刷新」的可用态算出来（票 02），
+  // 晚一步那按钮就还停在可点，而按下去已经什么都不会发生。
+  if (tabActive < 0) tabClosedAll = true
   saveTabs()
   renderTabStrip()
-  if (!wasActive) { render(); return }
   if (tabActive < 0) { render(); return }   // 全关：主区留在原样，服务端追踪目录不动
+  if (!wasActive) { render(); return }                            // 关的是挂起卡：只动卡面，活跃卡不受影响
   // 切到落点那张：走 switchToIndex 而不是 activateTabAt——那张卡的界面状态分桶已经存好了，
   // 再记一次会把「刚离开那张卡的样子」写到它头上，两个项目的记忆就串了
   switchToIndex(tabActive)
@@ -3143,9 +3270,11 @@ document.getElementById('setNotify').addEventListener('change', function () {
 
 /* 可见性与轮询模式联动（票 06）：不可见时按模式收表——观测档在此熄火（展示档定时照排、惰性本无表）；
    回前台立即补一拍（观测/展示保持即刷行为；惰性档不自动请求，只认「立即刷新」）。
-   补拍带积压标记（票 04）：离开期间攒下的变化聚合为一条通知，不逐条轰炸；惰性档不补拍也就零通知。 */
+   补拍带积压标记（票 04）：离开期间攒下的变化聚合为一条通知，不逐条轰炸；惰性档不补拍也就零通知。
+   挂起优先（票 02）：一张卡都没开时没有前台项目，回前台不补拍——挂起即零请求，不因模式破例。 */
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) { schedulePoll(); return }
+  if (tabActive < 0) { schedulePoll(); return }
   if (pollMode !== 'manual') { notifyBacklog = true; refresh(true) }
 })
 /* 标签条读回即渲染（重开页面原样恢复卡列表/顺序/活跃索引/折叠态）——不等第一拍：

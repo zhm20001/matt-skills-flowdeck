@@ -134,6 +134,10 @@
   /* 状态点：活跃实心、挂起灰空心——「哪张在前台」一眼可辨，不靠一闪而过的内容区徽标 */
   .tabcard .tdot { width: 8px; height: 8px; flex: none; border-radius: 50%; border: 2px solid var(--fd-ink-muted); }
   .tabcard.on .tdot { background: currentColor; border-color: currentColor; }
+  /* 挂起卡的最后刷新时刻（票 02）：数据停在旧拍这件事摆在卡面上，别等到切回去才发现。
+     走 muted 前景色（与状态点同源），字号比目录名小一档让名字仍是最强的那一层。 */
+  .tabcard .tstamp { flex: none; font-size: 1rem; color: var(--fd-ink-muted); font-variant-numeric: tabular-nums; }
+  .tabcard .tstamp::before { content: '·'; margin-right: 0.3rem; color: var(--fd-rule); }
   /* 折叠把手：展开态排在卡尾（靠右），折叠态独占一行、就是整条标签条 */
   .tabhandle { flex: none; margin-left: auto; border: none; background: transparent; color: var(--fd-ink-muted); padding: 0.2rem 0.8rem; }
   .tabhandle:hover { background: var(--fd-chip-hover); border-color: var(--fd-rule); color: var(--fd-accent); }
