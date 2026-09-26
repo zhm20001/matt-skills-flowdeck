@@ -49,18 +49,21 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
     </div>
     <div class="head-controls">
       <div class="rootbox">
-      <input id="rootInput" data-i18n-title="root.input.title" data-i18n-placeholder="root.input.placeholder" title="要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json" placeholder="粘贴要追踪的项目目录路径">
-      <button id="rootMenuBtn" data-i18n-title="rootmenu.btn.title" data-i18n-aria="rootmenu.btn.aria" title="浏览常用目录：网页上切换过的目录自动收录，点一条立即切回" aria-label="展开常用目录下拉">▾</button>
-      <div id="rootMenu" class="menu" hidden></div>
+      <button id="newTabBtn" class="primary" data-i18n="newtab.btn.label" data-i18n-title="newtab.btn.title" data-i18n-aria="newtab.btn.aria" title="为另一个项目目录开一张标签：粘一个路径，或从常用目录里挑一条——当前项目不被关掉" aria-label="开新标签">＋ 开新标签</button>
+      <div id="rootMenu" class="menu" hidden>
+        <div class="menu-head">
+          <input id="newTabPath" type="text" data-i18n-title="newtab.input.title" data-i18n-placeholder="newtab.input.placeholder" title="要开成标签的项目目录（里面得有个 .scratch/）。支持绝对路径；回车即开卡并切过去" placeholder="粘贴项目目录路径，开成新标签">
+        </div>
+        <div id="rootMenuList"></div>
+      </div>
     </div>
-      <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）">项目</button>
+      <button id="rootsBtn" data-i18n="roots.btn.label" data-i18n-title="roots.btn.title" title="项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一行开为标签页）">项目</button>
       <select id="themeSelect" data-i18n-aria="theme.label" data-i18n-title="theme.select.title" aria-label="主题" title="在冷白、暖纸与 GitHub 暗三套主题之间切换（记忆在本浏览器里）">
         <option value="cold" data-i18n="theme.cold">冷白</option>
         <option value="paper" data-i18n="theme.paper">暖纸</option>
         <option value="dark" data-i18n="theme.dark">GitHub 暗</option>
       </select>
       <button id="langBtn" data-i18n-title="lang.btn.title" title="切换界面语言为英文（记忆在本浏览器里）">EN</button>
-      <button id="switchBtn" data-i18n="switch.btn.label" data-i18n-title="switch.btn.title" title="切换追踪目录：立即生效并写进 config.json">换目录</button>
       <button id="refreshBtn" data-i18n="refresh.btn.label">立即刷新</button>
       <button id="snapshotBtn" data-i18n="snapshot.btn.label" data-i18n-title="snapshot.btn.title" title="把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档" disabled>导出快照</button>
       <button id="settingsBtn" data-i18n="settings.btn.label" data-i18n-title="settings.btn.title" title="集中修改可设项（写进 config.json）：轮询间隔立即生效；监听地址/端口重启后生效；访问令牌只写不读">设置</button>
@@ -68,6 +71,7 @@ function oneOf(v, allowed, dflt) { return allowed.indexOf(v) >= 0 ? v : dflt }
     </div>
   </header>
 
+  <div class="tabstrip" id="tabStrip"></div>
   <div class="banner" id="err" role="alert"></div>
   <div class="tabs" id="tabs"></div>
   <div id="main"></div>
@@ -290,19 +294,18 @@ var UI_TEXT = {
   'manual.badge.title': { zh: '惰性轮询模式：不自动请求，数据停在最近一次盘点时刻——点「立即刷新」取新', en: 'Passive polling: no automatic requests, the data is from the last scan — press Refresh for a new one' },
   'manual.badge.text': { zh: '手动模式 · {when} 盘点', en: 'Manual mode · scanned {when}' },
   'manual.badge.bare': { zh: '手动模式', en: 'Manual mode' },
-  'root.input.title': { zh: '要追踪的项目目录（里面得有个 .scratch/）。支持绝对路径；保存后立即生效并写进 config.json', en: 'Project directory to track (it needs a .scratch/). Absolute paths work; it takes effect at once and is written to config.json' },
-  'root.input.placeholder': { zh: '粘贴要追踪的项目目录路径', en: 'Paste the project directory path to track' },
-  'rootmenu.btn.title': { zh: '浏览常用目录：网页上切换过的目录自动收录，点一条立即切回', en: 'Browse recent directories: ones you switched to on this page are collected, click one to switch back' },
-  'rootmenu.btn.aria': { zh: '展开常用目录下拉', en: 'Open the recent directories menu' },
+  'newtab.btn.label': { zh: '＋ 开新标签', en: '+ New tab' },
+  'newtab.btn.title': { zh: '为另一个项目目录开一张标签：粘一个路径，或从常用目录里挑一条——当前项目不被关掉', en: 'Open a tab for another project directory: paste a path or pick one from the recent list — the current project is not closed' },
+  'newtab.btn.aria': { zh: '开新标签', en: 'Open a new tab' },
+  'newtab.input.title': { zh: '要开成标签的项目目录（里面得有个 .scratch/）。支持绝对路径；回车即开卡并切过去', en: 'The project directory to open as a tab (it needs a .scratch/). Absolute paths work; Enter opens the tab and switches to it' },
+  'newtab.input.placeholder': { zh: '粘贴项目目录路径，开成新标签', en: 'Paste a project directory path to open as a new tab' },
   'roots.btn.label': { zh: '项目', en: 'Projects' },
-  'roots.btn.title': { zh: '项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一条立即切过去）', en: 'Project overview: every recent directory scanned read-only (chain stage, ticket counts, fog on one screen; click a row to switch)' },
+  'roots.btn.title': { zh: '项目总览：常用目录逐个只读盘点（链阶段、票计数、迷雾数一屏看完；点一行开为标签页）', en: 'Project overview: every recent directory scanned read-only (chain stage, ticket counts, fog on one screen; click a row to open it as a tab)' },
   'theme.label': { zh: '主题', en: 'Theme' },
   'theme.select.title': { zh: '在冷白、暖纸与 GitHub 暗三套主题之间切换（记忆在本浏览器里）', en: 'Switch between the cold white, warm paper and GitHub dark themes (remembered in this browser)' },
   'theme.cold': { zh: '冷白', en: 'Cold white' },
   'theme.paper': { zh: '暖纸', en: 'Warm paper' },
   'theme.dark': { zh: 'GitHub 暗', en: 'GitHub dark' },
-  'switch.btn.label': { zh: '换目录', en: 'Switch' },
-  'switch.btn.title': { zh: '切换追踪目录：立即生效并写进 config.json', en: 'Switch the tracked directory: takes effect at once and is written to config.json' },
   'refresh.btn.label': { zh: '立即刷新', en: 'Refresh' },
   'snapshot.btn.label': { zh: '导出快照', en: 'Export snapshot' },
   'snapshot.btn.title': { zh: '把最近一拍盘点的原始响应体导出成带时间戳的 JSON 文件（存档或喂给别的 Agent）。不含票正文——票正文是点开才取的，快照定位是盘点存档', en: 'Export the raw body of the latest scan as a timestamped JSON file (to archive or hand to another agent). Ticket bodies are excluded — they load on click; a snapshot is a scan archive' },
@@ -412,12 +415,32 @@ var UI_TEXT = {
   'switch.ok': { zh: '已切换到 {root}，并写进了 config.json', en: 'Switched to {root}, written into config.json' },
   'refresh.failed': { zh: '刷新失败：{msg}（服务还在跑吗？）', en: 'Refresh failed: {msg} (is the server still running?)' },
   'roots.remove-failed': { zh: '删除常用目录失败：{msg}', en: 'Removing the recent directory failed: {msg}' },
+
+  // 项目标签条（project-tabs 票 01）：卡面、状态点、折叠把手、空态与开卡提示
+  'tabs.strip.aria': { zh: '项目标签条：每个项目一张卡，点卡即切换', en: 'Project tabs: one card per project, click a card to switch' },
+  'tabs.state.active': { zh: '当前', en: 'Current' },
+  'tabs.state.idle': { zh: '挂起', en: 'Suspended' },
+  'tabs.card.title': { zh: '{name}：{state}。点一下切到这个项目（{path}）', en: '{name}: {state}. Click to switch to this project ({path})' },
+  'tabs.card.aria': { zh: '项目标签 {name}，{state}。按 Enter 切到这个项目', en: 'Project tab {name}, {state}. Press Enter to switch to this project' },
+  'tabs.close.title': { zh: '关闭这张标签（不关项目文件）', en: 'Close this tab (it does not touch the project files)' },
+  'tabs.close.aria': { zh: '关闭 {name} 这张标签', en: 'Close the {name} tab' },
+  'tabs.collapse.label': { zh: '折叠标签条', en: 'Collapse the tab strip' },
+  'tabs.expand.label': { zh: '展开标签条', en: 'Expand the tab strip' },
+  'tabs.collapse.title': { zh: '把标签条折成一条细线，看板拿回全部空间（形态记在本浏览器）', en: 'Fold the tab strip into a thin line and give the board all the space (the shape is remembered in this browser)' },
+  'tabs.expand.title': { zh: '展开标签条，重新露出全部项目卡', en: 'Expand the tab strip and show every project card again' },
+  'tabs.collapse.aria': { zh: '标签条已折叠，点一下展开。当前项目：{name}', en: 'The tab strip is collapsed; click to expand. Current project: {name}' },
+  'tabs.expand.aria': { zh: '展开标签条。当前项目：{name}', en: 'Expand the tab strip. Current project: {name}' },
+  'tabs.empty.hint': { zh: '标签全关了——项目文件一个没动，服务仍在追踪原目录。开一张标签就能接着看。', en: 'Every tab is closed — no project file was touched and the server still tracks the same directory. Open a tab to carry on.' },
+  'tabs.empty.open': { zh: '打开目录', en: 'Open a directory' },
+  'tabs.empty.open.title': { zh: '为某个项目目录开一张标签（粘贴路径或挑一个常用目录）', en: 'Open a tab for a project directory (paste a path or pick a recent one)' },
+  'tabs.limit': { zh: '标签最多 {n} 张：先关一张再开新的', en: 'At most {n} tabs: close one before opening another' },
+  'tabs.opened': { zh: '已开新标签：{name}', en: 'New tab opened: {name}' },
   'menu.empty': { zh: '切换过的目录会出现在这里', en: 'Directories you switch to show up here' },
   'menu.no-match': { zh: '没有匹配的常用目录', en: 'No matching recent directory' },
   'menu.current': { zh: '当前', en: 'Current' },
   'menu.missing': { zh: '目录不存在', en: 'Missing' },
   'menu.del.title': { zh: '从常用目录里删掉这一条（立即写回 config.json，删错了重新切一次就会收回来）', en: 'Delete this entry from the recent list (written back to config.json at once; switch to it again to bring it back)' },
-  'menu.pick.title': { zh: '点一下切换到这个目录', en: 'Click to switch to this directory' },
+  'menu.pick.title': { zh: '点一下为这个目录开一张标签（已开过就直接切到那张）', en: 'Click to open a tab for this directory (an open one is switched to instead)' },
   'menu.missing.title': { zh: '这个目录在本机上不存在：不能切换，但可以删除', en: 'This directory does not exist on this machine: it cannot be picked, but it can be deleted' },
 
   // 前沿面板
@@ -585,8 +608,10 @@ var UI_TEXT = {
   'ov.current': { zh: '当前', en: 'Current' },
   'ov.no-scratch': { zh: '无产物', en: 'No artifacts' },
   'ov.unreadable': { zh: '不可读', en: 'Unreadable' },
-  'ov.row.title': { zh: '点一下切换到这个项目（既有换目录操作，写进 config.json）', en: 'Click to switch to this project (the usual directory switch, written to config.json)' },
+  'ov.row.title': { zh: '点一下为这个项目开一张标签（既有换根操作，写进 config.json）', en: 'Click to open a tab for this project (the usual root switch, written to config.json)' },
   'ov.row.aria': { zh: '{name}：{stage}，票 {closed}/{tickets}，迷雾 {fog}。按 Enter 切换到这个项目', en: '{name}: {stage}, tickets {closed}/{tickets}, fog {fog}. Press Enter to switch to this project' },
+  'ov.open-tab': { zh: '开为标签页', en: 'Open as tab' },
+  'ov.open-tab.title': { zh: '为这个项目开一张标签并切过去（当前项目不会被关掉）', en: 'Open a tab for this project and switch to it (the current one is not closed)' },
   'ov.row.stage-unknown': { zh: '链阶段未知', en: 'stage unknown' },
   'ov.row.no-scratch.title': { zh: '目录存在但没有 .scratch/（无产物）', en: 'The directory exists but has no .scratch/ (no artifacts)' },
   'ov.row.unreadable.title': { zh: '目录读不了：可能不存在或无权限', en: 'The directory cannot be read: missing or no permission' },
@@ -1375,12 +1400,15 @@ function doneGroupRow(count, collapsed) {
   return tr
 }
 
-/* 主区渲染的数据签名：render() 消耗的全部输入（含档位过滤与全部视图的两个偏好——
-   都是渲染输入，变了就得重画）。签名没变就跳过重画——轮询热路径上最常见的情形是
+/* 主区渲染的数据签名：render() 消耗的全部输入（含档位过滤、全部视图的两个偏好与
+   活跃项目标签——两张卡的内容可能逐字相同，但「切走再切回要回到离开时的样子」要求
+   换卡必重画，否则该卡的滚动位置与选中态装不回去）。
+   都是渲染输入，变了就得重画。签名没变就跳过重画——轮询热路径上最常见的情形是
    「什么都没变」，此时一根手指都不碰 DOM（与下拉的签名模式同款）。 */
 function mainRenderSignature() {
   return JSON.stringify([
     selected,
+    activeTabPath(),
     state ? state.scratchExists : null,
     state ? state.efforts : null,
     ticketFilter,
@@ -1540,6 +1568,9 @@ function dispatchNotifications(prev, next, opts) {
 
 function refresh(force) {
   if (document.hidden && !force) { schedulePoll(); return }
+  // 记下这一拍是「第几次换根之后」发出去的：换根在途时发出去的拍，回来时必然还带着旧目录，
+  // 拿它对齐会把刚点开的卡又拉回去（旧载荷只更新主区，不参与补位——到下一拍自会归位）
+  var sentEpoch = tabEpoch
   apiFetch('/api/state', { etag: lastEtag || undefined, rawBody: true }).then(function (res) {
     if (res.status === 304) return null // 内容编号没变（服务端指纹短路的那拍）：本地 state 就是最新，不重解析
     if (!res.ok) throw new Error(res.errorText) // 401 走统一定向文案，其余服务端 .error 优先
@@ -1557,11 +1588,30 @@ function refresh(force) {
       state = data
       if (data.pollMs && data.pollMs !== pollMs) pollMs = data.pollMs
       if (data.pollMode) pollMode = data.pollMode // 模式跟服务端配置走（跨浏览器一致；不存 localStorage）
+      // 补位（票 01）：以服务端追踪目录为真相对齐活跃卡，缺卡就补开一张（满额时占掉活跃那张）。
+      // 放这里而不是页面加载，是因为 config.json 随时可能被手改——每拍都对齐才不丢。
+      // 这一拍若是换根完成之前就发出去的，它报的还是旧目录：拿它对齐会把刚点开的卡拉回去（tabEpoch 对不上就只更新主区）。
+      if (sentEpoch === tabEpoch) {
+        var aligned = tabAlign(state.root, tabList, tabActive)
+        if (aligned.added || aligned.active !== tabActive) {
+          tabList = aligned.list
+          tabActive = aligned.active
+          saveTabs()
+          renderTabStrip()
+        }
+      }
+      // 换卡才装回那张卡离开时的样子（选中项/票筛选/滚动）；同一张卡上的轮询不覆盖你刚点的 effort
+      if (tabActive >= 0 && tabList[tabActive] !== tabRestoredPath) {
+        tabRestoredPath = tabList[tabActive]
+        restoreActiveTabUi()
+      }
       if (selected && selected !== ALL_VIEW && !state.efforts.some(function (e) { return e.slug === selected })) selected = null
       // 数据签名没变就不重画主区（不打扰阅读与滚动）；变了才重建，且先存后恢复滚动位置。
       if (mainRenderSignature() !== renderSig) {
         var mainEl = document.getElementById('main')
-        var snap = snapshotScrolls(mainEl)
+        // 切回一张挂起卡时用它离开时的滚动位置（离开时的旧内容由 render 前的 state 承载）
+        var snap = tabPendingScroll || snapshotScrolls(mainEl)
+        tabPendingScroll = null
         render()
         restoreScrolls(mainEl, snap)
       }
@@ -1571,7 +1621,7 @@ function refresh(force) {
     applyPollModeUI()
     renderMeta(true)
     // 下拉开着时：数据没变就不动 DOM（不打扰浏览）；变了就原位重画，保持展开、不抢焦点。
-    if (rootMenuState.open && rootMenuSignature() !== rootMenuSig) renderRootMenu()
+    if (newTabMenuState.open && newTabMenuSignature() !== newTabMenuSig) renderNewTabMenu()
   }).catch(function (e) {
     showErr(tf('refresh.failed', { msg: e && e.message ? e.message : e }))
   }).finally(function () {
@@ -1579,32 +1629,300 @@ function refresh(force) {
   })
 }
 
-function switchRoot() {
-  var input = document.getElementById('rootInput')
-  var raw = (input.value || '').trim()
-  if (!raw) { input.focus(); return }
-  var btn = document.getElementById('switchBtn')
-  btn.disabled = true
-  apiFetch('/api/config', { body: JSON.stringify({ root: raw }) }).then(function (res) {
-    btn.disabled = false
-    if (!res.ok) {
-      showErr(tf('switch.failed', { msg: res.errorText }))
-      return
-    }
-    selected = null
-    toast(tf('switch.ok', { root: res.data.root }))
-    refresh(true)
+/* ── 项目标签（project tab，project-tabs 票 01）──
+   架构：前端多开、服务端单根。每张卡是客户端对一个目录的视图槽；切换标签 = 复用既有换根请求
+   （POST /api/config），服务端「同一时刻只追踪一个目录」的模型原样保留，不新增端点。
+   不变式：config.json 的 root 永远等于活跃卡的目录——页面加载以服务端返回的追踪目录为真相对齐，
+   缺卡就补开一张（沿常用目录「当前目录置顶补位」先例）。
+   标签条自身（卡列表/顺序/活跃索引/折叠态）只存本浏览器（flowdeck- 前缀键，与主题/缩放同族），
+   绝不进 config.json——那是跨浏览器一致的服务状态。每卡的界面状态（选中项/票筛选/滚动位置）
+   内存级按目录分桶，切走存、切回调；页面重载只恢复标签条本身。 */
+
+var TABS_KEY = 'flowdeck-tabs'
+var tabList = []        // 卡的目录路径；顺序即开卡顺序（拖拽排序是 Out of Scope）
+var tabActive = -1      // 活跃卡下标；-1 = 一张都没开（全关空态）
+var tabCollapsed = false
+var tabUi = {}          // 目录 → { selected, filter, scroll }：每卡的界面状态，内存级
+var tabPendingScroll = null   // 切回某张卡时它离开时的滚动位置（render 之后装回）
+var tabRestoredPath = null    // 已装回界面状态的那张卡：只有换卡才装回，轮询不覆盖你刚点的 effort
+var tabEpoch = 0              // 换根代数：每次换根 +1，识别「这一拍是不是换根之前发出去的」
+
+/* TAG_FN_BEGIN —— 项目标签纯函数。verify 直测这一段（不复制第二份，源就在这里） */
+var TAB_LIMIT = 8
+/* 固定 emoji 池：目录名哈希取模落池，同一目录恒同图、零配置。池子大小取 16（2 的幂，
+   取模不偏斜）；用户自定义标记是 Out of Scope，数据结构不预设阻碍。 */
+var TAB_EMOJI = ['📁', '🗂️', '📦', '🧩', '🛠️', '🧪', '📐', '🧭', '🗃️', '📚', '🖥️', '⚙️', '🔬', '🌱', '🎯', '🪄']
+
+/** 目录路径 → 展示名（basename）；路径为空或全是分隔符时原样返回。 */
+function tabName(p) {
+  var s = String(p)
+  var cut = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+  return s.slice(cut + 1) || s
+}
+
+/** FNV-1a 32 位：稳定哈希（同一字符串在任何引擎、任何时刻同一个数）。 */
+function tabHash(s) {
+  var h = 2166136261
+  for (var i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0
+  }
+  return h >>> 0
+}
+
+/** 目录 → 图形标记：哈希目录名落池，同一目录恒同图。 */
+function tabEmoji(path) {
+  return TAB_EMOJI[tabHash(tabName(path)) % TAB_EMOJI.length]
+}
+
+/** 开卡变换：同目录去重落到已有卡（index 即该卡）；超上限拒绝（limited）。 */
+function tabOpen(list, path) {
+  var hit = list.indexOf(path)
+  if (hit >= 0) return { list: list, index: hit, added: false, limited: false }
+  if (list.length >= TAB_LIMIT) return { list: list, index: -1, added: false, limited: true }
+  return { list: list.concat([path]), index: list.length, added: true, limited: false }
+}
+
+/** 关卡变换：关的正是活跃卡时落右邻、无右邻落左邻；关的不是活跃卡则活跃卡下标随位移。 */
+function tabClose(list, active, i) {
+  if (i < 0 || i >= list.length) return { list: list, active: active, removed: false }
+  var next = list.slice(0, i).concat(list.slice(i + 1))
+  var act = active
+  // 关的正是活跃卡：落右邻；最后一张没有右邻时这个 Math.min 自然落到 -1，也就是「全关」的空态
+  if (active === i) act = Math.min(i, next.length - 1)
+  else if (active > i) act = active - 1
+  return { list: next, active: act, removed: true }
+}
+
+/** 读回的标签条状态清洗：只留非空字符串、去重、封顶 8、活跃下标夹回值域。 */
+function tabNormalize(saved) {
+  var src = (saved && Array.isArray(saved.list)) ? saved.list : []
+  var list = []
+  for (var i = 0; i < src.length; i++) {
+    var p = src[i]
+    if (typeof p !== 'string' || !p || list.length >= TAB_LIMIT) continue
+    if (list.indexOf(p) < 0) list.push(p)
+  }
+  var active = (saved && typeof saved.active === 'number' && isFinite(saved.active)) ? saved.active : 0
+  if (!list.length) active = -1
+  else active = active < 0 ? 0 : Math.min(active, list.length - 1)
+  return { list: list, active: active, collapsed: !!(saved && saved.collapsed) }
+}
+
+/** 补位变换：以服务端追踪目录为真相对齐活跃卡；无卡与之对应则补开一张置为活跃。
+    满额且无对应卡时，服务端追踪目录占掉活跃那张——上限守 8，而「root = 活跃卡目录」这条
+    不变式不留破口。 */
+function tabAlign(root, list, active) {
+  if (!root) return { list: list, active: list.length ? Math.max(0, Math.min(active, list.length - 1)) : -1, added: false }
+  var hit = list.indexOf(root)
+  if (hit >= 0) return { list: list, active: hit, added: false }
+  var at = active >= 0 ? active : list.length - 1
+  if (list.length >= TAB_LIMIT) {
+    var out = list.slice()
+    out[at] = root
+    return { list: out, active: at, added: true }
+  }
+  return { list: list.concat([root]), active: list.length, added: true }
+}
+/* TAG_FN_END */
+
+/** 活跃卡指向的目录（无卡时 null）：记住界面状态分桶、渲染状态点都问它。 */
+function activeTabPath() {
+  return tabActive >= 0 && tabActive < tabList.length ? tabList[tabActive] : null
+}
+
+function readTabs() {
+  var raw = null
+  try { raw = localStorage.getItem(TABS_KEY) } catch (e) {}
+  if (!raw) return { list: [], active: -1, collapsed: false }
+  var parsed = null
+  try { parsed = JSON.parse(raw) } catch (e) {}
+  return tabNormalize(parsed)
+}
+
+/** 落盘标签条：卡列表 + 顺序 + 活跃索引 + 折叠态，一个键一把 JSON（浏览器偏好，不进 config.json）。 */
+function saveTabs() {
+  try {
+    localStorage.setItem(TABS_KEY, JSON.stringify({ list: tabList, active: tabActive, collapsed: tabCollapsed }))
+  } catch (e) {}
+}
+
+/** 每卡的界面状态：切走时存下选中项、票筛选与滚动位置。内存级，页面重载不恢复。 */
+function rememberActiveTabUi() {
+  var path = activeTabPath()
+  if (!path) return
+  var main = document.getElementById('main')
+  tabUi[path] = { selected: selected, filter: ticketFilter, scroll: main ? snapshotScrolls(main) : null }
+}
+
+function restoreActiveTabUi() {
+  var path = activeTabPath()
+  var ui = path ? tabUi[path] : null
+  if (!ui) { selected = null; ticketFilter = null; tabPendingScroll = null; return }
+  selected = ui.selected
+  ticketFilter = ui.filter
+  tabPendingScroll = ui.scroll
+}
+
+/** 标签条渲染：展开态是卡行 + 折叠把手，折叠态整条就是一把把手（细线），空态出「打开目录」大入口。 */
+function renderTabStrip() {
+  var box = document.getElementById('tabStrip')
+  if (!box) return
+  box.textContent = ''
+  box.className = 'tabstrip' + (tabCollapsed ? ' collapsed' : '') + (tabList.length ? '' : ' empty')
+  box.setAttribute('aria-label', t('tabs.strip.aria'))
+  if (!tabCollapsed && !tabList.length) {
+    var open = el('button', 'primary', t('tabs.empty.open'))
+    open.title = t('tabs.empty.open.title')
+    open.addEventListener('click', function () { openNewTabMenu() })
+    box.appendChild(open)
+    box.appendChild(el('div', 'sub', t('tabs.empty.hint')))
+  }
+  if (!tabCollapsed) {
+    tabList.forEach(function (path, i) { box.appendChild(tabCard(path, i)) })
+  }
+  box.appendChild(tabCollapseHandle())
+}
+
+function tabCard(path, i) {
+  var on = i === tabActive
+  var name = tabName(path)
+  var state = t(on ? 'tabs.state.active' : 'tabs.state.idle')
+  var card = el('div', 'tabcard' + (on ? ' on' : ''))
+  card.setAttribute('role', 'tab')
+  card.setAttribute('aria-selected', on ? 'true' : 'false')
+  card.title = tf('tabs.card.title', { name: name, state: state, path: path })
+  card.setAttribute('aria-label', tf('tabs.card.aria', { name: name, state: state }))
+  var dot = el('span', 'tdot' + (on ? ' on' : ''))
+  dot.setAttribute('aria-hidden', 'true') // 状态点是装饰，信息由整卡的 aria-label 承载
+  card.appendChild(dot)
+  var mark = el('span', 'temoji', tabEmoji(path))
+  mark.setAttribute('aria-hidden', 'true')
+  card.appendChild(mark)
+  card.appendChild(el('span', 'tname', name))
+  var x = el('button', 'tclose', '✕')
+  x.title = t('tabs.close.title')
+  x.setAttribute('aria-label', tf('tabs.close.aria', { name: name }))
+  x.addEventListener('click', function (ev) { ev.stopPropagation(); closeTabAt(i) })
+  card.appendChild(x)
+  clickable(card, function () { activateTabAt(i) })
+  return card
+}
+
+/** 折叠/展开把手：折叠态下它就是整条标签条（细线 + 当前项目），展开态排在卡尾。 */
+function tabCollapseHandle() {
+  var path = activeTabPath()
+  var name = path ? tabName(path) : '—'
+  var h = el('button', 'tabhandle' + (tabCollapsed ? ' only' : ''))
+  h.textContent = tabCollapsed ? (path ? tabEmoji(path) + ' ' + name + ' ▴' : '▴') : '▾'
+  h.title = t(tabCollapsed ? 'tabs.expand.title' : 'tabs.collapse.title')
+  h.setAttribute('aria-label', tf(tabCollapsed ? 'tabs.expand.aria' : 'tabs.collapse.aria', { name: name }))
+  h.setAttribute('aria-expanded', tabCollapsed ? 'false' : 'true')
+  h.addEventListener('click', function () {
+    tabCollapsed = !tabCollapsed
+    saveTabs()
+    renderTabStrip()
+  })
+  return h
+}
+
+/** 换根（复用既有 POST /api/config 与既有失败提示）：只有服务端应答成功才走 onOk，
+    失败一律 showErr 并停留在原卡片——不新增端点、不新增错误通道。 */
+function switchRootTo(path, onOk) {
+  var btn = document.getElementById('newTabBtn')
+  if (btn) btn.disabled = true
+  tabEpoch++                   // 从这一刻起，之前发出去的状态拍一律不再参与补位
+  return apiFetch('/api/config', { body: JSON.stringify({ root: path }) }).then(function (res) {
+    if (btn) btn.disabled = false
+    if (!res.ok) { showErr(tf('switch.failed', { msg: res.errorText })); return }
+    onOk(res.data.root)
   }).catch(function (e) {
-    btn.disabled = false
+    if (btn) btn.disabled = false
     showErr(tf('switch.failed', { msg: e && e.message ? e.message : e }))
   })
 }
 
-/* ── 常用目录下拉：地址栏的组合框 ──
+/** 换到一张已开好的卡：POST 成功后才把活跃卡挪过去（失败停留原卡）。不碰界面状态分桶——
+    记住「切走前那张卡什么样」是调用方的责任（关卡时它已经自己记过了）。 */
+function switchToIndex(i) {
+  if (i < 0 || i >= tabList.length) return
+  var path = tabList[i]
+  if (i === tabActive && state && state.root === path) { renderTabStrip(); return }
+  switchRootTo(path, function (root) {
+    tabActive = i
+    saveTabs()
+    renderTabStrip()
+    toast(tf('switch.ok', { root: root }))
+    refresh(true)
+  })
+}
+
+/** 点卡切换：已开好的卡之间来回跳，复用同一套换根请求。 */
+function activateTabAt(i) {
+  if (i < 0 || i >= tabList.length) return
+  rememberActiveTabUi()
+  switchToIndex(i)
+}
+
+/** 开新标签：换根成功即开卡并激活；同目录去重落到已有卡（已开过就直接切过去）；
+    超上限不出卡、提示先关一张。服务端已经在追这个目录时只对齐卡面，不重复写盘。 */
+function openTabFor(raw) {
+  var path = String(raw || '').trim()
+  if (!path) {
+    var field = document.getElementById('newTabPath')
+    if (field) field.focus()
+    return
+  }
+  var r = tabOpen(tabList, path)
+  if (r.limited) { showErr(tf('tabs.limit', { n: TAB_LIMIT })); return }
+  if (state && state.root === path) {
+    tabList = r.list
+    tabActive = r.index
+    saveTabs()
+    closeNewTabMenu()
+    renderTabStrip()
+    if (r.added) toast(tf('tabs.opened', { name: tabName(path) }))
+    return
+  }
+  rememberActiveTabUi()
+  switchRootTo(path, function (root) {
+    tabList = r.list
+    tabActive = r.index
+    saveTabs()
+    closeNewTabMenu()
+    renderTabStrip()
+    toast(r.added ? tf('tabs.opened', { name: tabName(root || path) }) : tf('switch.ok', { root: root }))
+    refresh(true)
+  })
+}
+
+/** 关卡：关的正是活跃卡时落到右邻（无右邻落左邻）并复用换根请求把服务端跟过去；
+    关的是挂起卡只动卡面。全关不碰服务端追踪目录（关浏览视图不是破坏服务状态）。 */
+function closeTabAt(i) {
+  if (i < 0 || i >= tabList.length) return
+  var closing = tabList[i]
+  var wasActive = i === tabActive
+  if (wasActive) rememberActiveTabUi()
+  delete tabUi[closing]
+  var r = tabClose(tabList, tabActive, i)
+  tabList = r.list
+  tabActive = r.active
+  saveTabs()
+  renderTabStrip()
+  if (!wasActive) { render(); return }
+  if (tabActive < 0) { render(); return }   // 全关：主区留在原样，服务端追踪目录不动
+  // 切到落点那张：走 switchToIndex 而不是 activateTabAt——那张卡的界面状态分桶已经存好了，
+  // 再记一次会把「刚离开那张卡的样子」写到它头上，两个项目的记忆就串了
+  switchToIndex(tabActive)
+}
+
+/* ── 开新标签菜单：顶栏「＋ 开新标签」点开的那个浮层 ──
+   旧形态是地址栏组合框（一个「当前目录」输入框 + 换目录按钮）；项目标签条接管之后
+   它唯一的面孔是「开新标签」：菜单顶部一个路径框，下面是常用目录——挑一条即开卡。
    数据来自盘点载荷的 recentRoots（[{path, exists}]，最近使用在前）。
    当前追踪目录永远置顶展示（带「当前」标示，未入存储列表时也展示）——纯界面行为，不写回。 */
-var rootMenuState = { open: false, hl: 0, typed: false }
-var rootMenuSig = ''   // 最近一次渲染的数据签名：轮询刷新时数据没变就不重画（不动 DOM 也就不动焦点）
+var newTabMenuState = { open: false, hl: 0, typed: false }
+var newTabMenuSig = '' // 最近一次渲染的数据签名：轮询刷新时数据没变就不重画（不动 DOM 也就不动焦点）
 
 function showErr(msg) {
   var b = document.getElementById('err')
@@ -1612,15 +1930,15 @@ function showErr(msg) {
   b.textContent = msg
 }
 
-function rootMenuStoredEmpty() {
+function recentRootsStoredEmpty() {
   return !(state && state.recentRoots && state.recentRoots.length)
 }
 
-function rootMenuSignature() {
-  return JSON.stringify([rootMenuFiltered(), rootMenuStoredEmpty()])
+function newTabMenuSignature() {
+  return JSON.stringify([recentRootsFiltered(), recentRootsStoredEmpty()])
 }
 
-function rootMenuList() {
+function recentRootList() {
   var list = []
   var seen = {}
   if (state && state.root) { list.push({ path: state.root, exists: true, current: true }); seen[state.root] = true }
@@ -1633,35 +1951,33 @@ function rootMenuList() {
 }
 
 /* 过滤只对「本次展开后打过的字」生效：刚展开时展示全量（不打字也能浏览全部常用目录），
-   上一次切换留在输入框里的路径不算过滤词。 */
-function rootMenuFiltered() {
-  if (!rootMenuState.typed) return rootMenuList()
-  var q = (document.getElementById('rootInput').value || '').trim().toLowerCase()
-  var all = rootMenuList()
+   上一次开卡留在路径框里的字不算过滤词（展开时那个框已被清空）。 */
+function recentRootsFiltered() {
+  if (!newTabMenuState.typed) return recentRootList()
+  var field = document.getElementById('newTabPath')
+  var q = (field ? field.value : '').trim().toLowerCase()
+  var all = recentRootList()
   if (!q) return all
   return all.filter(function (e) { return e.path.toLowerCase().indexOf(q) >= 0 })
 }
 
-function baseName(p) {
-  var s = String(p)
-  var cut = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
-  return s.slice(cut + 1) || s
-}
-
-function renderRootMenu() {
+/* 菜单本体是静态壳（顶部那个路径框不能被重画抹掉），条目只重建 #rootMenuList 这一层。 */
+function renderNewTabMenu() {
   var box = document.getElementById('rootMenu')
-  if (!rootMenuState.open) { box.hidden = true; box.textContent = ''; rootMenuSig = ''; return }
-  var entries = rootMenuFiltered()
-  if (rootMenuState.hl >= entries.length) rootMenuState.hl = Math.max(0, entries.length - 1)
-  box.textContent = ''
+  var list = document.getElementById('rootMenuList')
+  if (!box || !list) return
+  if (!newTabMenuState.open) { box.hidden = true; list.textContent = ''; newTabMenuSig = ''; return }
+  var entries = recentRootsFiltered()
+  if (newTabMenuState.hl >= entries.length) newTabMenuState.hl = Math.max(0, entries.length - 1)
+  list.textContent = ''
   box.hidden = false
-  var storedEmpty = rootMenuStoredEmpty()
+  var storedEmpty = recentRootsStoredEmpty()
   if (!entries.length) {
-    box.appendChild(el('div', 'menu-empty', t(storedEmpty ? 'menu.empty' : 'menu.no-match')))
+    list.appendChild(el('div', 'menu-empty', t(storedEmpty ? 'menu.empty' : 'menu.no-match')))
   } else {
     entries.forEach(function (e, i) {
-      var opt = el('div', 'opt' + (e.exists ? '' : ' missing') + (i === rootMenuState.hl ? ' hl' : ''))
-      var main = el('div', 'main', baseName(e.path))
+      var opt = el('div', 'opt' + (e.exists ? '' : ' missing') + (i === newTabMenuState.hl ? ' hl' : ''))
+      var main = el('div', 'main', tabName(e.path))
       if (e.current) main.appendChild(el('span', 'chip cur', t('menu.current')))
       if (!e.exists) main.appendChild(el('span', 'chip', t('menu.missing')))
       opt.appendChild(main)
@@ -1672,31 +1988,32 @@ function renderRootMenu() {
       opt.appendChild(del)
       if (e.exists) {
         opt.title = t('menu.pick.title')
-        // 键盘层：下拉项可 Tab 停留、Enter/Space 与点按同路切换（失效条目不可点，也不进 Tab 序）
-        clickable(opt, function () { pickRecentRoot(e.path) })
+        // 键盘层：下拉项可 Tab 停留、Enter/Space 与点按同路开卡（失效条目不可点，也不进 Tab 序）
+        clickable(opt, function () { openTabFor(e.path) })
       } else {
         opt.title = t('menu.missing.title')
       }
-      box.appendChild(opt)
+      list.appendChild(opt)
     })
-    if (storedEmpty) box.appendChild(el('div', 'menu-empty', t('menu.empty')))
+    if (storedEmpty) list.appendChild(el('div', 'menu-empty', t('menu.empty')))
   }
-  rootMenuSig = rootMenuSignature()
+  newTabMenuSig = newTabMenuSignature()
 }
 
-function openRootMenu() {
-  if (!rootMenuState.open) { rootMenuState.open = true; rootMenuState.hl = 0; rootMenuState.typed = false; renderRootMenu() }
+function openNewTabMenu() {
+  var field = document.getElementById('newTabPath')
+  if (!newTabMenuState.open) {
+    newTabMenuState.open = true
+    newTabMenuState.hl = 0
+    newTabMenuState.typed = false
+    if (field) field.value = ''   // 每次展开从空框开始：上一条路径不是这一次的过滤词
+    renderNewTabMenu()
+  }
+  if (field) field.focus()
 }
 
-function closeRootMenu() {
-  if (rootMenuState.open) { rootMenuState.open = false; renderRootMenu() }
-}
-
-function pickRecentRoot(path) {
-  var input = document.getElementById('rootInput')
-  input.value = path
-  closeRootMenu()
-  switchRoot()
+function closeNewTabMenu() {
+  if (newTabMenuState.open) { newTabMenuState.open = false; renderNewTabMenu() }
 }
 
 function removeRecentRoot(path) {
@@ -1706,7 +2023,7 @@ function removeRecentRoot(path) {
       return
     }
     if (state) state.recentRoots = res.data.recentRoots || []
-    renderRootMenu()
+    renderNewTabMenu()
   }).catch(function (e) {
     showErr(tf('roots.remove-failed', { msg: e && e.message ? e.message : e }))
   })
@@ -1827,10 +2144,11 @@ function applyLang() {
   applyLangButton()
   applyThemeSelect()
   applyScaleSelect()
+  renderTabStrip()
   render()
   renderMeta(!!lastOk)
   applyPollModeUI()
-  if (rootMenuState.open) renderRootMenu()
+  if (newTabMenuState.open) renderNewTabMenu()
   if (frontierState.open) renderFrontierPanel()
   syncSkillsLang() // 清单按语言取，切语言要作废重取（开窗时当场重画，关窗时留到下次开）
   if (rootsModalCtl.isOpen() && lastRoots) renderRootsRows(lastRoots)
@@ -1845,58 +2163,57 @@ document.getElementById('langBtn').addEventListener('click', function () {
 applyLangButton()
 
 document.getElementById('refreshBtn').addEventListener('click', function () { refresh(true) })
-document.getElementById('switchBtn').addEventListener('click', switchRoot)
 
-/* 组合框接线：聚焦/输入/▾ 展开，↑↓/Enter/Esc 键盘操作，点外面收起 */
+/* 开新标签菜单接线：顶栏按钮展开/收起，菜单里的路径框过滤，↑↓/Enter/Esc 键盘操作，点外面收起 */
 ;(function () {
-  var input = document.getElementById('rootInput')
-  input.addEventListener('focus', openRootMenu)
-  input.addEventListener('click', openRootMenu)
-  input.addEventListener('input', function () {
-    rootMenuState.open = true
-    rootMenuState.hl = 0
-    rootMenuState.typed = true
-    renderRootMenu()
+  var field = document.getElementById('newTabPath')
+  field.addEventListener('click', openNewTabMenu)
+  field.addEventListener('input', function () {
+    newTabMenuState.open = true
+    newTabMenuState.hl = 0
+    newTabMenuState.typed = true
+    renderNewTabMenu()
   })
-  document.getElementById('rootMenuBtn').addEventListener('click', function (ev) {
+  document.getElementById('newTabBtn').addEventListener('click', function (ev) {
     ev.stopPropagation()
-    if (rootMenuState.open) closeRootMenu()
-    else { openRootMenu(); input.focus() }
+    if (newTabMenuState.open) closeNewTabMenu()
+    else openNewTabMenu()
   })
-  input.addEventListener('keydown', function (ev) {
+  field.addEventListener('keydown', function (ev) {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault()
-      if (!rootMenuState.open) { openRootMenu(); return }
-      var n = rootMenuFiltered().length
+      if (!newTabMenuState.open) { openNewTabMenu(); return }
+      var n = recentRootsFiltered().length
       if (!n) return
-      rootMenuState.hl = ev.key === 'ArrowDown' ? Math.min(rootMenuState.hl + 1, n - 1) : Math.max(rootMenuState.hl - 1, 0)
-      renderRootMenu()
+      newTabMenuState.hl = ev.key === 'ArrowDown' ? Math.min(newTabMenuState.hl + 1, n - 1) : Math.max(newTabMenuState.hl - 1, 0)
+      renderNewTabMenu()
       return
     }
-    if (ev.key === 'Escape' && rootMenuState.open) {
+    if (ev.key === 'Escape' && newTabMenuState.open) {
       ev.preventDefault()
-      closeRootMenu()
+      closeNewTabMenu()
       return
     }
     if (ev.key === 'Enter') {
-      if (rootMenuState.open) {
-        var pick = rootMenuFiltered()[rootMenuState.hl]
+      if (newTabMenuState.open) {
+        var pick = recentRootsFiltered()[newTabMenuState.hl]
         if (pick && pick.exists) {
           ev.preventDefault()
-          pickRecentRoot(pick.path)
+          openTabFor(pick.path)
           return
         }
       }
-      // 没开下拉、高亮落在失效条目上、或没有匹配条目：回落到「按输入框内容换目录」的老行为
-      switchRoot()
+      // 没开下拉、高亮落在失效条目上、或没有匹配条目：回落到「按路径框内容开新标签」
+      ev.preventDefault()
+      openTabFor(field.value)
     }
   })
   document.addEventListener('click', function (ev) {
-    if (!rootMenuState.open) return
-    var t = ev.target
+    if (!newTabMenuState.open) return
+    var n = ev.target
     var wrap = document.querySelector('.rootbox')
-    while (t) { if (t === wrap) return; t = t.parentNode }
-    closeRootMenu()
+    while (n) { if (n === wrap) return; n = n.parentNode }
+    closeNewTabMenu()
   })
 })()
 
@@ -2339,8 +2656,9 @@ function openIssueModal(eff, tk) {
 
 /* ── 项目总览弹窗（票 03）：跨常用目录只读盘点 ──
    按需单拍：打开（或点「重新盘点」）才请求 /api/roots-overview，不进轮询载荷；
-   GET 不触碰常用目录排序。行点击 = 既有换目录操作（填输入框 + switchRoot），
-   换完弹窗关闭、主区切到新 root。当前追踪目录置顶标「当前」（服务端排序）。 */
+   GET 不触碰常用目录排序。行点击与行内「开为标签页」都走开新标签这条既有换根流
+   （project-tabs 票 01：不再有单独的「换目录」按钮，总览是第二个入口），
+   开完弹窗关闭、主区切到新 root。当前追踪目录置顶标「当前」（服务端排序）。 */
 var rootsModalCtl = makeModal(document.getElementById('rootsModal'))
 var lastRoots = null // 最近一次盘点结果：换语言时原位重画，不重发请求
 
@@ -2400,17 +2718,17 @@ function renderRootsRows(roots) {
     if (r.status === 'unreadable') tdNote.appendChild(el('span', 'chip', t('ov.unreadable')))
     tr.appendChild(tdNote)
     if (!bad) {
-      // 可切目录：行点击 = 既有换目录流（零新机制）；不可读行置灰不可点
+      // 可开卡：行点击 = 开新标签（复用既有换根流，零新机制）；不可读行置灰不可点
       tr.title = t('ov.row.title')
       tr.setAttribute('aria-label', tf('ov.row.aria', {
         name: r.name, stage: overviewStageLabel(r.stage) || t('ov.row.stage-unknown'), closed: r.closed, tickets: r.tickets, fog: r.fog,
       }))
-      clickable(tr, function () {
-        rootsModalCtl.close()
-        var input = document.getElementById('rootInput')
-        input.value = r.path
-        switchRoot()
-      })
+      // 行内入口（票 01 收编）：总览不只是「看」，还是「进入」——一键为任一项目开卡
+      var open = el('button', 'opentab', t('ov.open-tab'))
+      open.title = t('ov.open-tab.title')
+      open.addEventListener('click', function (ev) { ev.stopPropagation(); rootsModalCtl.close(); openTabFor(r.path) })
+      tdNote.appendChild(open)
+      clickable(tr, function () { rootsModalCtl.close(); openTabFor(r.path) })
     } else {
       tr.title = t(r.status === 'no-scratch' ? 'ov.row.no-scratch.title' : 'ov.row.unreadable.title')
     }
@@ -2785,6 +3103,15 @@ document.addEventListener('visibilitychange', function () {
   if (document.hidden) { schedulePoll(); return }
   if (pollMode !== 'manual') { notifyBacklog = true; refresh(true) }
 })
+/* 标签条读回即渲染（重开页面原样恢复卡列表/顺序/活跃索引/折叠态）——不等第一拍：
+   卡面纯本地存储，画出来零请求。真正的活跃卡由下面 refresh() 里那次补位说了算：
+   服务端追踪目录是真相，本地记忆只在它与之一致时才算数。 */
+var bootTabs = readTabs()
+tabList = bootTabs.list
+tabActive = bootTabs.active
+tabCollapsed = bootTabs.collapsed
+renderTabStrip()
+
 schedulePoll()
 refresh(true)
 </script>

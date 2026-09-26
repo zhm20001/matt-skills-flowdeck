@@ -81,11 +81,10 @@
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 1px; }
   input, select, textarea { font: inherit; color: var(--fd-ink-body); background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 0.4rem 0.8rem; }
 
-  /* ── 地址栏组合框：常用目录下拉（右缘 ▾ + 浮层菜单） ── */
+  /* ── 开新标签入口：顶栏按钮 + 浮层（顶部一个路径框，下面是常用目录） ── */
   .rootbox { position: relative; }
-  .rootbox #rootInput { width: 250px; padding-right: 2.6rem; }
-  #rootMenuBtn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: var(--fd-ink-muted); padding: 0.2rem 0.5rem; }
-  #rootMenuBtn:hover { background: transparent; color: var(--fd-accent); }
+  .menu-head { position: sticky; top: 0; padding: 0.8rem; background: var(--fd-paper); border-bottom: 1px solid var(--fd-rule); }
+  .menu-head #newTabPath { width: 100%; }
   .menu { position: absolute; top: calc(100% + 4px); right: 0; width: 400px; max-width: 92vw; max-height: 330px; overflow: auto; background: var(--fd-paper); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); box-shadow: var(--fd-shadow-float); z-index: 40; }
   .menu-empty { padding: 1.8rem 1.4rem; text-align: center; color: var(--fd-ink-muted); font-size: 1.2rem; }
   .opt { position: relative; padding: 0.7rem 3.4rem 0.7rem 1.2rem; border-bottom: 1px solid var(--fd-rule-soft); cursor: pointer; }
@@ -117,6 +116,29 @@
   .tabs { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1.4rem; }
   .tabs button { border-radius: 999px; }
   .tabs button.on { background: var(--fd-tab-on-bg); border-color: var(--fd-tab-on-bg); color: var(--fd-tab-on-ink); }
+
+  /* ── 项目标签条（project-tabs 票 01）：顶栏下方一整行，可折成细线 ──
+     卡 = 状态点 + 自动派生 emoji + 目录 basename + 关闭件；色值只经 --fd-* 别名消费
+     （三主题同源），字号与间距走 rem 因而随流式缩放基座伸缩，定宽刻意只给组件本身。 */
+  .tabstrip { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.4rem; }
+  .tabcard { display: flex; align-items: center; gap: 0.6rem; max-width: 24rem; padding: 0.4rem 0.5rem 0.4rem 0.8rem; border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); background: var(--fd-chip); cursor: pointer; }
+  .tabcard:hover { background: var(--fd-chip-hover); border-color: var(--fd-ink-muted); }
+  .tabcard.on { background: var(--fd-tab-on-bg); border-color: var(--fd-tab-on-bg); color: var(--fd-tab-on-ink); }
+  .tabcard .tname { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabcard .temoji { font-size: 1.3rem; line-height: 1; flex: none; }
+  .tabcard .tclose { flex: none; border: none; background: transparent; color: inherit; opacity: 0.6; padding: 0 0.3rem; }
+  .tabcard .tclose:hover { background: transparent; border-color: transparent; opacity: 1; color: var(--fd-bad); }
+  .tabcard.on .tclose:hover { color: inherit; text-decoration: line-through; }
+  /* 状态点：活跃实心、挂起灰空心——「哪张在前台」一眼可辨，不靠一闪而过的内容区徽标 */
+  .tabcard .tdot { width: 8px; height: 8px; flex: none; border-radius: 50%; border: 2px solid var(--fd-ink-muted); }
+  .tabcard.on .tdot { background: currentColor; border-color: currentColor; }
+  /* 折叠把手：展开态排在卡尾（靠右），折叠态独占一行、就是整条标签条 */
+  .tabhandle { flex: none; margin-left: auto; border: none; background: transparent; color: var(--fd-ink-muted); padding: 0.2rem 0.8rem; }
+  .tabhandle:hover { background: var(--fd-chip-hover); border-color: var(--fd-rule); color: var(--fd-accent); }
+  .tabhandle.only { margin-left: 0; width: 100%; border: 1px solid var(--fd-rule); border-radius: var(--fd-radius-btn); text-align: left; }
+  /* 空态：全关之后给一个居中的大入口（关浏览视图不碰服务端追踪目录，所以这里只是入口） */
+  .tabstrip.empty { flex-direction: column; align-items: center; gap: 0.8rem; padding: 2rem 1.4rem; border: 1px dashed var(--fd-rule); border-radius: var(--fd-radius); }
+  .tabstrip.empty .sub { text-align: center; max-width: 46rem; }
 
   .card { background: var(--fd-card); border: 1px solid var(--fd-rule); border-radius: var(--fd-radius); padding: 1.6rem; margin-bottom: 1.6rem; }
   .card h2 { font-size: 1.3rem; margin: 0 0 1.2rem; color: var(--fd-ink-muted); font-weight: 600; letter-spacing: 0.02em; }
@@ -215,6 +237,8 @@
   tr.rootrow.bad { cursor: default; }
   tr.rootrow.bad:hover { background: transparent; }
   tr.rootrow.bad .name, tr.rootrow.bad .sub { color: var(--fd-ink-muted); }
+  /* 行内「开为标签页」：总览不只是「看」，还是「进入」 */
+  tr.rootrow .opentab { font-size: 1.1rem; padding: 0.1rem 0.8rem; margin-left: 0.6rem; white-space: nowrap; }
 
   .empty { text-align: center; padding: 4rem 2rem; }
   pre.agreement { text-align: left; background: var(--fd-code-bg); border: 1px dashed var(--fd-rule); border-radius: var(--fd-radius-btn); padding: 1.4rem; white-space: pre-wrap; font-size: 1.25rem; font-family: var(--fd-font-mono); color: var(--fd-ink-body); }

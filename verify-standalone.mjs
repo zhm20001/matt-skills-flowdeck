@@ -73,6 +73,13 @@
  *                                降级保留为回归防护；两份 README 的起步约定第 4 步已缩成指针，钉它不再
  *                                逐字复制权威原文。
  *  34. 指引词可整段改写 · 五面铺开（custom-guides 02 + 03）→ config.json 的 guides 字段：逐形状校验
+ *  35. 项目标签纯函数（project-tabs 01）→ 从 index.html 的 TAG_FN 区直接求值（不复制第二份）：
+ *                                emoji 派生（同目录恒同图、池内无重复、不同名散开）、开卡（去重/上限 8）、
+ *                                关卡（右邻优先、无右邻落左邻、全关落 -1）、读回清洗、补位（含满额换位）。
+ *  36. 项目标签条（project-tabs 01）→ HTTP：切标签即换根写盘，root 恒等于活跃卡目录、
+ *                                「说明」「字段说明」与 pollMs 一次不丢；jsdom：卡面渲染与生命周期
+ *                                （开/切/关、去重落已有卡、上限拦截、空态）、折叠与折叠态持久化、
+ *                                重开页面原样恢复、页面加载以服务端追踪目录补位、每卡界面状态按目录分桶。
  *                                （非法整体 400 且一个字不写盘、错误码稳定）、applied.immediate、手改下一拍
  *                                生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，
  *                                面上额外键剔除，缺面/空串/清空皆合法）；界面上五面（四个阶段格 + 票行）各设自定义
@@ -717,8 +724,11 @@ async function runScenarios(tmp) {
   // 边界另一侧：组件定宽与圆角/边框刻意留 px，不随缩放档变化
   assert.match(appCss, /\.menu\s*\{[^}]*width: 400px/, '菜单定宽保持 px')
   assert.match(appCss, /\.modal \.box\.settings-box\s*\{[^}]*width: 560px/, '设置盒定宽保持 px')
-  assert.match(appCss, /\.rootbox #rootInput\s*\{[^}]*width: 250px/, '地址输入框定宽保持 px')
   assert.match(appCss, /\.chip\s*\{[^}]*border-radius: 999px/, '圆角保持 px')
+  // 标签卡是流式组件（跟着视口与缩放档伸缩），只有「封顶宽度」留 px 防长路径名撑爆一行
+  assert.match(appCss, /\.tabcard\s*\{[^}]*max-width: 24rem/, '项目标签卡走流式宽度 + rem 封顶，不钉死 px')
+  // 旧地址栏组合框退役（project-tabs 票 01：换目录心智由标签条接管，界面上不留第二套）
+  assert.ok(!/rootInput|rootMenuBtn|switchBtn/.test(appCss), '旧单目录输入框与「换目录」按钮的样式已随控件退役')
   // token 纪律规则 1 的机器面（双轴评审收口）：裸值一旦溜进业务样式，两份 README 的「零裸值」即成空话，
   // 而换肤就会漏这一处——暗色主题下那个琥珀点就是三套里唯一不随肤走的颜色。
   assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(appCss), '业务样式零裸十六进制色值（裸值只准住 styles/tokens-*.css）')
@@ -727,6 +737,60 @@ async function runScenarios(tmp) {
   assert.deepEqual(fontDecls.filter(([, v]) => !/var\(--fd-font|inherit/.test(v)).map(([k, v]) => k + ': ' + v), [],
     '业务样式零裸字体栈（只写 var(--fd-font-*) 或 inherit）')
   ok('流式缩放基座（文件级）：--fluid-base/--ui-scale/根字号乘法与主容器 clamp 接线在案、字号与间距声明零 px（缩放靠 rem 生效）、组件定宽与圆角刻意留 px、业务样式零裸色值与零裸字体栈（token 纪律规则 1 的机器面）；不断言像素尺寸（jsdom 无布局）')
+
+  // ── 项目标签纯函数（project-tabs 票 01）：从 index.html 的 TAG_FN 区直接求值 ──
+  //    零构建单文件没法让测试 import 界面的纯函数；这里按标记切出来原样求值（同 UI_TEXT 的做法），
+  //    测的就是界面真正在跑的那份实现，而不是测试里抄的第二份。
+  const tabFnFrom = deckHtml.indexOf('/* TAG_FN_BEGIN')
+  const tabFnTo = deckHtml.indexOf('/* TAG_FN_END')
+  assert.ok(tabFnFrom > 0 && tabFnTo > tabFnFrom, '项目标签纯函数区要能从 index.html 定位（TAG_FN_BEGIN/END 标记）')
+  const TABFN = new Function(deckHtml.slice(tabFnFrom, tabFnTo) +
+    '\nreturn { tabName, tabHash, tabEmoji, tabOpen, tabClose, tabNormalize, tabAlign, TAB_LIMIT, TAB_EMOJI }')()
+  const { tabName, tabEmoji, tabOpen, tabClose, tabNormalize, tabAlign } = TABFN
+
+  // emoji 派生：固定池、同目录恒同图、不同名尽量散开（判准是外部可观察的取词，不是内部哈希值）
+  assert.equal(TABFN.TAB_LIMIT, 8, '标签上限 8 张')
+  assert.equal(TABFN.TAB_EMOJI.length, 16, '固定 emoji 池 16 个')
+  assert.equal(new Set(TABFN.TAB_EMOJI).size, TABFN.TAB_EMOJI.length, '池内无重复项')
+  assert.deepEqual([tabName('/a/b/c'), tabName('c'), tabName('/a/b/'), tabName('')], ['c', 'c', '/a/b/', ''], '展示名取 basename')
+  assert.equal(tabEmoji('/a/flowdeck'), tabEmoji('/z/flowdeck'), '同目录名恒同图（与父目录无关）')
+  assert.equal(tabEmoji('/a/flowdeck'), tabEmoji('/a/flowdeck'), '同一输入两次同图（纯函数）')
+  assert.ok(TABFN.TAB_EMOJI.includes(tabEmoji('/tmp/x')), '取到的图必在池内')
+  const spread = new Set(Array.from({ length: 40 }, (_, i) => tabEmoji('/w/proj-' + i)))
+  assert.ok(spread.size >= 10, '不同目录名尽量散开（40 个名字落到 ' + spread.size + ' 个图）')
+
+  // 开卡：同目录去重落到已有卡；超上限拒绝且不改原表
+  let open = tabOpen([], '/p/a')
+  assert.deepEqual([open.added, open.index, open.limited, open.list], [true, 0, false, ['/p/a']])
+  open = tabOpen(['/p/a', '/p/b'], '/p/a')
+  assert.deepEqual([open.added, open.index, open.limited, open.list], [false, 0, false, ['/p/a', '/p/b']], '同目录去重落到已有卡，不出第二张')
+  const eight = Array.from({ length: 8 }, (_, i) => '/p/' + i)
+  const over = tabOpen(eight, '/p/new')
+  assert.deepEqual([over.added, over.index, over.limited, over.list], [false, -1, true, eight], '满 8 张时开新卡被拒，原表不动')
+  assert.deepEqual([tabOpen(eight, '/p/3').added, tabOpen(eight, '/p/3').limited], [false, false], '满额时开已存在的目录仍走去重（不是拒绝）')
+
+  // 关卡：关活跃卡落右邻、无右邻落左邻；关挂起卡只让活跃卡下标随位移；全关落 -1
+  assert.deepEqual(tabClose(['a', 'b', 'c'], 1, 1), { list: ['a', 'c'], active: 1, removed: true }, '关活跃卡落右邻')
+  assert.deepEqual(tabClose(['a', 'b', 'c'], 2, 2), { list: ['a', 'b'], active: 1, removed: true }, '关末位（无右邻）落左邻')
+  assert.deepEqual(tabClose(['a', 'b', 'c'], 2, 0), { list: ['b', 'c'], active: 1, removed: true }, '关挂起卡：活跃卡跟着前移一位')
+  assert.deepEqual(tabClose(['a'], 0, 0), { list: [], active: -1, removed: true }, '关掉最后一张落空态（-1）')
+  assert.deepEqual(tabClose(['a', 'b'], 0, 9), { list: ['a', 'b'], active: 0, removed: false }, '越界下标原样返回（不误伤）')
+
+  // 读回清洗：坏形状的存储值不能让标签条崩，值域夹回
+  assert.deepEqual(tabNormalize({ list: ['/a', '/a', '', null, 3, '/b'], active: 9, collapsed: true }),
+    { list: ['/a', '/b'], active: 1, collapsed: true }, '去重、剔非字符串、活跃下标夹回值域')
+  assert.deepEqual(tabNormalize(null), { list: [], active: -1, collapsed: false }, '空值落空态')
+  assert.deepEqual(tabNormalize({ list: 12 }), { list: [], active: -1, collapsed: false }, 'list 不是数组也落空态（不抛）')
+  const many = Array.from({ length: 20 }, (_, i) => '/p/' + i)
+  assert.deepEqual([tabNormalize({ list: many, active: -3 }).list.length, tabNormalize({ list: many, active: -3 }).active],
+    [8, 0], '读回也守上限 8，负下标夹回 0')
+
+  // 补位：以服务端追踪目录为真相对齐；缺卡补开置活跃；满额时占掉活跃那张（上限不破、不变式不破）
+  assert.deepEqual(tabAlign('/a', ['/a', '/b'], 1), { list: ['/a', '/b'], active: 0, added: false }, '已有对应卡 → 活跃卡对齐过去')
+  assert.deepEqual(tabAlign('/c', ['/a', '/b'], 0), { list: ['/a', '/b', '/c'], active: 2, added: true }, '无对应卡 → 补开一张置为活跃')
+  const alignedFull = tabAlign('/z', eight, 3)
+  assert.deepEqual([alignedFull.list.length, alignedFull.list[3], alignedFull.active], [8, '/z', 3], '满额且无对应卡：服务端目录占掉活跃那张')
+  ok('项目标签纯函数（文件级）：emoji 派生同目录恒同图/池内无重复/不同名散开；开卡去重与上限 8；关卡右邻优先、无右邻落左邻、全关落空态；读回清洗与补位（满额换位）')
 
   // ── 通知事件推导（票 04）：前后两拍盘点的结构化 diff，纯函数 ──
   const { deriveEvents } = await import('./notify.mjs')
@@ -1066,6 +1130,22 @@ async function runScenarios(tmp) {
     saved2 = JSON.parse(await fs.readFile(cfgPath, 'utf8'))
     assert.deepEqual(saved2.recentRoots, [nodePath.resolve(anotherProject), nodePath.resolve(tmp), '/tmp/fd-没有这个目录'])
     ok('收录去重：重复切换同一目录只移顶不重复；切到当前已是追踪目录的目录也算一次使用')
+
+    // ── 切标签 = 同一个换根请求（project-tabs 票 01）：服务端零新端点，来回切只改 root ──
+    // 最后一轮落在 anotherProject，好让下面删除端点那几行的 recentRoots 顺序接着上一组（末尾兜底重排断言已覆盖）。
+    for (const dir of [tmp, anotherProject, tmp, anotherProject]) {
+      const hop = await postJson(withCfg.url + '/api/config', { root: dir })
+      assert.equal(hop.status, 200, '切到 ' + dir + ' 成功')
+      assert.equal(hop.data.root, nodePath.resolve(dir), '应答回的 root 是归一后的那个')
+      const onDisk = JSON.parse(await fs.readFile(cfgPath, 'utf8'))
+      assert.equal(onDisk.root, nodePath.resolve(dir), 'config.json 的 root 恒等于最后切过去的（活跃）那张卡的目录')
+      assert.equal(onDisk.pollMs, 2000, '切标签不碰轮询间隔')
+      assert.equal(onDisk.说明, '这是给人看的说明。', '切标签保留人看的「说明」')
+      assert.deepEqual(onDisk.字段说明, { root: '要追踪的目录' }, '切标签保留「字段说明」')
+    }
+    const servedNow = await (await fetch(withCfg.url + '/api/state')).json()
+    assert.equal(servedNow.root, nodePath.resolve(anotherProject), '换完 /api/state 报的就是那个目录（补位规则的真相来源）')
+    ok('切标签即换根（HTTP 黑盒）：多次来回切后 config.json 的 root 恒等于活跃卡目录，pollMs 与「说明」「字段说明」一次不丢，/api/state 跟着报新目录')
 
     // ── 删除端点：防护与换目录同款；写回并返回最新列表；删未知条目幂等 ──
     const delGuard1 = await fetch(withCfg.url + '/api/recent-roots', {
@@ -1925,11 +2005,13 @@ async function runScenarios(tmp) {
     await new Promise((r) => setTimeout(r, 150))
     const doc = dom.window.document
     const win = dom.window
-    const input = doc.getElementById('rootInput')
+    const input = doc.getElementById('newTabPath')
+    const newTabBtn = doc.getElementById('newTabBtn')
     const menu = doc.getElementById('rootMenu')
     const opts = () => Array.from(doc.querySelectorAll('#rootMenu .opt'))
     const postCalls = () => calls.filter((c) => c.opts && c.opts.method === 'POST')
     const key = (k) => input.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+    const openNewTab = () => newTabBtn.dispatchEvent(new win.Event('click', { bubbles: true }))
 
   // 默认选中第一个 effort（__root）：地图干净 → grill 完成，当前步是 spec
   assert.equal(doc.querySelectorAll('#tabs button').length, 6, '5 个 effort + 尾部「全部」伪条目')
@@ -1969,11 +2051,11 @@ async function runScenarios(tmp) {
     tabBtn('idea-b').dispatchEvent(new win.Event('click'))
     assert.equal(doc.querySelectorAll('.stage .chip.infer').length, 0, '全实证 effort 无任何推定标注')
 
-    // ── 常用目录下拉：聚焦弹出；当前追踪目录置顶标示（主行目录名、次行全路径），纯展示不写回 ──
+    // ── 开新标签菜单：顶栏按钮点开；当前追踪目录置顶标示（主行目录名、次行全路径），纯展示不写回 ──
     assert.equal(postCalls().length, 0, '没动下拉之前不该有任何写请求')
-    input.focus()
+    openNewTab()
     await tick()
-    assert.equal(menu.hasAttribute('hidden'), false, '聚焦输入框应展开常用目录下拉')
+    assert.equal(menu.hasAttribute('hidden'), false, '点「＋ 开新标签」应展开常用目录下拉')
     assert.equal(opts().length, 4)
     assert.equal(opts()[0].querySelector('.main').textContent.indexOf(nodePath.basename(absTmp)), 0)
     assert.equal(opts()[0].querySelector('.sub').textContent, absTmp)
@@ -1985,7 +2067,7 @@ async function runScenarios(tmp) {
     await tick()
     assert.equal(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).length, cfgPostsBeforeMissingClick, '置灰条目点了不该发起切换')
     assert.equal(menu.hasAttribute('hidden'), false, '点置灰条目也不该关下拉')
-    ok('常用目录下拉：聚焦展开；当前目录置顶标示；主行目录名、次行全路径；失效条目置灰标注且不可点选')
+    ok('开新标签菜单：顶栏按钮点开；当前目录置顶标示；主行目录名、次行全路径；失效条目置灰标注且不可点选')
 
     // ── ✕ 即删即生效：删掉失效条目，菜单原地更新、不关闭 ──
     const gone1 = opts().find((o) => o.querySelector('.sub').textContent === '/tmp/fd-gone-1')
@@ -2012,22 +2094,22 @@ async function runScenarios(tmp) {
     assert.equal(opts().length, 3)
     ok('常用目录过滤：输入按全路径子串过滤（不区分大小写），无匹配时给出空态文案')
 
-    // ── 键盘：↑↓ 移动高亮；Enter 选中即切换；高亮在失效条目上时回落为按输入框内容换目录 ──
+    // ── 键盘：↑↓ 移动高亮；Enter 选中即开卡；高亮在失效条目上时回落为按路径框内容开新标签 ──
     assert.ok(opts()[0].className.indexOf('hl') >= 0)
     key('ArrowDown')
     key('ArrowDown')
     assert.ok(opts()[2].className.indexOf('hl') >= 0)
     const postsBeforeEnter = postCalls().length
     key('Enter')
-    assert.equal(postCalls().length, postsBeforeEnter, '输入框为空时 Enter 不发起换目录')
-    // 输入的新路径没有匹配条目：Enter 仍按输入框内容换目录（老行为不回归）
+    assert.equal(postCalls().length, postsBeforeEnter, '路径框为空时 Enter 不发起开卡')
+    // 输入的新路径没有匹配条目：Enter 仍按路径框内容开新标签（老行为不回归）
     input.value = '/tmp/fd-typed-new'
     input.dispatchEvent(new win.Event('input', { bubbles: true }))
     assert.equal(opts().length, 0)
     key('Enter')
     await tick()
     assert.equal(JSON.parse(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).pop().opts.body).root, '/tmp/fd-typed-new')
-    input.dispatchEvent(new win.Event('click', { bubbles: true }))
+    openNewTab()
     await tick()
     input.value = '/tmp/fd-proj-alpha'
     input.dispatchEvent(new win.Event('input', { bubbles: true }))
@@ -2035,11 +2117,11 @@ async function runScenarios(tmp) {
     await tick()
     const cfgPosts = postCalls().filter((c) => c.url.indexOf('/api/config') >= 0)
     assert.equal(JSON.parse(cfgPosts.pop().opts.body).root, '/tmp/fd-proj-alpha')
-    assert.equal(menu.hasAttribute('hidden'), true, '选中即切换后收起下拉')
+    assert.equal(menu.hasAttribute('hidden'), true, '选中即开卡后收起菜单')
     assert.match(doc.getElementById('meta').textContent, /fd-proj-alpha/)
-    ok('常用目录键盘操作：↑↓ 移动高亮，Enter 选中立即切换；高亮失效或无匹配时回落为按输入框换目录')
+    ok('开新标签菜单键盘操作：↑↓ 移动高亮，Enter 选中立即开卡并切过去；高亮失效或无匹配时回落为按路径框开新标签')
 
-    // ── 点选即切换：重开下拉（输入框已持有焦点，focus 不会再派发事件，用点击展开），直接点一条 ──
+    // ── 点选即开卡：重开菜单（路径框已持有焦点，focus 不会再派发事件，用点击展开），直接点一条 ──
     input.dispatchEvent(new win.Event('click', { bubbles: true }))
     await tick()
     assert.equal(opts().length, 4, '切换后当前目录仍在置顶，被删的条目不再回来')
@@ -2048,9 +2130,9 @@ async function runScenarios(tmp) {
     alphaOpt.dispatchEvent(new win.Event('click', { bubbles: true }))
     await tick()
     assert.equal(JSON.parse(postCalls().filter((c) => c.url.indexOf('/api/config') >= 0).pop().opts.body).root, '/tmp/fd-proj-alpha')
-    ok('常用目录点选：点一条立即发起切换')
+    ok('常用目录点选：点一条立即为它开卡（复用同一条换根请求）')
 
-    // ── 轮询刷新不打扰：下拉开着、焦点在输入框，后台刷新（无用户点击）后两者都保住，数据还更新了 ──
+    // ── 轮询刷新不打扰：菜单开着、焦点在路径框，后台刷新（无用户点击）后两者都保住，数据还更新了 ──
     input.focus()
     input.dispatchEvent(new win.Event('click', { bubbles: true }))
     await tick()
@@ -2058,15 +2140,15 @@ async function runScenarios(tmp) {
     statePayload.recentRoots.push({ path: '/tmp/fd-proj-beta', exists: true })
     doc.dispatchEvent(new win.Event('visibilitychange'))
     await tick()
-    assert.equal(menu.hasAttribute('hidden'), false, '后台刷新不应关闭展开的下拉')
-    assert.equal(doc.activeElement, input, '后台刷新不应抢走输入框焦点')
+    assert.equal(menu.hasAttribute('hidden'), false, '后台刷新不应关闭展开的菜单')
+    assert.equal(doc.activeElement, input, '后台刷新不应抢走路径框焦点')
     assert.ok(opts().some((o) => o.querySelector('.sub').textContent === '/tmp/fd-proj-beta'), '刷新后的新数据应进入下拉')
 
     key('Escape')
-    assert.equal(menu.hasAttribute('hidden'), true, 'Esc 应关闭下拉')
+    assert.equal(menu.hasAttribute('hidden'), true, 'Esc 应关闭菜单')
     assert.deepEqual(jsErrors, [])
     dom.window.close()
-    ok('常用目录轮询共存：刷新不关闭下拉、不抢焦点，新数据照常进来；Esc 关闭')
+    ok('开新标签菜单轮询共存：刷新不关闭菜单、不抢焦点，新数据照常进来；Esc 关闭')
 
     // ── 空列表场景：只有置顶的当前目录 + 引导文案，纯展示不写回 ──
     const jsErrors2 = []
@@ -2090,7 +2172,7 @@ async function runScenarios(tmp) {
     })
     await new Promise((r) => setTimeout(r, 150))
     const eDoc = emptyDom.window.document
-    eDoc.getElementById('rootInput').focus()
+    eDoc.getElementById('newTabBtn').dispatchEvent(new emptyDom.window.Event('click', { bubbles: true }))
     await tick()
     assert.equal(eDoc.querySelectorAll('#rootMenu .opt').length, 1, '空列表时只有置顶的当前目录')
     assert.ok(eDoc.getElementById('rootMenu').textContent.indexOf('切换过的目录会出现在这里') >= 0)
@@ -2191,12 +2273,17 @@ async function runScenarios(tmp) {
     await new Promise((r) => setTimeout(r, 150))
     const uDoc = unauthDom.window.document
     const uWin = unauthDom.window
-    uDoc.getElementById('rootInput').value = '/tmp/fd-switch-target'
-    uDoc.getElementById('switchBtn').dispatchEvent(new uWin.Event('click', { bubbles: true }))
+    const uNewTab = uDoc.getElementById('newTabBtn')
+    uNewTab.dispatchEvent(new uWin.Event('click', { bubbles: true }))
+    await tick()
+    const uField = uDoc.getElementById('newTabPath')
+    uField.value = '/tmp/fd-switch-target' // 不匹配任何常用目录 → Enter 走「按路径框内容开新标签」
+    uField.dispatchEvent(new uWin.Event('input', { bubbles: true }))
+    uField.dispatchEvent(new uWin.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
     await new Promise((r) => setTimeout(r, 60))
     assert.match(uDoc.getElementById('err').textContent, /换目录失败：需要访问令牌/, 'POST 401 显示定向文案（不走服务端泛文案）')
     assert.match(uDoc.getElementById('err').textContent, /\?token=/, '定向文案带 ?token= 补救指引')
-    assert.equal(uDoc.getElementById('switchBtn').disabled, false, '失败后按钮恢复可用')
+    assert.equal(uNewTab.disabled, false, '失败后按钮恢复可用')
     assert.deepEqual(jsErrors401, [])
     unauthDom.window.close()
     ok('apiFetch 归一：POST 错令牌拿到定向 401 提示（含 ?token= 补救指引），按钮状态恢复')
@@ -2236,11 +2323,14 @@ async function runScenarios(tmp) {
     assert.equal(modeCalls.state, 1, '首载一拍')
     await new Promise((r) => setTimeout(r, 1300)) // pollMs=1000：若仍有自动轮询，这里早该多出请求
     assert.equal(modeCalls.state, 1, '惰性档零自动请求（过了 pollMs 周期也没有新请求）')
-    // 状态变更操作（换目录）完成后自动刷一拍
-    mDoc.getElementById('rootInput').value = '/tmp/fd-mode-b'
-    mDoc.getElementById('switchBtn').dispatchEvent(new mWin.Event('click', { bubbles: true }))
+    // 状态变更操作（开新标签）完成后自动刷一拍
+    mDoc.getElementById('newTabBtn').dispatchEvent(new mWin.Event('click', { bubbles: true }))
+    const mField = mDoc.getElementById('newTabPath')
+    mField.value = '/tmp/fd-mode-b'
+    mField.dispatchEvent(new mWin.Event('input', { bubbles: true }))
+    mField.dispatchEvent(new mWin.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
     await new Promise((r) => setTimeout(r, 120))
-    assert.equal(modeCalls.state, 2, '换目录成功后自动补一拍')
+    assert.equal(modeCalls.state, 2, '开新标签成功后自动补一拍')
     assert.match(badge.textContent, /盘点$/, '补拍后徽标盘点时间更新')
     // 别处改成观测档 → 本浏览器手动刷新一拍即跟随（无轮询所致的已知边角，记档）
     modePayload = { ...modePayload, pollMode: 'observe' }
@@ -2380,9 +2470,8 @@ async function runScenarios(tmp) {
     assert.match(inferStage.getAttribute('aria-label'), /推定 · 无 map：此格不是由本阶段产物证成/, '链格 aria-label 载推定含义')
     assert.match(inferStage.querySelector('.chip.infer').getAttribute('aria-label'), /推定 · 无 map：/, '推定徽标 aria-label 载推定含义')
 
-    // 键盘层：下拉项可 Tab 停留、Enter 触发切换；失效条目不可点也不进 Tab 序
-    const aInput = aDoc.getElementById('rootInput')
-    aInput.focus()
+    // 键盘层：下拉项可 Tab 停留、Enter 触发开卡；失效条目不可点也不进 Tab 序
+    aDoc.getElementById('newTabBtn').dispatchEvent(new aWin.Event('click', { bubbles: true }))
     await tick()
     const aOpts = Array.from(aDoc.querySelectorAll('#rootMenu .opt'))
     assert.equal(aOpts[0].getAttribute('tabindex'), '0', '可点下拉项可 Tab 停留')
@@ -2391,9 +2480,9 @@ async function runScenarios(tmp) {
     aOpts[1].focus()
     aKey(aOpts[1], 'Enter')
     await tick()
-    assert.equal(postsA.length, 1, '下拉项 focus 后 Enter 发起切换')
+    assert.equal(postsA.length, 1, '下拉项 focus 后 Enter 发起开卡')
     assert.equal(postsA[0].root, '/tmp/fd-a11y-old')
-    assert.equal(aDoc.getElementById('rootMenu').hasAttribute('hidden'), true, 'Enter 切换后收起下拉')
+    assert.equal(aDoc.getElementById('rootMenu').hasAttribute('hidden'), true, 'Enter 开卡后收起菜单')
 
     // 焦点圈禁（makeModal 第六件）：弹窗内 Tab 循环不外逃。
     // 选择器必须与 makeModal 里的那份同集（button/[href]/input/select/textarea/[tabindex]）——
@@ -2666,7 +2755,7 @@ async function runScenarios(tmp) {
     allDom2.window.close()
     ok('全部视图偏好读取：localStorage 记忆跨会话生效（不显示完工 + 展开态）')
 
-    // ── 项目总览弹窗（票 03）：打开才单拍、坏行标注、点行触发现有切换流 ──
+    // ── 项目总览弹窗（票 03 + 票 01 收编）：打开才单拍、坏行标注、行与行内按钮都开为标签页 ──
     const jsErrorsOv = []
     const vcOv = new VirtualConsole()
     vcOv.on('jsdomError', (e) => jsErrorsOv.push(String((e && e.message) || e)))
@@ -2675,6 +2764,7 @@ async function runScenarios(tmp) {
     const ovRowsPayload = {
       roots: [
         { path: '/tmp/fd-ov-cur', name: 'fd-ov-cur', current: true, status: 'ok', stage: 'implement', efforts: 2, tickets: 3, closed: 1, fog: 2 },
+        { path: '/tmp/fd-ov-next', name: 'fd-ov-next', current: false, status: 'ok', stage: 'grill', tickets: 2, closed: 0, fog: 1 },
         { path: '/tmp/fd-ov-nos', name: 'fd-ov-nos', current: false, status: 'no-scratch' },
         { path: '/tmp/fd-ov-bad', name: 'fd-ov-bad', current: false, status: 'unreadable' },
       ],
@@ -2685,10 +2775,11 @@ async function runScenarios(tmp) {
       pretendToBeVisual: true,
       virtualConsole: vcOv,
       beforeParse(window) {
+        let served = '/tmp/fd-ov-cur' // 桩服务端真的记住换根：否则补位规则会把活跃卡拉回旧目录
         window.fetch = (u, opts) => {
           const url = String(u)
           if (url.indexOf('/api/state') >= 0) {
-            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: '/tmp/fd-ov-cur', pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
+            return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify({ ...ws, root: served, pollMs: 5000, configPath: '/tmp/config.json', recentRoots: [] })) })
           }
           if (url.indexOf('/api/roots-overview') >= 0) {
             ovCalls.overview++
@@ -2696,7 +2787,8 @@ async function runScenarios(tmp) {
           }
           if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
             ovPosts.push(JSON.parse(opts.body))
-            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: JSON.parse(opts.body).root }) })
+            served = JSON.parse(opts.body).root
+            return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: served }) })
           }
           return Promise.reject(new Error('项目总览场景不该请求别的接口：' + u))
         }
@@ -2712,23 +2804,338 @@ async function runScenarios(tmp) {
     await tick()
     assert.equal(ovCalls.overview, 1, '打开才请求一次')
     const rvRows = Array.from(rvDoc.querySelectorAll('#rootsBody tr.rootrow'))
-    assert.equal(rvRows.length, 3)
+    assert.equal(rvRows.length, 4)
     assert.ok(rvRows[0].querySelector('.chip.cur'), '当前追踪目录带「当前」标示')
     assert.equal(rvRows[0].querySelectorAll('td')[1].textContent, 'Implement 实现', '链阶段给中文标签')
     assert.equal(rvRows[0].querySelectorAll('td')[2].textContent, '1/3', '票计数 closed/total')
     assert.equal(rvRows[0].querySelectorAll('td')[3].textContent, '2', '迷雾数')
-    assert.match(rvRows[1].querySelector('.chip').textContent, /无产物/, '无 .scratch 行标注「无产物」')
-    assert.ok(rvRows[1].className.indexOf('bad') >= 0, '坏行置灰')
-    assert.match(rvRows[2].querySelector('.chip').textContent, /不可读/, '不可读行标注')
-    // 点行 = 既有换目录流：填输入框、POST /api/config、弹窗关闭
-    rvRows[0].dispatchEvent(new rvWin.Event('click', { bubbles: true }))
+    assert.match(rvRows[2].querySelector('.chip').textContent, /无产物/, '无 .scratch 行标注「无产物」')
+    assert.ok(rvRows[2].className.indexOf('bad') >= 0, '坏行置灰')
+    assert.match(rvRows[3].querySelector('.chip').textContent, /不可读/, '不可读行标注')
+    // 收编（票 01）：好行多一枚「开为标签页」按钮，坏行没有（不可点的东西不摆按钮）
+    assert.equal(rvRows[0].querySelectorAll('button.opentab').length, 1)
+    assert.equal(rvRows[1].querySelectorAll('button.opentab').length, 1)
+    assert.equal(rvRows[2].querySelectorAll('button.opentab').length, 0, '无产物行不给开卡入口')
+    assert.equal(rvRows[3].querySelectorAll('button.opentab').length, 0, '不可读行不给开卡入口')
+    // 行内按钮 = 同一个开卡流（既有换根请求），且不误触整行的点击
+    rvRows[1].querySelector('button.opentab').dispatchEvent(new rvWin.Event('click', { bubbles: true }))
     await tick()
-    assert.equal(rvDoc.getElementById('rootsModal').hasAttribute('hidden'), true, '切换后弹窗关闭')
+    assert.equal(rvDoc.getElementById('rootsModal').hasAttribute('hidden'), true, '开卡后弹窗关闭')
     assert.equal(ovPosts.length, 1)
-    assert.equal(ovPosts[0].root, '/tmp/fd-ov-cur', '走既有 POST /api/config 换目录')
+    assert.equal(ovPosts[0].root, '/tmp/fd-ov-next', '走既有 POST /api/config 换根（服务端零新端点）')
+    assert.equal(rvDoc.querySelectorAll('#tabStrip .tabcard').length, 2, '开卡后标签条上是两张卡')
+    assert.equal(rvDoc.querySelectorAll('#tabStrip .tabcard.on .tname')[0].textContent, 'fd-ov-next', '新卡被激活')
+    // 点行 = 同一个开卡流；点当前追踪目录那行只对齐卡面、不重复写盘
+    rvDoc.getElementById('rootsBtn').dispatchEvent(new rvWin.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    const rvRows2 = Array.from(rvDoc.querySelectorAll('#rootsBody tr.rootrow'))
+    rvRows2[0].dispatchEvent(new rvWin.Event('click', { bubbles: true }))
+    await tick()
+    assert.equal(ovPosts.length, 2, '点行同样发起开卡')
+    assert.equal(ovPosts[1].root, '/tmp/fd-ov-cur')
     assert.deepEqual(jsErrorsOv, [])
     ovDom.window.close()
-    ok('项目总览（jsdom）：打开才单拍、当前置顶标示、无产物/不可读分行标注置灰、点行触发现有切换流并关窗')
+    ok('项目总览（jsdom）：打开才单拍、当前置顶标示、无产物/不可读分行标注置灰；行内「开为标签页」与点行都走既有换根流开卡并关窗，当前目录那行只对齐卡面不重复写盘')
+
+    // ── 项目标签条（project-tabs 票 01）：渲染与生命周期、折叠、持久化恢复、补位、每卡状态记忆 ──
+    // 夹具：桩服务端真的记住换根（否则补位规则会把活跃卡拉回旧目录，测的就不是真行为）；
+    // stored 预置 flowdeck-tabs 模拟「这个浏览器上次开过哪些卡」，null 即没记过。
+    const settleTabs = async () => { await new Promise((r) => setTimeout(r, 150)) }   // 与后文 settle 同款首拍等待
+    const TABS_A = '/tmp/fd-tab-alpha'
+    const TABS_B = '/tmp/fd-tab-beta'
+    const TABS_C = '/tmp/fd-tab-gamma'
+    function tabStripDom(port, stored, servedRoot) {
+      const errs = []
+      const vcT = new VirtualConsole()
+      vcT.on('jsdomError', (e) => errs.push(String((e && e.message) || e)))
+      const posts = []
+      let served = servedRoot
+      // 把应答扣住，用来造「请求在途 / 旧载荷晚归」这两个窗口：
+      //   on=true 换根应答扣到 release()；gateState=true 时下一拍状态应答扣到 flushState()
+      const hold = { on: false, release: null, gateState: false, flushState: null }
+      const d = uiDom({
+        runScripts: 'dangerously',
+        url: 'http://127.0.0.1:' + port + '/',
+        pretendToBeVisual: true,
+        virtualConsole: vcT,
+        beforeParse(window) {
+          if (stored) window.localStorage.setItem('flowdeck-tabs', JSON.stringify(stored))
+          window.fetch = (u, opts) => {
+            const url = String(u)
+            if (url.indexOf('/api/state') >= 0) {
+              const payload = {
+                ...ws, root: served, rootName: nodePath.basename(served), pollMs: 5000, configPath: '/tmp/config.json',
+                recentRoots: [{ path: served, exists: true }, { path: TABS_A, exists: true }, { path: TABS_B, exists: true }, { path: TABS_C, exists: true }],
+              }
+              if (hold.gateState) {
+                hold.gateState = false
+                const held = payload   // 这一拍的目录在发请求时就定下了
+                return new Promise((res) => { hold.flushState = () => res({ ok: true, json: async () => JSON.parse(JSON.stringify(held)) }) })
+              }
+              return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(payload)) })
+            }
+            if (url.indexOf('/api/config') >= 0 && opts && opts.method === 'POST') {
+              const want = JSON.parse(opts.body).root
+              if (want === '/tmp/fd-tab-deleted') {
+                return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: '这个目录不存在或不是目录。', code: 'config.root-missing' }) })
+              }
+              posts.push(want)
+              if (hold.on) {
+                return new Promise((res) => {
+                  hold.release = () => { served = want; res({ ok: true, json: async () => ({ ok: true, root: served }) }) }
+                })
+              }
+              served = want
+              return Promise.resolve({ ok: true, json: async () => ({ ok: true, root: served }) })
+            }
+            return Promise.reject(new Error('标签条用例不该请求别的接口：' + url))
+          }
+        },
+      })
+      return { d, errs, posts, hold, setServed: (p) => { served = p } }
+    }
+    const cards = (c) => Array.from(c.d.window.document.querySelectorAll('#tabStrip .tabcard'))
+    const cardNames = (c) => cards(c).map((n) => n.querySelector('.tname').textContent)
+    const activeName = (c) => (c.d.window.document.querySelector('#tabStrip .tabcard.on .tname') || { textContent: null }).textContent
+    const storedTabs = (c) => JSON.parse(c.d.window.localStorage.getItem('flowdeck-tabs') || 'null')
+    const openTab = async (c, path) => {
+      const w = c.d.window
+      w.document.getElementById('newTabBtn').dispatchEvent(new w.Event('click', { bubbles: true }))
+      const f = w.document.getElementById('newTabPath')
+      f.value = path
+      f.dispatchEvent(new w.Event('input', { bubbles: true }))
+      f.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      await tick()
+      await tick()
+    }
+
+    // (1) 首次打开：没记过标签 → 以服务端追踪目录为真相补开一张置为活跃
+    const strip = tabStripDom(39370, null, TABS_A)
+    await settleTabs()
+    assert.equal(cards(strip).length, 1, '没记过标签：只补开服务端追踪目录那一张')
+    assert.equal(activeName(strip), 'fd-tab-alpha')
+    assert.match(cards(strip)[0].querySelector('.temoji').textContent, /\S/, '卡面带自动派生的图形标记')
+    assert.ok(cards(strip)[0].querySelector('.tdot.on'), '活跃卡状态点实心')
+    assert.equal(cards(strip)[0].querySelector('.tdot').getAttribute('aria-hidden'), 'true', '状态点是装饰，语义进整卡 aria-label')
+    assert.match(cards(strip)[0].getAttribute('aria-label'), /项目标签 fd-tab-alpha，当前/, '整卡 aria-label 自载项目名与活跃态')
+    assert.equal(cards(strip)[0].getAttribute('aria-selected'), 'true')
+    assert.ok(cards(strip)[0].querySelector('button.tclose'), '每张卡带关闭件')
+    assert.deepEqual(strip.posts, [], '补位是纯客户端行为，零写请求')
+
+    // (2) 开新标签：换根成功即开卡并激活
+    await openTab(strip, TABS_B)
+    assert.deepEqual(cardNames(strip), ['fd-tab-alpha', 'fd-tab-beta'])
+    assert.equal(activeName(strip), 'fd-tab-beta', '新卡被激活')
+    assert.ok(cards(strip)[0].querySelector('.tdot:not(.on)'), '旧卡状态点转空心（挂起）')
+    assert.deepEqual(strip.posts, [TABS_B], '开卡复用既有 POST /api/config（零新端点）')
+    assert.equal(storedTabs(strip).list.length, 2)
+    assert.equal(storedTabs(strip).active, 1)
+    assert.equal(storedTabs(strip).collapsed, false)
+
+    // (3) 去重：已开过的目录再开一次落到已有卡，不出第二张
+    await openTab(strip, TABS_A)
+    assert.deepEqual(cardNames(strip), ['fd-tab-alpha', 'fd-tab-beta'], '同目录去重：不产生克隆')
+    assert.equal(activeName(strip), 'fd-tab-alpha', '去重后落到那张已有卡并激活')
+    assert.deepEqual(cards(strip).length, 2)
+
+    // (4) 点卡切换：复用同一套换根请求
+    cards(strip)[1].dispatchEvent(new strip.d.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(activeName(strip), 'fd-tab-beta')
+    assert.equal(strip.posts[strip.posts.length - 1], TABS_B, '点卡即换根')
+    assert.equal(storedTabs(strip).active, 1, '活跃索引随切换落盘')
+
+    // (5) 每卡界面状态按目录分桶：选中 effort + 票筛选档位，切走再切回原样
+    const effBtn = (c, name) => Array.from(c.d.window.document.querySelectorAll('#tabs button')).find((b) => b.textContent.indexOf(name) === 0)
+    const tierChip = (c) => Array.from(c.d.window.document.querySelectorAll('.tierchip')).find((b) => b.textContent.indexOf('ready-for-agent') === 0)
+    effBtn(strip, 'idea-b').dispatchEvent(new strip.d.window.Event('click'))
+    const tier = tierChip(strip)
+    tier.dispatchEvent(new strip.d.window.Event('click'))
+    assert.ok(tierChip(strip).className.indexOf('on') >= 0, '票筛选档位点亮')
+    cards(strip)[0].dispatchEvent(new strip.d.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.equal(activeName(strip), 'fd-tab-alpha', '切到另一张卡')
+    assert.ok(!(effBtn(strip, 'idea-b').className.indexOf('on') >= 0), '另一张卡不带这张卡的选中态（回到默认视图）')
+    assert.equal(strip.d.window.document.querySelectorAll('.tierchip.on').length, 0, '票筛选按目录分桶：另一张卡上没有任何档位点亮')
+    cards(strip)[1].dispatchEvent(new strip.d.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.ok(effBtn(strip, 'idea-b').className.indexOf('on') >= 0, '切回那张卡：选中的 effort 还在')
+    assert.ok(tierChip(strip).className.indexOf('on') >= 0, '切回那张卡：票筛选档位还在')
+    assert.equal(storedTabs(strip).list.length, 2, '每卡界面状态是内存级，不落 localStorage（存进去的只有标签条本身）')
+    assert.deepEqual(Object.keys(JSON.parse(storedTabs(strip) ? JSON.stringify(storedTabs(strip)) : '{}')).sort(),
+      ['active', 'collapsed', 'list'], '持久化的只有卡列表/顺序、活跃索引与折叠态')
+
+    // (6) 关挂起卡：只动卡面，活跃卡不动、零写请求
+    const postsBeforeIdleClose = strip.posts.length
+    cards(strip)[0].querySelector('button.tclose').dispatchEvent(new strip.d.window.Event('click', { bubbles: true }))
+    await tick()
+    assert.deepEqual(cardNames(strip), ['fd-tab-beta'], '挂起卡关掉后卡面少一张')
+    assert.equal(activeName(strip), 'fd-tab-beta', '活跃卡不受影响')
+    assert.equal(strip.posts.length, postsBeforeIdleClose, '关挂起卡零写请求')
+
+    // (7) 关活跃卡：落右邻（无右邻落左邻）并复用换根请求把服务端跟过去
+    await openTab(strip, TABS_C)
+    assert.deepEqual(cardNames(strip), ['fd-tab-beta', 'fd-tab-gamma'])
+    cards(strip)[0].querySelector('button.tclose').dispatchEvent(new strip.d.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.deepEqual(cardNames(strip), ['fd-tab-gamma'], '关掉末位（无右邻）后只剩一张')
+    assert.equal(activeName(strip), 'fd-tab-gamma')
+    assert.equal(strip.posts[strip.posts.length - 1], TABS_C, '关活跃卡时服务端跟到落点那张卡')
+    assert.deepEqual(strip.errs, [])
+    strip.d.window.close()
+    ok('项目标签条渲染与生命周期（jsdom）：首次以服务端追踪目录补位置活跃；开卡成功即激活、状态点实心/空心、aria 自载项目名；同目录去重不克隆；点卡切换复用换根请求；每卡按目录分桶记住选中 effort 与票筛选档位；关挂起卡零写请求、关活跃卡落右邻并让服务端跟上')
+
+    // (8) 上限 8：第 9 张被拒、提示先关一张，且不发出写请求
+    const cap = tabStripDom(39371, null, TABS_A)
+    await settleTabs()
+    for (const d of ['/p/1', '/p/2', '/p/3', '/p/4', '/p/5', '/p/6', '/p/7']) await openTab(cap, d)
+    assert.equal(cards(cap).length, 8, '开到 8 张为止')
+    const capPosts = cap.posts.length
+    await openTab(cap, '/p/8')
+    assert.equal(cards(cap).length, 8, '第 9 张不出卡')
+    assert.equal(cap.posts.length, capPosts, '超上限连换根请求都不发（先在客户端拦）')
+    assert.match(cap.d.window.document.getElementById('err').textContent, /标签最多 8 张：先关一张再开新的/, '超上限给出可执行的提示')
+    assert.deepEqual(cap.errs, [])
+    cap.d.window.close()
+
+    // (9) 全关：空态出「打开目录」大入口，且不清服务端追踪目录（不产生写请求）
+    const empty = tabStripDom(39372, { list: [TABS_A, TABS_B], active: 1, collapsed: false }, TABS_B)
+    await settleTabs()
+    assert.equal(cards(empty).length, 2, '记忆里的两张卡恢复出来')
+    const emptyPosts = empty.posts.length
+    // 逐张关：每关一次都重新查 DOM（渲染已重建，握着旧节点的监听器闭包带着旧下标）
+    for (let guard = 0; cards(empty).length && guard < 8; guard++) {
+      cards(empty)[0].querySelector('button.tclose').dispatchEvent(new empty.d.window.Event('click', { bubbles: true }))
+      await tick()
+    }
+    await tick()
+    assert.equal(cards(empty).length, 0, '全关后一张卡都不剩')
+    assert.equal(empty.posts.length, emptyPosts, '全关零写请求：关浏览视图不破坏服务端追踪目录')
+    const emptyState = empty.d.window.document.getElementById('tabStrip')
+    assert.match(emptyState.className, /empty/, '空态有自己的形态')
+    assert.equal(emptyState.querySelector('button').textContent, '打开目录', '空态出「打开目录」大入口')
+    assert.match(emptyState.textContent, /项目文件一个没动/, '空态说清「全关不碰项目文件」')
+    assert.deepEqual(storedTabs(empty), { list: [], active: -1, collapsed: false }, '全关态也落盘（重开仍是空态）')
+    assert.deepEqual(empty.errs, [])
+    empty.d.window.close()
+
+    // (10) 折叠：折成细线、可再展开，折叠态持久化；重开页面原样恢复
+    const fold = tabStripDom(39373, { list: [TABS_A, TABS_B], active: 0, collapsed: true }, TABS_A)
+    await settleTabs()
+    const foldBox = fold.d.window.document.getElementById('tabStrip')
+    assert.match(foldBox.className, /collapsed/, '记忆「折叠」→ 重开就折着')
+    assert.equal(cards(fold).length, 0, '折叠态不铺卡面（只留一条细线）')
+    const handle = foldBox.querySelector('button.tabhandle')
+    assert.match(handle.textContent, /fd-tab-alpha/, '把手带着当前项目名（折起来也知道在哪）')
+    assert.equal(handle.getAttribute('aria-expanded'), 'false')
+    handle.dispatchEvent(new fold.d.window.Event('click', { bubbles: true }))
+    assert.deepEqual(cardNames(fold), ['fd-tab-alpha', 'fd-tab-beta'], '点把手展开，卡面回来')
+    assert.equal(storedTabs(fold).collapsed, false, '展开态即时落盘')
+    foldBox.querySelector('button.tabhandle').dispatchEvent(new fold.d.window.Event('click', { bubbles: true }))
+    assert.match(fold.d.window.document.getElementById('tabStrip').className, /collapsed/, '再点折回去')
+    assert.equal(storedTabs(fold).collapsed, true)
+    assert.deepEqual(fold.errs, [])
+    fold.d.window.close()
+
+    // (11) 页面加载以服务端追踪目录为真相对齐：本地记忆里有它但活跃卡指别处 → 活跃卡对齐过去
+    const realign = tabStripDom(39374, { list: [TABS_A, TABS_B, TABS_C], active: 0, collapsed: false }, TABS_C)
+    await settleTabs()
+    assert.deepEqual(cardNames(realign), ['fd-tab-alpha', 'fd-tab-beta', 'fd-tab-gamma'], '重开页面：卡列表与顺序原样恢复')
+    assert.equal(activeName(realign), 'fd-tab-gamma', '活跃卡对齐服务端追踪目录（本地记忆的活跃索引只在与之一致时算数）')
+    assert.deepEqual(realign.posts, [], '对齐是纯客户端行为')
+    assert.deepEqual(realign.errs, [])
+    realign.d.window.close()
+
+    // (12) 补位：本地记忆里没有服务端追踪目录 → 为它补开一张置为活跃
+    const place = tabStripDom(39375, { list: [TABS_A, TABS_B], active: 0, collapsed: false }, TABS_C)
+    await settleTabs()
+    assert.deepEqual(cardNames(place), ['fd-tab-alpha', 'fd-tab-beta', 'fd-tab-gamma'], '无对应卡则补开一张')
+    assert.equal(activeName(place), 'fd-tab-gamma', '补开的那张置为活跃')
+    assert.equal(storedTabs(place).active, 2, '补位后落盘')
+    assert.deepEqual(place.errs, [])
+    place.d.window.close()
+
+    // (13) 失效目录：切不过去，停留原卡片、沿用既有失败提示
+    const DEAD = '/tmp/fd-tab-deleted'
+    const dead = tabStripDom(39376, { list: [TABS_A, DEAD], active: 0, collapsed: false }, TABS_A)
+    await settleTabs()
+    assert.deepEqual(cardNames(dead), ['fd-tab-alpha', 'fd-tab-deleted'], '挂起卡不主动探测磁盘（零请求），失效只在你切回去时暴露')
+    cards(dead)[1].dispatchEvent(new dead.d.window.Event('click', { bubbles: true }))
+    await tick()
+    await tick()
+    assert.match(dead.d.window.document.getElementById('err').textContent, /换目录失败/, '切到失效目录沿用既有失败提示')
+    assert.equal(activeName(dead), 'fd-tab-alpha', '失败后停留原卡片')
+    assert.deepEqual(cardNames(dead), ['fd-tab-alpha', 'fd-tab-deleted'], '失败不吞掉那张失效卡，也不静默')
+    assert.deepEqual(dead.posts, [], '失败的那次不写盘')
+    assert.deepEqual(dead.errs, [])
+    dead.d.window.close()
+    ok('项目标签条边界（jsdom）：上限 8 张拦截且不发写请求；全关出「打开目录」空态且零写请求（不清服务端追踪目录）；折叠成细线可再展开且折叠态持久化；重开恢复卡列表/顺序/活跃索引，活跃卡以服务端追踪目录对齐、缺卡即补开置活跃；切到失效目录沿用既有失败提示并停留原卡片')
+
+    // (14) 关活跃卡落右邻时，落点那张卡自己的界面状态分桶不能被「刚离开那张卡的样子」覆盖
+    const land = tabStripDom(39377, { list: [TABS_A, TABS_B], active: 0, collapsed: false }, TABS_A)
+    await settleTabs()
+    effBtn(land, 'idea-b').dispatchEvent(new land.d.window.Event('click'))             // A 名下：idea-b
+    cards(land)[1].dispatchEvent(new land.d.window.Event('click', { bubbles: true }))  // 切到 B
+    await tick(); await tick()
+    effBtn(land, 'idea-a').dispatchEvent(new land.d.window.Event('click'))             // B 名下：idea-a
+    cards(land)[0].dispatchEvent(new land.d.window.Event('click', { bubbles: true }))  // 切回 A（活跃卡是 A 了）
+    await tick(); await tick()
+    assert.ok(effBtn(land, 'idea-b').className.indexOf('on') >= 0, 'A 切回来时用回自己的选中态')
+    cards(land)[0].querySelector('button.tclose').dispatchEvent(new land.d.window.Event('click', { bubbles: true }))  // 关 A（活跃）落 B
+    await tick(); await tick()
+    assert.equal(activeName(land), 'fd-tab-beta', '关掉活跃卡后落在右邻那张')
+    assert.ok(effBtn(land, 'idea-a').className.indexOf('on') >= 0, '落点卡用回自己的界面状态（没被刚离开那张的覆盖）')
+    assert.ok(!(effBtn(land, 'idea-b').className.indexOf('on') >= 0), '刚离开那张卡的选中态没串过来')
+    assert.deepEqual(land.errs, [])
+    land.d.window.close()
+
+    // (15) 换根在途期间回来的那一拍（还是旧目录）不能把刚点开的卡又拉回去
+    const race = tabStripDom(39378, { list: [TABS_A, TABS_B], active: 0, collapsed: false }, TABS_A)
+    await settleTabs()
+    // 时序：轮询的一拍先发出去（此时服务端还在追 A）→ 用户点 B 切过去 → 那一拍才回来
+    race.hold.gateState = true
+    race.d.window.document.getElementById('refreshBtn').dispatchEvent(new race.d.window.Event('click', { bubbles: true }))
+    await tick()
+    assert.ok(race.hold.flushState, '有一拍状态在途（模拟轮询那一拍正好在切换前发出）')
+    cards(race)[1].dispatchEvent(new race.d.window.Event('click', { bubbles: true }))  // 切到 B
+    await tick()
+    await tick()
+    assert.equal(activeName(race), 'fd-tab-beta', '换根落定后活跃卡是 B')
+    race.hold.flushState()     // 那一拍现在才回来——它报的还是旧目录 A
+    await tick()
+    await tick()
+    assert.equal(activeName(race), 'fd-tab-beta', '切换之前发出、落定之后才回来的旧载荷没把活跃卡拉回 A')
+    assert.equal(storedTabs(race).active, 1, '落盘的活跃索引也是新的那张')
+    assert.deepEqual(race.errs, [])
+    race.d.window.close()
+    // (16) 换过一次根之后补位仍然活着：别处（手改 config.json / 另一个浏览器）把追踪目录改掉照样跟上
+    const after = tabStripDom(39379, { list: [TABS_A, TABS_B], active: 0, collapsed: false }, TABS_A)
+    await settleTabs()
+    cards(after)[1].dispatchEvent(new after.d.window.Event('click', { bubbles: true }))  // 切到 B（换根代数 +1）
+    await tick(); await tick()
+    assert.equal(activeName(after), 'fd-tab-beta')
+    after.setServed(TABS_C)     // 换根之外，追踪目录被改到了 C
+    after.d.window.document.getElementById('refreshBtn').dispatchEvent(new after.d.window.Event('click', { bubbles: true }))
+    await tick(); await tick()
+    assert.deepEqual(cardNames(after), ['fd-tab-alpha', 'fd-tab-beta', 'fd-tab-gamma'], '换过根之后补位照常工作（没被换根次数卡住）')
+    assert.equal(activeName(after), 'fd-tab-gamma', '跟到新追踪目录那张')
+    assert.deepEqual(after.errs, [])
+    after.d.window.close()
+    ok('项目标签条两处竞态（jsdom）：关活跃卡落右邻时不覆盖落点卡自己的界面状态分桶；切换之前发出、落定之后才回来的旧载荷不参与补位、活跃卡不倒退，且换过根之后补位照常工作')
+
+    // 旧控件退役：界面上不再有「换目录」按钮与单目录输入框，换目录心智只有标签条一套
+    assert.equal(deckHtml.indexOf('id="switchBtn"'), -1, '「换目录」按钮已退役')
+    assert.equal(deckHtml.indexOf('id="rootInput"'), -1, '单目录输入框已退役')
+    for (const deadKey of ['root.input.title', 'root.input.placeholder', 'switch.btn.label', 'switch.btn.title', 'rootmenu.btn.title', 'rootmenu.btn.aria']) {
+      assert.ok(!SHELL_TEXT[deadKey], '退役控件的词条已随之撤掉：' + deadKey)
+    }
+    ok('入口收编（文件级）：「换目录」按钮与单目录输入框连同其词条一并退役，换目录心智只留标签条一套')
+
 
     // ── 技能包弹窗：按钮打开、侧栏清单分组、点条目/内链取正文渲染 Markdown、Esc 关闭 ──
     const jsErrors4 = []
@@ -3969,6 +4376,16 @@ async function runScenarios(tmp) {
       assert.deepEqual(rows.filter((r) => !String(r[1] || '').trim()).map((r) => r[0]), [], '英文态 ' + attr + ' 无空文案')
       assert.deepEqual(rows.filter((r) => r[1] !== shWin.UI_TEXT[r[0]].en).map((r) => r[0]), [], '英文态 ' + attr + ' 逐字取英文列')
     }
+    // 项目标签条（票 01）：动态渲染出来的卡面不在静态壳的取词面上，得单独钉一遍英文
+    const shStrip = shDoc.getElementById('tabStrip')
+    const shCards = Array.from(shStrip.querySelectorAll('.tabcard'))
+    assert.equal(shCards.length, 1, '英文态标签条以服务端追踪目录补位出卡')
+    assert.equal(shCards[0].querySelector('.tname').textContent, 'fd-shell-en', '卡面出目录 basename')
+    assert.match(shCards[0].getAttribute('aria-label'), /Project tab fd-shell-en, Current/, '整卡 aria-label 出英文')
+    assert.match(shCards[0].getAttribute('title'), /Click to switch to this project/, '卡面 title 出英文')
+    assert.equal(shCards[0].querySelector('button.tclose').getAttribute('aria-label'), 'Close the fd-shell-en tab', '关闭件 aria-label 出英文')
+    assert.match(shStrip.querySelector('button.tabhandle').getAttribute('aria-label'), /Current project: fd-shell-en/, '折叠把手 aria-label 出英文')
+    assert.deepEqual(cjkResidue(shDoc).filter((h) => /tabcard|tdot|tabhandle/.test(h)), [], '标签条零中文残留（卡面、状态点与把手）')
     shClick(shTab('All'))
     assert.deepEqual(cjkResidue(shDoc), [], '「全部」视图零残留（表头、折叠行、行 aria-label）')
     shClick(shTab('gamma'))
@@ -3982,10 +4399,10 @@ async function runScenarios(tmp) {
     shOpen('frontierBadge')
     assert.deepEqual(cjkResidue(shDoc), [], '前沿面板零残留（分组名、票行 title 与 aria-label）')
     shEsc()
-    // 常用目录下拉（含失效条目与删除按钮 tooltip）
-    shDoc.getElementById('rootInput').focus()
+    // 开新标签菜单（含失效条目、删除按钮 tooltip 与顶部路径框）
+    shOpen('newTabBtn')
     await tick()
-    assert.deepEqual(cjkResidue(shDoc), [], '常用目录下拉零残留（「当前」「目录不存在」徽标与删除提示）')
+    assert.deepEqual(cjkResidue(shDoc), [], '开新标签菜单零残留（「当前」「目录不存在」徽标、删除提示与路径框）')
     shDoc.dispatchEvent(new shWin.Event('click', { bubbles: true }))
     // 设置弹窗（表单各项、说明行、轮询模式三个选项）
     shOpen('settingsBtn')
@@ -4029,7 +4446,7 @@ async function runScenarios(tmp) {
     assert.deepEqual(cjkResidue(shDoc), [], '空态页零残留（约定与骨架指令都出英文）')
     assert.deepEqual(jsErrorsShell, [])
     shellDom.window.close()
-    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/常用目录/设置/项目总览/票正文/技能弹窗（含正文）/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
+    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/项目标签条/开新标签菜单/设置/项目总览/票正文/技能弹窗（含正文）/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
 
     // ── 英文态内容随语言（票 02）：一键复制、桌面通知、报错措辞三处人话都翻；未知 code 回落原文 ──
     const jsErrorsLang = []
@@ -4079,6 +4496,14 @@ async function runScenarios(tmp) {
     const lgDoc = langDom2.window.document
     const lgWin = langDom2.window
     const lgClick = (node) => node.dispatchEvent(new lgWin.Event('click', { bubbles: true }))
+    /** 为一个路径走完整开新标签流（顶栏按钮 → 路径框 → Enter），供报错措辞用例复用。 */
+    const lgOpenTabField = (path) => {
+      lgClick(lgDoc.getElementById('newTabBtn'))
+      const f = lgDoc.getElementById('newTabPath')
+      f.value = path
+      f.dispatchEvent(new lgWin.Event('input', { bubbles: true }))
+      f.dispatchEvent(new lgWin.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    }
     // 一键复制随语言：票行 = 实现指引词，链格 = 阶段指引词（与服务端英文列同源），下一步卡 = 当前步指引词
     lgClick(lgDoc.querySelector('tr.ticket'))
     await tick()
@@ -4110,10 +4535,8 @@ async function runScenarios(tmp) {
     assert.ok(!/Grill 拷问|To-Spec 规格|四阶段完成/.test(stageNote.body), '通知里的阶段名与「完成」用英文说法：' + stageNote.body)
     assert.match(stageNote.body, /Implement/, '推进通知的阶段名出英文（stageNameById 读 stageNames 表）')
     // 服务端报错按 code 措辞
-    const rootInput = lgDoc.getElementById('rootInput')
     langCfgReply = { error: '这个目录不存在或不是目录：/tmp/xyz', code: 'config.root-missing' }
-    rootInput.value = '/tmp/xyz'
-    lgClick(lgDoc.getElementById('switchBtn'))
+    lgOpenTabField('/tmp/xyz')
     await tick()
     await tick()
     const banner = lgDoc.getElementById('err')
@@ -4122,7 +4545,7 @@ async function runScenarios(tmp) {
     assert.match(banner.textContent, /does not exist|not a directory/i, '按 code 出英文措辞')
     // 未知 code 回退原文：界面不猜，宁可把服务端原话说出来
     langCfgReply = { error: '一种界面还没学过的错法。', code: 'mystery.unknown-case' }
-    lgClick(lgDoc.getElementById('switchBtn'))
+    lgOpenTabField('/tmp/xyz')
     await tick()
     await tick()
     assert.ok(lgDoc.getElementById('err').textContent.indexOf('一种界面还没学过的错法。') >= 0, '未知 code 回退服务端原文：' + lgDoc.getElementById('err').textContent)
@@ -4232,7 +4655,7 @@ async function runScenarios(tmp) {
       ok('技能弹窗按语言取篇（jsdom）：英文态清单与单篇都带 ?lang=en、侧栏与正文出英文；中文态两类请求都不带参数且不挂标注；镜像缺篇回退中文原文（响应头 X-FlowDeck-Doc-Lang 自报 zh）并在正文上方挂英文标注、缓存路径同挂；切语言重取清单而单篇按语言各自缓存')
     }
 
-    ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、换目录控件都对')
+    ok('界面运行时：jsdom 真跑一遍无报错，流程链渲染、effort 切换、票表、项目标签条与开新标签菜单都对')
   }
 }
 
