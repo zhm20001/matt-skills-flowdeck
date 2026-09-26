@@ -72,14 +72,16 @@
  *                                局限与 ADR 并列承认）。票行与收尾（implementDone）的「不提合并」负向钉
  *                                降级保留为回归防护；两份 README 的起步约定第 4 步已缩成指针，钉它不再
  *                                逐字复制权威原文。
- *  34. 指引词可整段改写（custom-guides 02）→ config.json 的 guides 字段：逐形状校验（非法整体 400 且
- *                                一个字不写盘、错误码稳定）、applied.immediate、手改下一拍生效、写盘保留
- *                                「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，面上额外键
- *                                剔除，缺面/空串/清空皆合法）；界面上：出厂两处复制都落内置段、自定义段
- *                                非空则 Implement 阶段格与未完工的下一步卡按钮整段取代、只填中文时英文
- *                                界面仍复制内置英文段、只敲全白等同没填（有内容的边缘空白原样带出）、预览与复制
- *                                同步回落、预填来自载荷、
- *                                保存只提交变更字段（改动中英成对发）、恢复默认二次确认后清空两列。
+ *  34. 指引词可整段改写 · 五面铺开（custom-guides 02 + 03）→ config.json 的 guides 字段：逐形状校验
+ *                                （非法整体 400 且一个字不写盘、错误码稳定）、applied.immediate、手改下一拍
+ *                                生效、写盘保留「说明」与「字段说明」、服务端只搬原值不参与拼装（面名不写死，
+ *                                面上额外键剔除，缺面/空串/清空皆合法）；界面上五面（四个阶段格 + 票行）各设自定义
+ *                                段各复制一次都走该面自己的段，面下拉带空态（不默认落在某一面）、切面即换内容与
+ *                                预览、下拉里四个阶段名读载荷 stageNames、只填中文时英文界面仍复制内置英文段、
+ *                                只敲全白等同没填（有内容的边缘空白原样带出）、预览与复制同步回落、预填来自载荷、
+ *                                保存只提交变更字段（改动中英成对发、五面并存时只换当前面）、恢复默认只清当前面；
+ *                                票行那面 {key}/{path}/{title} 实填、其余四面无槽；config.example.json 与两份
+ *                                README 的 config 段同步了 guides 字段。
  *                                必改的既有缺陷：设置弹窗焦点圈禁那条测试的选择器补上 textarea。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
@@ -587,14 +589,14 @@ async function runScenarios(tmp) {
   for (const [label, extra] of gwScenarios) {
     const chain = deriveChain(Object.assign({ slug: 'deck' }, extra))
     for (const st of chain.stages) {
-      gwSegments.push({ face: `${st.id}·${label}·中文`, text: st.copyText })
-      gwSegments.push({ face: `${st.id}·${label}·英文`, text: st.en.copyText })
+      gwSegments.push({ face: `${st.id}·${label}·中文`, faceId: st.id, lang: '中文', text: st.copyText })
+      gwSegments.push({ face: `${st.id}·${label}·英文`, faceId: st.id, lang: '英文', text: st.en.copyText })
     }
   }
   const gwTicketM = /'copy\.ticket': \{ zh: '([\s\S]*?)', en: '([\s\S]*?)' \},/.exec(gwHtml)
   assert.ok(gwTicketM, '词表含 copy.ticket 词条（zh/en 两列都切得出来）')
-  gwSegments.push({ face: '票行复制词·中文', text: gwTicketM[1] })
-  gwSegments.push({ face: '票行复制词·英文', text: gwTicketM[2] })
+  gwSegments.push({ face: '票行复制词·中文', faceId: 'ticket', lang: '中文', text: gwTicketM[1] })
+  gwSegments.push({ face: '票行复制词·英文', faceId: 'ticket', lang: '英文', text: gwTicketM[2] })
   // 起步工作约定（空态页那段两栏并列的步骤）不是五面之一，但它同样是出厂固定文案、同样发给使用者，
   // 且正是本次回退的第三处——一并纳入，免得规则只守住两个面。
   const gwAgreeFrom = gwHtml.indexOf("'empty.agreement': {")
@@ -608,6 +610,14 @@ async function runScenarios(tmp) {
   // 用下限而不是 assert.equal 是有意的：往后加一个场景是常事，等值会让这条护栏在正当增补时误炸；
   // 它要挡的是「某个面整个没被扫到」这种塌方，真塌了数量一定掉到下限以下。
   assert.ok(gwSegments.length >= 80, `扫的面数够（${gwSegments.length} 段 = 四阶段格 × 场景 × 中英 + 票行 + 工作约定）`)
+  // 面覆盖钉（票 03）：两条规则要盖的是**五面中英两列**，不是「扫到了一批文案」就算数。
+  // 逐面逐列清点——漏掉整整一面的话，上面的条数下限照样过得去（别的面多扫几遍就补回来了），
+  // 只有按面点名才挡得住这种塌方。
+  for (const faceId of ['grill', 'spec', 'tickets', 'implement', 'ticket']) {
+    for (const col of ['中文', '英文']) {
+      assert.ok(gwSegments.some((s) => s.faceId === faceId && s.lang === col), `五面中英两列都扫到了：${faceId}·${col}`)
+    }
+  }
   const gwDistinct = new Set(gwSegments.map((s) => s.text))
   assert.ok(gwDistinct.size >= 12, `状态分支确实被扫到（去重后 ${gwDistinct.size} 段不同文案）`)
 
@@ -2388,12 +2398,21 @@ async function runScenarios(tmp) {
     // 焦点圈禁（makeModal 第六件）：弹窗内 Tab 循环不外逃。
     // 选择器必须与 makeModal 里的那份同集（button/[href]/input/select/textarea/[tabindex]）——
     // 少写一个元素类型，新控件就静默逃出覆盖：加指引词的 textarea 时正是漏在这里（票 02 必改项）。
+    //
+    // 「同集」与「圈内」分两步钉：面下拉一开窗是空态、未选面时两个 textarea 是 disabled 的，
+    // 拿「此刻可聚焦的那些」去断言覆盖面会被空态骗过去（控件明明在，只是暂时不可点），
+    // 于是覆盖面用未过滤的 querySelectorAll 断言，圈内只对 enabled 的做圈禁往返。
     aDoc.getElementById('settingsBtn').dispatchEvent(new aWin.Event('click', { bubbles: true }))
     await tick()
     const setBox = aDoc.getElementById('settingsModal')
     assert.ok(setBox.contains(aDoc.activeElement), '开窗即把焦点放进弹窗')
-    const focusIn = () => Array.from(setBox.querySelectorAll('button, input, select, textarea')).filter((n) => !n.disabled && !n.closest('[hidden]'))
-    assert.ok(focusIn().some((n) => n.tagName === 'TEXTAREA'), '指引词两个 textarea 在焦点序里（选择器没漏 textarea）')
+    const focusables = Array.from(setBox.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    const focusIn = () => focusables.filter((n) => !n.disabled && !n.closest('[hidden]'))
+    assert.deepEqual(
+      Array.from(setBox.querySelectorAll('button, input, select, textarea')),
+      focusables, '选择器与 makeModal 的那份同集（票 03：面下拉与两个 textarea 都得落在圈禁覆盖内）')
+    assert.ok(focusables.some((n) => n.id === 'setGuidesZh') && focusables.some((n) => n.id === 'setGuidesEn'), '指引词两个 textarea 在焦点序里（选择器没漏 textarea）')
+    assert.ok(focusables.some((n) => n.id === 'setGuidesFace'), '面下拉也在焦点序里')
     const firstF = focusIn()[0]
     const lastF = focusIn()[focusIn().length - 1]
     aKey(lastF, 'Tab')
@@ -3513,9 +3532,11 @@ async function runScenarios(tmp) {
       '四个阶段名/副题不再进界面词表（单一来源在 FLOW_STAGES，经 stageNames 与 chain.stages.en 下发）')
     ok('阶段名单一来源（jsdom）：界面词表撤四阶段名/副题的第二份拷贝，链格/全部视图/通知/项目总览取词全走载荷下发列')
 
-    // ── 指引词自定义段（custom-guides 票 02，ADR-0004）：config → 服务端 → 界面 → 复制 这条窄路 ──
-    // 本票只钉 implement 一面（票行与另外三面留给下一票）。规则一句话：自定义段非空整段取代内置段，
-    // 为空回落内置段，中英各判各的。这组只钉接线，不碰像素（jsdom 无布局能力）。
+    // ── 指引词自定义段（custom-guides 票 02 + 03，ADR-0004）：config → 服务端 → 界面 → 复制 ──
+    // 票 03 把面从一面扩到五面（四个阶段格 + 票行）、给编辑器加面下拉、给票行那面开三个槽。规则一句话：
+    // 某一面的自定义段非空即整段取代内置段，为空回落内置段，中英各判各的。票行是五面里唯一带槽的一面
+    // （{key}/{path}/{title}），其余四面无槽——不引入通用模板语言（ADR-0004 已否）。
+    // 这组只钉接线，不碰像素（jsdom 无布局能力）。
     const gdTk = { key: '01', fileName: '01-guides.md', title: '指引票', state: 'open', status: 'ready-for-agent', claimedBy: '', type: 'task', blockedBy: [], progress: null, formatWarnings: [], updatedAt: '2026-09-18T00:00:00Z' }
     const gdEffort = {
       slug: 'demo', title: '指引词 demo', git: null, latestAt: '2026-09-18T00:00:00Z',
@@ -3563,6 +3584,8 @@ async function runScenarios(tmp) {
     }
     const gdSettle = async () => { await new Promise((r) => setTimeout(r, 150)) }
     const gdDoc = (c) => c.d.window.document
+    /** 关窗前先等一拍：剪贴板那声 toast 走 Promise，等它落地再关（关早了回调里 document 已经没了）。 */
+    const gdClose = async (c) => { await tick(); c.d.window.close() }
     const gdOpenSettings = async (c) => {
       gdDoc(c).getElementById('settingsBtn').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
       await tick()
@@ -3571,6 +3594,18 @@ async function runScenarios(tmp) {
       gdDoc(c).getElementById('settingsSave').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
       await tick()
       await tick()
+    }
+    /** 选面：面下拉的 change 通路——置值 + 派发 change，与真实下拉同一条路。 */
+    const gdPickFace = (c, face) => {
+      const sel = gdDoc(c).getElementById('setGuidesFace')
+      sel.value = face
+      sel.dispatchEvent(new c.d.window.Event('change', { bubbles: true }))
+    }
+    /** 往当前面的某一列打字：置值 + 派发 input（预览边打字边重画，靠的就是这个事件）。 */
+    const gdType = (c, langKey, value) => {
+      const ta = gdDoc(c).getElementById(langKey === 'zh' ? 'setGuidesZh' : 'setGuidesEn')
+      ta.value = value
+      ta.dispatchEvent(new c.d.window.Event('input', { bubbles: true }))
     }
     const gdCopyStage = (c, i) => {
       const cell = gdDoc(c).querySelectorAll('.stage')[i]
@@ -3581,20 +3616,113 @@ async function runScenarios(tmp) {
       gdDoc(c).querySelector('.card.next button').dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
       return c.copies[c.copies.length - 1]
     }
+    /** 票行点击复制（票 03 的第五面）：tr.ticket 与 a11y 那组用同一个选择器。 */
+    const gdCopyTicket = (c, i) => {
+      const row = gdDoc(c).querySelectorAll('tr.ticket')[i]
+      row.dispatchEvent(new c.d.window.Event('click', { bubbles: true }))
+      return c.copies[c.copies.length - 1]
+    }
     const gdBuiltin = gdEffort.chain.stages[3].copyText
+    const gdTkPath = '/tmp/fd-guides/.scratch/demo/issues/01-guides.md'
+    /** 面下拉里某一面的名字：四个阶段面读载荷 stageNames（阶段名单一来源），票行面读界面词表。 */
+    const gdFaceLabel = (c, face) => {
+      const opt = gdDoc(c).querySelector('#setGuidesFace option[value="' + face + '"]')
+      return opt && opt.textContent
+    }
 
-    // 出厂（载荷不带 guides）：两处复制都落内置段，中英各一
+    // 出厂（载荷不带 guides）：五面各复制一次都落内置段
     const factory = guidesDom(39370, undefined)
     await gdSettle()
-    assert.equal(gdCopyStage(factory, 3), gdBuiltin, '出厂：implement 阶段格复制出内置段')
+    for (let i = 0; i < 4; i++) {
+      assert.equal(gdCopyStage(factory, i), gdEffort.chain.stages[i].copyText, `出厂：第 ${i} 面阶段格复制出该面内置段`)
+    }
     assert.equal(gdCopyNext(factory), gdBuiltin, '出厂：未完工的下一步卡按钮也是内置段')
-    assert.notEqual(gdCopyStage(factory, 2), gdBuiltin, '出厂：另外三面不受影响（tickets 面照旧走内置段）')
-    await gdOpenSettings(factory)
-    assert.equal(gdDoc(factory).getElementById('setGuidesZh').value, '', '出厂：中文 textarea 空（回落内置段）')
-    assert.equal(gdDoc(factory).getElementById('setGuidesEn').value, '', '出厂：英文 textarea 空')
-    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent, gdBuiltin, '预览为空时显示内置段')
+    const gdFactoryTk = gdCopyTicket(factory, 0)
+    assert.ok(gdFactoryTk.includes(gdTkPath) && gdFactoryTk.includes('指引票'), '出厂：票行复制出内置段且三槽已实填（票号/路径/标题）')
     assert.deepEqual(factory.errs, [])
-    factory.d.window.close()
+
+    // 面下拉的空态：默认**不**落在某一面（默认落在 implement 上会让人以为那就是全部五面），
+    // 明确说「还没选」，并把两个输入框与恢复默认一并禁掉——没选面时无处可编辑，这比留个能敲的
+    // 空框更像「这里得先选」。
+    await gdOpenSettings(factory)
+    const gdFace = gdDoc(factory).getElementById('setGuidesFace')
+    assert.deepEqual(Array.from(gdFace.querySelectorAll('option')).map((o) => o.value), ['', 'grill', 'spec', 'tickets', 'implement', 'ticket'], '面下拉是空态项 + 五面')
+    assert.equal(gdFace.value, '', '开窗不默认落在某一面')
+    assert.equal(gdDoc(factory).getElementById('setGuidesZh').disabled, true, '空态：中文 textarea 禁用')
+    assert.equal(gdDoc(factory).getElementById('setGuidesEn').disabled, true, '空态：英文 textarea 禁用')
+    assert.equal(gdDoc(factory).getElementById('setGuidesReset').disabled, true, '空态：恢复默认禁用')
+    assert.equal(gdDoc(factory).getElementById('setGuidesSlotsRow').hidden, true, '空态：槽那一行整行收掉（不留一个配空白的标签）')
+    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent, SHELL_TEXT['set.guides.preview.pick'].zh, '空态：预览明说先选一面')
+    // 下拉里四个阶段面的名字读载荷 stageNames——界面词表里不留第二份（抄一份迟早和 FLOW_STAGES 漂开）
+    for (const id of ['grill', 'spec', 'tickets', 'implement']) {
+      assert.equal(gdFaceLabel(factory, id), STAGE_TABLE.find((f) => f.id === id).title, `下拉里 ${id} 面的名字取自载荷 stageNames（阶段名单一来源）`)
+    }
+    assert.deepEqual(
+      Object.keys(SHELL_TEXT).filter((k) => /^set\.guides\.face\.(grill|spec|tickets|implement)$/.test(k)), [],
+      '四个阶段名不进界面词表（下拉标签读载荷，抄一份就是第二真相）')
+    assert.equal(gdFaceLabel(factory, 'ticket'), SHELL_TEXT['set.guides.face.ticket'].zh, '票行面是五面里唯一没有阶段名来源的一面，标签住词表')
+    // 读不到阶段名时（旧快照没有 stageNames）回落面名本身，不留四个没名字的空选项
+    const gdBare = guidesDom(39385, undefined)
+    await gdSettle()
+    // 旧快照的极端情形：既没有 stageNames，也没有 effort 可回落 → 阶段名彻底读不出
+    gdBare.d.window.eval('state.stageNames = null; state.efforts = []')
+    await gdOpenSettings(gdBare)
+    for (const id of ['grill', 'spec', 'tickets', 'implement']) {
+      assert.equal(gdFaceLabel(gdBare, id), id, `读不到阶段名时回落面名本身（不是空选项）：${id}`)
+    }
+    await gdClose(gdBare)
+
+    // 切面即换内容与预览；编辑器逐面明写「这一面有没有槽」
+    gdPickFace(factory, 'grill')
+    assert.equal(gdDoc(factory).getElementById('setGuidesZh').disabled, false, '选面后 textarea 可编辑')
+    assert.equal(gdDoc(factory).getElementById('setGuidesReset').disabled, false, '选面后恢复默认可用')
+    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent, gdEffort.chain.stages[0].copyText, '切到 grill 面：预览换成该面内置段')
+    assert.equal(gdDoc(factory).getElementById('setGuidesSlotsRow').hidden, false, '选面后槽那一行出现')
+    assert.equal(gdDoc(factory).getElementById('setGuidesSlots').textContent, SHELL_TEXT['set.guides.slots.none'].zh, '阶段面：编辑器明写这一面无槽')
+    gdPickFace(factory, 'ticket')
+    assert.equal(gdDoc(factory).getElementById('setGuidesSlots').textContent, SHELL_TEXT['set.guides.slots.ticket'].zh, '票行面：编辑器明写三个槽')
+    // 「保存后生效」就得显示真会复制出去的那一份：三个槽拿当前 effort 的第一张票实填过，
+    // 而不是把永远不会被逐字复制的模板摆出来
+    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent,
+      SHELL_TEXT['copy.ticket'].zh.replace('{key}', '01').replace('{path}', gdTkPath).replace('{title}', '指引票'),
+      '票行面：预览显示的是实填后的内置段（与点第一张票复制出来的逐字一致）')
+    assert.equal(gdDoc(factory).getElementById('setGuidesPreview').textContent.indexOf('{'), -1, '票行面预览不残留未实填的槽')
+    assert.deepEqual(factory.errs, [])
+    await gdClose(factory)
+
+    // 五面各设自定义段 → 五面各复制一次，都走该面自己的段
+    const five = guidesDom(39381, {
+      grill: { zh: '甲面自定义段' }, spec: { zh: '乙面自定义段' },
+      tickets: { zh: '丙面自定义段' }, implement: { zh: '丁面自定义段' },
+      ticket: { zh: '票行自定义段：{key} / {title}' },
+    })
+    await gdSettle()
+    const gdFive = ['甲面自定义段', '乙面自定义段', '丙面自定义段', '丁面自定义段']
+    for (let i = 0; i < 4; i++) assert.equal(gdCopyStage(five, i), gdFive[i], `第 ${i} 面：阶段格复制走该面自己的自定义段（互不串台）`)
+    assert.equal(gdCopyTicket(five, 0), '票行自定义段：01 / 指引票', '票行：复制走票行那面的自定义段，并实填 {key} 与 {title}')
+    await gdOpenSettings(five)
+    gdPickFace(five, 'ticket')
+    assert.equal(gdDoc(five).getElementById('setGuidesPreview').textContent, '票行自定义段：01 / 指引票', '票行面：自定义段的预览同样实填三槽（预览即生效的那一份）')
+    assert.deepEqual(five.errs, [])
+    await gdClose(five)
+
+    // 其余四面无槽：段里写了 {key} 也原样留着——不引入通用模板语言（ADR-0004 已否）
+    const noSlots = guidesDom(39382, { implement: { zh: '段里的 {key} {path} {title} 都原样留着' } })
+    await gdSettle()
+    assert.equal(gdCopyStage(noSlots, 3), '段里的 {key} {path} {title} 都原样留着', '阶段那四面无槽：槽标记原样留在段里（不会被偷偷填上）')
+    assert.deepEqual(noSlots.errs, [])
+    await gdClose(noSlots)
+
+    // 票行无自定义段 → 回落内置段，且内置段那三个槽照旧实填
+    const tkFallback = guidesDom(39383, { implement: { zh: '只改 implement' } })
+    await gdSettle()
+    const gdTkCopy = gdCopyTicket(tkFallback, 0)
+    assert.ok(gdTkCopy.includes(gdTkPath), '票行回落内置段：{path} 实填成票的路径')
+    assert.ok(gdTkCopy.includes('指引票'), '票行回落内置段：{title} 实填成票标题')
+    assert.ok(gdTkCopy.includes('01'), '票行回落内置段：{key} 实填成票号')
+    assert.equal(gdTkCopy.indexOf('{'), -1, '票行复制结果里不残留未实填的槽')
+    assert.deepEqual(tkFallback.errs, [])
+    await gdClose(tkFallback)
 
     // 自定义段非空：阶段格与下一步卡按钮都取自定义段，逐字相等（整段取代，不是接在前面）
     const custom = guidesDom(39371, { implement: { zh: '自定义中文段：请在隔离工作树里实现这张票。', en: 'Custom English segment.' } })
@@ -3602,22 +3730,30 @@ async function runScenarios(tmp) {
     assert.equal(gdCopyStage(custom, 3), '自定义中文段：请在隔离工作树里实现这张票。', '阶段格复制走中文自定义段（整段取代）')
     assert.equal(gdCopyNext(custom), '自定义中文段：请在隔离工作树里实现这张票。', '未完工的下一步卡按钮同走自定义段')
     await gdOpenSettings(custom)
+    gdPickFace(custom, 'implement')
     assert.equal(gdDoc(custom).getElementById('setGuidesZh').value, '自定义中文段：请在隔离工作树里实现这张票。', '预填：中文 textarea 来自 /api/state 的 guides')
     assert.equal(gdDoc(custom).getElementById('setGuidesEn').value, 'Custom English segment.', '预填：英文 textarea 来自同一份载荷')
     assert.equal(gdDoc(custom).getElementById('setGuidesPreview').textContent, '自定义中文段：请在隔离工作树里实现这张票。', '预览显示自定义段')
-    assert.deepEqual(gdDoc(custom).getElementById('setGuidesPreview').textContent.indexOf(gdBuiltin), -1, '被取代的内置段不并列显示')
+    assert.equal(gdDoc(custom).getElementById('setGuidesPreview').textContent.indexOf(gdBuiltin), -1, '被取代的内置段不并列显示')
     assert.deepEqual(custom.errs, [])
-    custom.d.window.close()
+    await gdClose(custom)
 
     // 中英各判各的：只填中文时，英文界面复制出的仍是内置英文段（不串台）
     const zhOnly = guidesDom(39372, { implement: { zh: '只有中文有自定义段' } }, 'en')
     await gdSettle()
     assert.equal(gdCopyStage(zhOnly, 3), gdEffort.chain.stages[3].en.copyText, '只填中文 → 英文界面复制出内置英文段')
     await gdOpenSettings(zhOnly)
+    gdPickFace(zhOnly, 'implement')
     assert.equal(gdDoc(zhOnly).getElementById('setGuidesPreview').textContent, gdEffort.chain.stages[3].en.copyText, '英文界面预览内置英文段（不拿中文那份顶上）')
     assert.equal(gdDoc(zhOnly).getElementById('setGuidesEn').value, '', '英文 textarea 留空（缺面即回落）')
+    // 下拉里那四个阶段名读的是载荷的 en 列——中文阶段名漏进英文界面，这条挡得住
+    for (const id of ['grill', 'spec', 'tickets', 'implement']) {
+      const opt = gdDoc(zhOnly).querySelector('#setGuidesFace option[value="' + id + '"]')
+      assert.equal(opt.textContent, STAGE_TABLE.find((f) => f.id === id).en.title, `英文界面：下拉里 ${id} 面的名字取英文列（阶段名单一来源随语言）`)
+    }
+    assert.equal(gdDoc(zhOnly).querySelector('#setGuidesFace option[value="ticket"]').textContent, SHELL_TEXT['set.guides.face.ticket'].en, '票行面标签随语言翻')
     assert.deepEqual(zhOnly.errs, [])
-    zhOnly.d.window.close()
+    await gdClose(zhOnly)
 
     // 「整段取代」是逐字的：边缘空白原样带出去，粘出来的与 config.json 里存的同一个字符串
     const spaced = guidesDom(39376, { implement: { zh: '  前后留白也算内容  ' } })
@@ -3634,52 +3770,90 @@ async function runScenarios(tmp) {
     assert.equal(gdCopyNext(blank), gdBuiltin, '下一步卡按钮同样回落内置段')
     // 预览读的是输入框里的草稿：敲进空白也该立刻回落，不必等保存
     await gdOpenSettings(blank)
-    gdDoc(blank).getElementById('setGuidesZh').value = '   \n  '
-    gdDoc(blank).getElementById('setGuidesZh').dispatchEvent(new blank.d.window.Event('input', { bubbles: true }))
+    gdPickFace(blank, 'implement')
+    gdType(blank, 'zh', '   \n  ')
     assert.equal(gdDoc(blank).getElementById('setGuidesPreview').textContent, gdBuiltin, '草稿只剩空白 → 预览同步回落内置段')
     assert.deepEqual(blank.errs, [])
-    blank.d.window.close()
+    await gdClose(blank)
 
-    // 保存：没动不进补丁；只动中文就发中英两列（恢复默认清的是两列，发半边会给另一列留旧值）
+    // 保存：没动就不进补丁；只动中文就发中英两列（恢复默认清的是两列，发半边会给另一列留旧值）
     const saver = guidesDom(39374, { implement: { zh: '旧中文', en: 'Old English' } })
     await gdSettle()
     await gdOpenSettings(saver)
     await gdSave(saver)
     assert.deepEqual(saver.posts, [], '一字未改时不提交任何字段（沿用 settingsChanges 的差异收集）')
     await gdOpenSettings(saver)
+    gdPickFace(saver, 'implement')
     gdDoc(saver).getElementById('setGuidesZh').value = '新中文'
     await gdSave(saver)
     assert.deepEqual(saver.posts[saver.posts.length - 1], { guides: { implement: { zh: '新中文', en: 'Old English' } } }, '只改中文也把英文原样带回（不丢另一列）')
     assert.match(gdDoc(saver).getElementById('toast').textContent, /已生效：指引词/, 'toast 的字段名走 set.field.guides')
     assert.deepEqual(saver.errs, [])
-    saver.d.window.close()
+    await gdClose(saver)
 
-    // 恢复默认：二次确认后清空当前面的中英两列（只清输入框，写盘仍由「保存」触发）
-    const reset = guidesDom(39375, { implement: { zh: '要恢复的中文', en: 'English to restore' } })
+    // 五面并存时保存：改一面，其余四面原样带回（补丁以初值起底、只换当前面）
+    const multi = guidesDom(39384, { grill: { zh: '甲留' }, spec: { zh: '乙留' }, implement: { zh: '丙留' } })
+    await gdSettle()
+    await gdOpenSettings(multi)
+    gdPickFace(multi, 'spec')
+    gdDoc(multi).getElementById('setGuidesZh').value = '乙改'
+    await gdSave(multi)
+    assert.deepEqual(multi.posts[multi.posts.length - 1], { guides: { grill: { zh: '甲留', en: '' }, spec: { zh: '乙改', en: '' }, implement: { zh: '丙留', en: '' } } }, '只改 spec 一面，其余四面原样带回（不吞掉没编辑过的面）')
+    assert.deepEqual(multi.errs, [])
+    await gdClose(multi)
+
+    // 恢复默认：只清**当前**这一面的中英两列，其余四面不碰（二次确认挡住误点）
+    const reset = guidesDom(39375, { implement: { zh: '要恢复的中文', en: 'English to restore' }, grill: { zh: '保留的中文' } })
     await gdSettle()
     await gdOpenSettings(reset)
+    gdPickFace(reset, 'grill')
+    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '保留的中文', '预填：切到 grill 面显示的是这一面存的值')
+    gdPickFace(reset, 'implement')
+    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '要恢复的中文', '切回 implement 面：另一面的草稿没被冲掉')
     let gdConfirmText = ''
     reset.d.window.confirm = (msg) => { gdConfirmText = msg; return true }
     gdDoc(reset).getElementById('setGuidesReset').dispatchEvent(new reset.d.window.Event('click', { bubbles: true }))
-    assert.equal(gdConfirmText, SHELL_TEXT['set.guides.reset.confirm'].zh, '恢复默认走二次确认')
-    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '', '恢复默认清空中文段')
-    assert.equal(gdDoc(reset).getElementById('setGuidesEn').value, '', '恢复默认清空英文段')
+    assert.equal(gdConfirmText, SHELL_TEXT['set.guides.reset.confirm'].zh.replace('{face}', gdFaceLabel(reset, 'implement')), '恢复默认走二次确认，且确认文案点名当前面')
+    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '', '恢复默认清空当前面的中文段')
+    assert.equal(gdDoc(reset).getElementById('setGuidesEn').value, '', '恢复默认清空当前面的英文段')
     assert.equal(gdDoc(reset).getElementById('setGuidesPreview').textContent, gdBuiltin, '恢复后预览回落内置段')
+    gdPickFace(reset, 'grill')
+    assert.equal(gdDoc(reset).getElementById('setGuidesZh').value, '保留的中文', '恢复默认不碰其余四面（切回去还在）')
     await gdSave(reset)
-    assert.deepEqual(reset.posts[reset.posts.length - 1], { guides: { implement: { zh: '', en: '' } } }, '保存把两列一起清空（= 复制回落内置段）')
+    assert.deepEqual(reset.posts[reset.posts.length - 1], { guides: { implement: { zh: '', en: '' }, grill: { zh: '保留的中文', en: '' } } }, '保存把当前面两列一起清空、其余面原样带回')
     assert.deepEqual(reset.errs, [])
-    reset.d.window.close()
+    await gdClose(reset)
 
-    // 文件级钉：设置弹窗的「指引词」分区与两个 textarea 真在 markup 里（jsdom 那几组是接线面，
+    // 文件级钉：设置弹窗的「指引词」分区、面下拉与两个 textarea 真在 markup 里（jsdom 那几组是接线面，
     // 控件本身没了它们会一起「安静地绿」——所以分区与控件各钉一次）
     const guidesCat = deckHtml.match(/<div class="fcat" data-i18n="settings\.guides">([\s\S]*?)<\/div>/)
     assert.ok(guidesCat, '设置弹窗有「指引词」分区（.fcat 标题）')
     assert.equal(guidesCat[1], SHELL_TEXT['settings.guides'].zh, '分区标题的 markup 默认态与词表中文列一致')
+    assert.ok(deckHtml.includes('<select id="setGuidesFace">'), '设置弹窗有面下拉（#setGuidesFace）')
+    assert.ok(deckHtml.includes('<label for="setGuidesFace"'), '面下拉有配对的 <label for>（点标签能聚焦）')
+    assert.equal(deckHtml.match(/<option value="(?:grill|spec|tickets|implement|ticket)"/g).length, 5, '下拉里五个面各一项（与五面同集）')
     assert.equal(deckHtml.match(/<textarea id="setGuides(\w+)"/g).length, 2, '指引词分区里有两个 textarea（中英各一）')
     assert.ok(deckHtml.includes('<label for="setGuidesZh"'), 'textarea 有配对的 <label for>（点标签能聚焦）')
     assert.match(appCss, /\.frow textarea \{[^}]*min-height:/, 'styles/app.css 补了 .frow textarea 规则（设置弹窗第一个 textarea）')
     assert.match(appCss, /textarea:focus-visible/, 'textarea 进得了焦点环（漏了就只靠浏览器默认，键盘用户看不见焦点）')
-    ok('指引词可整段改写（custom-guides 02 · jsdom + 文件级）：出厂两处复制都落内置段；自定义段非空则阶段格与未完工的下一步卡按钮整段取代（逐字相等）；只填中文时英文界面仍复制内置英文段（不串台）；只敲全白等同没填（但有内容的边缘空白原样带出，粘出去的与存盘逐字一致）、预览与复制同步回落；预填来自载荷、保存只提交变更字段（改动中英成对发）、恢复默认清空两列；「指引词」分区与两个 textarea 在案，.frow textarea 与焦点环规则到位')
+
+    // 文档面：config.example.json 与两份 README 的 config 段都得列出 guides 字段，
+    // 否则「配置文档同步」这条只在代码里成立、文档那头没人知道这个字段存在。
+    const gdExCfg = JSON.parse(await fs.readFile(nodePath.join(HERE, 'config.example.json'), 'utf8'))
+    assert.deepEqual(gdExCfg.guides, {}, 'config.example.json 有 guides 字段，且出厂是空对象（缺面 = 回落内置段）')
+    const gdNote = gdExCfg['字段说明'] && gdExCfg['字段说明'].guides
+    assert.ok(typeof gdNote === 'string' && gdNote.length > 40, 'config.example.json 的「字段说明」有 guides 条目')
+    for (const faceId of ['grill', 'spec', 'tickets', 'implement', 'ticket']) {
+      assert.ok(gdNote.includes(faceId), `config.example.json 的 guides 说明点明 ${faceId} 面`)
+    }
+    for (const slot of ['{key}', '{path}', '{title}']) {
+      assert.ok(gdNote.includes(slot), `config.example.json 的 guides 说明点明票行那面的槽 ${slot}`)
+    }
+    for (const readme of ['README.zh-CN.md', 'README.md']) {
+      const txt = await fs.readFile(nodePath.join(HERE, readme), 'utf8')
+      assert.match(txt, /"guides":\s*\{\}/, `${readme} 的 config.json 段列出 guides 字段`)
+    }
+    ok('指引词可整段改写 · 五面铺开（custom-guides 02 + 03 · jsdom + 文件级 + 文档）：出厂五面各复制一次都落内置段；面下拉带空态（不默认落在某一面，未选面时输入框与恢复默认一并禁用）、切面即换内容与预览、下拉里四个阶段名读载荷 stageNames；五面各设自定义段各复制一次都走该面自己的段（互不串台）；票行那面 {key}/{path}/{title} 实填、其余四面无槽（段里的槽标记原样留着）；票行无自定义段回落内置段且内置段三槽照旧实填；只填中文时英文界面仍复制内置英文段；只敲全白等同没填（但有内容的边缘空白原样带出）、预览与复制同步回落；预填来自载荷、保存只提交变更字段（改动中英成对发、五面并存时只换当前面、其余面原样带回）、恢复默认只清当前面；「指引词」分区、面下拉与两个 textarea 在案，.frow textarea 与焦点环规则到位；config.example.json 与两份 README 的 config 段同步了 guides 字段')
 
     // ── 英文态整页无残留（english-ui 票 02）：真跑界面，逐视图扫中文残留 ──
     /** 界面夹具用的英文用户数据：票标题、地图小节、规格正文全 ASCII——判据字段名（Status /

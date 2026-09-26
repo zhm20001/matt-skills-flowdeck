@@ -14,7 +14,8 @@
  *   GET  /            界面（本目录的 index.html）
  *   GET  /styles/*.css  界面的运行时 CSS（app.css + 各主题 tokens，白名单放行）
  *   GET  /api/state   当前追踪目录的完整盘点（JSON，含 pollMs / pollMode / host / port / tokenEnabled / configPath / recentRoots 常用目录、
- *                     guides 指引词自定义段（{ 面名: { zh, en } } 原值，界面据此取代内置指引词；服务端不参与拼装）、
+ *                     guides 指引词自定义段（五面：grill / spec / tickets / implement / ticket，各 { zh, en }；
+ *                     原值下发，界面据此取代内置指引词并给票行那面填 {key}/{path}/{title} 三个槽；服务端不参与拼装）、
  *                     stageNames 四阶段人话名表（flowchain.mjs FLOW_STAGES 的直通车，链格/通知/项目总览共用）、
  *                     每 effort 一条 git 旁证字段——最近提交或 null，~15s TTL、不随指纹走）。
  *                     双层短路：磁盘没变的那一拍由服务端指纹短路（不重扫不重传，复用上一拍 JSON；
@@ -82,16 +83,18 @@ const STATIC_FILES = {
 
 const DEFAULT_CONFIG = { root: '', port: 3210, host: '127.0.0.1', pollMs: 5000, pollMode: 'observe', recentRoots: [], token: '', guides: {} }
 
-/** 指引词自定义段每一面的语言列（custom-guides 票 02）：形状 `guides.<面名>.{zh, en}`。
- *  一个 config 字段装全部面——config.json 里一处可找，界面也只发一个字段。 */
+/** 指引词自定义段每一面的语言列（custom-guides 票 02，票 03 起服务五面）：形状 `guides.<面名>.{zh, en}`。
+ *  一个 config 字段装全部面——config.json 里一处可找，界面也只发一个字段。
+ *  五个面名是 grill / spec / tickets / implement（四个阶段格，面名即 flowchain.mjs 的阶段 id）加 ticket
+ *  （点票行复制那面）；它们住在界面的面下拉里，服务端只把原值搬下去，所以这里不必也不该知道有五面。 */
 const GUIDE_LANGS = Object.freeze(['zh', 'en'])
 
 /** 指引词自定义段的归一（custom-guides 票 02，ADR-0004）：合规返回归一后的对象，不合规返回 undefined。
  *  合规的判据只有一条——每面是个对象，且里面的键**只有** zh/en 两个、都得是字符串。缺面与空串都合法：
  *  那正是「回落内置段」这一事实本身，由客户端按非空判定，不靠键的缺席。
- *  「只有 zh/en」是有意收紧：形状已经是最终形状，面里多出来的键没有第二个消费者，悄悄丢掉就等于
- *  静默吞掉一个笔误（键名打错的人会以为改生效了）。面名反过来不设限，原样透传——下一票把面数
- *  从一扩到五、给票行开槽时服务端一个字都不用改。
+ *  「只有 zh/en」是有意收紧：面里多出来的键没有第二个消费者，悄悄丢掉就等于静默吞掉一个笔误
+ *  （键名打错的人会以为改生效了）。面名反过来不设限，原样透传——票 03 把面数从一扩到五、给票行
+ *  开三个槽时，服务端因此一个字都不用改（照旧只搬值不拼装），面下拉与取词全在界面那一侧。
  *  两条路径宽严不同，各有各的理由：POST /api/config 把 undefined 当非法、整体 400 且一个字都不写盘
  *  （沿用既有语义）；读 config.json 那条（applyConfigText）把它当坏值回落空对象并告警一次，与 pollMode
  *  归一同姿态——手改文件写坏一个面的形状不该让整份配置失效，更不该让服务起不来。 */
@@ -186,15 +189,16 @@ const CONFIG_FIELDS = {
     code: 'config.token',
     error: 'token 需为字符串；空串表示清除令牌（关闭鉴权）。',
   },
-  // guides（custom-guides 票 02）：指引词自定义段，一个字段装全部面（本票只接通 implement 一面）。
-  // 归一回 undefined = 结构非法 → 整个请求 400 且一个字都不写盘；immediate = 写盘即生效
-  // （/api/state 真变化拍现读 config.json，且 config 的 mtime+size 本就在指纹里，手改也下一拍跟上）。
-  // 服务端只把值原样搬下去，不参与拼装——「服务端不造字」的纪律在这一格同样成立。
+  // guides（custom-guides 票 02，五面接通于票 03）：指引词自定义段，一个字段装全部五面
+  // （grill / spec / tickets / implement / ticket）。归一回 undefined = 结构非法 → 整个请求 400
+  // 且一个字都不写盘；immediate = 写盘即生效（/api/state 真变化拍现读 config.json，且 config 的
+  // mtime+size 本就在指纹里，手改也下一拍跟上）。服务端只把值原样搬下去，不参与拼装——
+  // 「服务端不造字」的纪律在这一格同样成立，票行那面的 {key}/{path}/{title} 也由界面在复制那一刻填。
   guides: {
     normalize: (v) => normalizeGuides(v),
     effect: EFFECT.IMMEDIATE,
     code: 'config.guides',
-    error: 'guides 需为 { 面名: { zh, en } } 形状的对象，面内只认 zh/en 两键且都必须是字符串（缺面或空串 = 回落内置指引词）。',
+    error: 'guides 需为 { 面名: { zh, en } } 形状的对象，面内只认 zh/en 两键且都必须是字符串（缺面或空串 = 回落内置指引词）。面名通常是 grill / spec / tickets / implement / ticket 五面，但不校验——别的面名也照收不误（界面只认这五面，写错的面名等于没写）。',
   },
 }
 

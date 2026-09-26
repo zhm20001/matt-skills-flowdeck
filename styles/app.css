@@ -73,7 +73,9 @@
   a { color: var(--fd-accent); }
   button { font: inherit; cursor: pointer; border: 1px solid var(--fd-rule); background: var(--fd-chip); color: var(--fd-ink-body); border-radius: var(--fd-radius-btn); padding: 0.4rem 1.2rem; }
   button:hover { border-color: var(--fd-ink-muted); background: var(--fd-chip-hover); }
-  button:disabled { opacity: 0.55; cursor: default; }
+  /* 禁用的不止按钮：指引词未选面时两个 textarea 一并禁用（票 03），没有这条的话它们看着
+     照样能敲——「看起来能编辑、其实敲不进去」比明确的灰掉糟得多。 */
+  button:disabled, select:disabled, textarea:disabled { opacity: 0.55; cursor: default; }
   button.primary { background: var(--fd-btn-bg); border-color: var(--fd-btn-bg); color: var(--fd-accent-ink); }
   button.primary:hover { background: var(--fd-btn-bg-hover); border-color: var(--fd-btn-bg-hover); }
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 1px; }
@@ -271,6 +273,9 @@
   .frow label { color: var(--fd-ink-muted); font-size: 1.25rem; text-align: right; }
   .frow input { width: 100%; }
   .frow input[type="checkbox"] { width: auto; justify-self: start; }
+  /* 下拉不在 100% 那一支里（轮询模式 / 界面缩放两档都是短的，让它们撑满反而不像下拉），
+     但指引词那五个面名比它们长一截——加上限，免得把 14rem+1fr 的格撑破设置框。 */
+  .frow select { max-width: 100%; }
   /* 指引词编辑区（custom-guides 票 02）：本弹窗第一个 textarea。
      高度走 rem 才跟着缩放档一起长缩（min-height 留在 rem 基准上），resize 留给使用者自己拖 */
   .frow textarea { width: 100%; min-height: 9rem; resize: vertical; }
