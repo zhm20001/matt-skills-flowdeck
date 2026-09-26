@@ -116,6 +116,8 @@
   .tabs { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1.4rem; }
   .tabs button { border-radius: 999px; }
   .tabs button.on { background: var(--fd-tab-on-bg); border-color: var(--fd-tab-on-bg); color: var(--fd-tab-on-ink); }
+  /* 完工 effort 的折叠入口（票 01）：一枚收着的 pill，虚线边 + 淡墨色，不与进行中的 tab 抢眼 */
+  .tabs button.donefold { color: var(--fd-ink-muted); border-style: dashed; }
 
   /* ── 项目标签条（project-tabs 票 01）：顶栏下方一整行，可折成细线 ──
      卡 = 状态点 + 自动派生 emoji + 目录 basename + 关闭件；色值只经 --fd-* 别名消费

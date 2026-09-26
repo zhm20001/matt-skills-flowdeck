@@ -261,6 +261,9 @@ var apiToken = ''
 var ALL_VIEW = '__all__'
 var ALL_SHOW_DONE_KEY = 'flowdeck-all-show-done'
 var ALL_DONE_COLLAPSED_KEY = 'flowdeck-all-done-collapsed'
+/* 切换条的完工折叠态（票 01）：只存会话内变量，不落 localStorage——收起是常态、展开是偶发动作，
+   不值得为它记一个偏好（与上面两个键划清界限：那两个管的是「全部」视图这张另一张图）。 */
+var doneFoldOpen = false
 function lsFlag(key, dflt) {
   try { var v = localStorage.getItem(key); return v === null ? dflt : v === '1' } catch (e) { return dflt }
 }
@@ -477,6 +480,11 @@ var UI_TEXT = {
   // 票表
   'tab.all': { zh: '全部', en: 'All' },
   'tab.all.title': { zh: '一屏纵览所有 effort 的链状态、迷雾与最近活跃；进行中在前、完工默认折叠', en: 'Every effort chain, fog and latest activity on one screen; active first, finished ones collapsed by default' },
+  // 切换条的完工折叠入口（票 01）：计数数的是折叠里那几个（选中的完工 effort 平铺在外，不占计数）
+  'tab.done.label': { zh: '✓ 完工 ({n})', en: '✓ Done ({n})' },
+  'tab.done.expand.title': { zh: '展开这 {n} 个完工 effort', en: 'Expand these {n} finished efforts' },
+  'tab.done.collapse.title': { zh: '收起完工 effort', en: 'Collapse the finished efforts' },
+  'tab.done.aria': { zh: '完工 effort 折叠入口（{n} 个）：点开逐个切过去。收起来只是显示偏好，它们的产物照旧计入迷雾、前沿票与通知', en: 'Finished efforts ({n}): click to open and switch to one. Collapsing is display-only — their artifacts still count toward fog, frontier tickets and notifications' },
   'tab.root': { zh: '根 .scratch/', en: '.scratch/ root' },
   'tickets.h2': { zh: '票（issues/）· 点一行可复制实现指引', en: 'Tickets (issues/) · click a row to copy its implementation prompt' },
   'tickets.none': { zh: '这个 effort 还没有票。', en: 'This effort has no tickets yet.' },
@@ -967,23 +975,49 @@ function fmtRelative(iso) {
   return fmtUpdatedAt(iso)
 }
 
+/* ── effort 切换条（票 01 减负）：完工 effort 收进一个折叠入口 ──
+   判据沿用现成的 chain.complete（四格全绿），不发明第二个「完工」口径。
+   分组顺序：进行中平铺在前 → 「✓ 完工 (n)」折叠入口 → 展开时的完工 tab → 「全部」垫底。
+   选中项例外：正看着的那个完工 effort 无条件平铺、不被折叠波及（它不在折叠里，计数也不数它），
+   切走后自然收回。全程零写——.scratch/ 一个字节不动（「完工 effort 无归档动作」是既有决策）。 */
 function renderTabs() {
   var box = document.getElementById('tabs')
   box.textContent = ''
   if (!state || !state.efforts.length) return
   if (!selected && state.efforts.length) selected = state.efforts[0].slug
-  state.efforts.forEach(function (e) {
-    var b = el('button', null, effortTabLabel(e) + (e.chain.complete ? ' ✓' : ''))
-    if (e.slug === selected) b.className = 'on'
-    b.addEventListener('click', function () { selected = e.slug; render() })
-    box.appendChild(b)
-  })
-  // 「全部」伪条目（票 02）：主区换跨 effort 汇总视图；effort 切换条本票不动（超 12 个的复议线在 map）
+  var active = []
+  var done = []
+  state.efforts.forEach(function (e) { (e.chain.complete ? done : active).push(e) })
+  var doneShown = []
+  var doneFolded = []
+  done.forEach(function (e) { (e.slug === selected ? doneShown : doneFolded).push(e) })
+  active.concat(doneShown).forEach(function (e) { box.appendChild(effortTabBtn(e)) })
+  if (doneFolded.length) box.appendChild(doneFoldButton(doneFolded))
+  if (doneFoldOpen) doneFolded.forEach(function (e) { box.appendChild(effortTabBtn(e)) })
+  // 「全部」伪条目（票 02）：主区换跨 effort 汇总视图
   var all = el('button', null, t('tab.all'))
   if (selected === ALL_VIEW) all.className = 'on'
   all.title = t('tab.all.title')
   all.addEventListener('click', function () { selected = ALL_VIEW; render() })
   box.appendChild(all)
+}
+
+/** 切换条上的一个 effort tab：点它即切选中项，零写。 */
+function effortTabBtn(e) {
+  var b = el('button', null, effortTabLabel(e) + (e.chain.complete ? ' ✓' : ''))
+  if (e.slug === selected) b.className = 'on'
+  b.addEventListener('click', function () { selected = e.slug; render() })
+  return b
+}
+
+/** 完工 effort 的折叠入口：文案带折叠内的计数，展开态由 aria-expanded 如实自报。 */
+function doneFoldButton(folded) {
+  var b = el('button', 'donefold', tf('tab.done.label', { n: folded.length }))
+  b.title = tf(doneFoldOpen ? 'tab.done.collapse.title' : 'tab.done.expand.title', { n: folded.length })
+  b.setAttribute('aria-expanded', doneFoldOpen ? 'true' : 'false')
+  b.setAttribute('aria-label', tf('tab.done.aria', { n: folded.length }))
+  b.addEventListener('click', function () { doneFoldOpen = !doneFoldOpen; render() })
+  return b
 }
 
 function renderChain(eff) {
@@ -1400,9 +1434,9 @@ function doneGroupRow(count, collapsed) {
   return tr
 }
 
-/* 主区渲染的数据签名：render() 消耗的全部输入（含档位过滤、全部视图的两个偏好与
-   活跃项目标签——两张卡的内容可能逐字相同，但「切走再切回要回到离开时的样子」要求
-   换卡必重画，否则该卡的滚动位置与选中态装不回去）。
+/* 主区渲染的数据签名：render() 消耗的全部输入（含档位过滤、全部视图的两个偏好、切换条的
+   完工折叠态与活跃项目标签——两张卡的内容可能逐字相同，但「切走再切回要回到离开时的样子」
+   要求换卡必重画，否则该卡的滚动位置与选中态装不回去）。
    都是渲染输入，变了就得重画。签名没变就跳过重画——轮询热路径上最常见的情形是
    「什么都没变」，此时一根手指都不碰 DOM（与下拉的签名模式同款）。 */
 function mainRenderSignature() {
@@ -1414,6 +1448,7 @@ function mainRenderSignature() {
     ticketFilter,
     lsFlag(ALL_SHOW_DONE_KEY, true),
     lsFlag(ALL_DONE_COLLAPSED_KEY, true),
+    doneFoldOpen,
   ])
 }
 

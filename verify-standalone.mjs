@@ -90,6 +90,14 @@
  *                                票行那面 {key}/{path}/{title} 实填、其余四面无槽；config.example.json 与两份
  *                                README 的 config 段同步了 guides 字段。
  *                                必改的既有缺陷：设置弹窗焦点圈禁那条测试的选择器补上 textarea。
+ *  37. 切换条减负（ui-declutter 01）→ 顶部 effort 切换条按 chain.complete 分组：进行中平铺在前、
+ *                                「✓ 完工 (n)」折叠入口、展开时的完工 tab、「全部」垫底；计数中英双语、
+ *                                入口可 Tab 到达且 aria-expanded 如实；选中项例外（选中的完工 effort 照常
+ *                                平铺、切走才收）；展开态只存会话变量（进渲染签名，刷新回落收起、零新
+ *                                localStorage 键）、折叠展开全程零写请求。
+ *  38. 流程链技能入口（ui-declutter 02）→ 链格内的大按钮行退役（词条与 .skillrow 样式零残留）、
+ *                                标题行右上角一个「？」开弹窗定位聚合页 flowchain（阻断冒泡、零新端点）；
+ *                                聚合页与英文镜像文件级钉（frontmatter 合法、镜像同名）。
  *
  * 跑法：node verify-standalone.mjs（全绿输出 OK，任何失败退出码非 0）
  */
@@ -2755,6 +2763,114 @@ async function runScenarios(tmp) {
     allDom2.window.close()
     ok('全部视图偏好读取：localStorage 记忆跨会话生效（不显示完工 + 展开态）')
 
+    // ── 切换条减负（票 01）：完工 effort 收进「✓ 完工 (n)」折叠入口，零写、纯显示偏好 ──
+    // 夹具形态照抄「全部视图」那一组：同载荷（alpha/beta 进行中，gamma/delta 四格全绿）、
+    // 同一个 uiDom + fetch 桩，不同的是这里盯 #tabs 本身。零写一并钉在桩上：折叠点来点去
+    // 一个写请求都不许发（.scratch/ 与 config.json 都得一个字节不动）。
+    const jsErrorsFold = []
+    const vcFold = new VirtualConsole()
+    vcFold.on('jsdomError', (e) => jsErrorsFold.push(String((e && e.message) || e)))
+    const foldFetches = []
+    const foldDom = uiDom({
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39324/',
+      pretendToBeVisual: true,
+      virtualConsole: vcFold,
+      beforeParse(window) {
+        Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.resolve() } })
+        window.fetch = (u, opts) => {
+          foldFetches.push({ url: String(u), method: (opts && opts.method) || 'GET' })
+          return Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(allPayload)) })
+        }
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const foDoc = foldDom.window.document
+    const foWin = foldDom.window
+    // 折叠入口按 aria-expanded 认（展开态是它对外的契约，不靠内部类名认门）
+    const foldToggle = () => foDoc.querySelector('#tabs button[aria-expanded]')
+    const foldTabs = () => Array.from(foDoc.querySelectorAll('#tabs button')).map((b) => b.textContent)
+
+    // 默认收起：进行中平铺在前，折叠入口垫在「全部」之前，完工 effort 一个 tab 都不露
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', '✓ 完工 (2)', '全部'], '收起态：进行中在前、折叠入口、纵览垫底')
+    assert.ok(!foldTabs().some((x) => x.indexOf('gamma') === 0 || x.indexOf('delta') === 0), '收起态不渲染任何完工 tab')
+    assert.equal(foldToggle().getAttribute('aria-expanded'), 'false', '折叠态如实用 aria-expanded=false')
+    assert.ok(foldToggle().getAttribute('aria-label'), '折叠入口带 aria-label（目标与展开态都读得到）')
+    // 词条里带 {n} 槽的一律走填槽取词：t() 原样吐占位符，真浏览器实拍撞出来的洞（标题挂着一句
+    // 「展开这 {n} 个完工 effort」）。两态的 title 都得是填好的整句。
+    for (const attr of ['title', 'aria-label']) {
+      assert.doesNotMatch(foldToggle().getAttribute(attr), /\{/, '折叠入口的 ' + attr + ' 不残留未填的占位符')
+    }
+    assert.match(foldToggle().getAttribute('title'), /2/, '折叠态 title 带折叠内的计数')
+    assert.equal(foldToggle().tagName, 'BUTTON', '折叠入口是原生 button（可 Tab 到达、Enter/Space 有默认键盘行为）')
+    foldToggle().focus()
+    assert.equal(foDoc.activeElement, foldToggle(), '折叠入口可聚焦（键盘可达）')
+
+    // 展开：两个完工 tab 落在折叠入口之后、「全部」之前；切换即时重画；零写
+    const beforeFetches = foldFetches.length
+    foldToggle().dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', '✓ 完工 (2)', 'gamma ✓', 'delta ✓', '全部'], '展开态：完工 tab 排在折叠入口之后、纵览之前')
+    assert.equal(foldToggle().getAttribute('aria-expanded'), 'true', '展开后 aria-expanded 翻成 true')
+    assert.doesNotMatch(foldToggle().getAttribute('title'), /\{/, '展开态 title 同样不残留未填的占位符')
+    assert.equal(foldFetches.length, beforeFetches, '折叠/展开是纯显示偏好：一个写请求都不发')
+    assert.deepEqual(foldFetches.filter((f) => f.method !== 'GET'), [], '全程零写请求')
+
+    // 展开态是会话内变量：数据没变的轮询不得把它悄悄收回去
+    foDoc.getElementById('refreshBtn').dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    await tick(); await tick()
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', '✓ 完工 (2)', 'gamma ✓', 'delta ✓', '全部'], '数据不变的刷新后展开态仍在（态进渲染签名）')
+
+    // 收起：再点一次即回默认形态
+    foldToggle().dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', '✓ 完工 (2)', '全部'], '再点一次收起')
+
+    // 选中项例外：选中的恰是完工 effort 时它的 tab 照常显示、不被折叠波及；计数只数折叠里那几个。
+    // 入口取自「全部」视图——从那里点进一个已完工 effort，正是这条路径。
+    Array.from(foDoc.querySelectorAll('#tabs button')).find((b) => b.textContent === '全部').dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    foDoc.querySelector('#main tr.donegroup').dispatchEvent(new foWin.Event('click', { bubbles: true })) // 先展开纵览的完工组，才点得到 gamma 那行
+    Array.from(foDoc.querySelectorAll('#main tr.effortrow')).find((tr) => tr.querySelector('.name').textContent === 'gamma')
+      .dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', 'gamma ✓', '✓ 完工 (1)', '全部'], '选中的完工 effort 照常平铺，折叠入口只数剩下那几个')
+    assert.match(foDoc.querySelector('#main .card h2').textContent, /完了/, '主区与 tab 一致（gamma 的链卡）')
+    // 切走才收：换一个进行中的 effort，gamma 回到折叠里
+    Array.from(foDoc.querySelectorAll('#tabs button')).find((b) => b.textContent === 'beta').dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.deepEqual(foldTabs(), ['alpha', 'beta', '✓ 完工 (2)', '全部'], '切走后 gamma 收回折叠入口，计数回到 2')
+
+    // 双语：英文态折叠入口换词（切换本身零请求）
+    foDoc.getElementById('langBtn').dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.ok(foldTabs().some((x) => x.indexOf('✓ Done (2)') === 0), '英文态折叠入口换文案（✓ Done (2)）')
+    assert.ok(foldToggle().getAttribute('aria-label').indexOf('中文') < 0, '英文态 aria-label 随语言翻')
+    assert.ok(foldToggle().getAttribute('aria-label').length > 0, '英文态 aria-label 非空')
+    foDoc.getElementById('langBtn').dispatchEvent(new foWin.Event('click', { bubbles: true }))
+    assert.deepEqual(jsErrorsFold, [])
+    const foldKeys = Object.keys(foldDom.window.localStorage)
+    assert.ok(!foldKeys.some((k) => k.indexOf('done') >= 0 && k.indexOf('all') < 0), '切换条折叠不新增 localStorage 键（刷新回落收起），现有键：' + foldKeys.join(','))
+
+    // 刷新回落：另开一个浏览器（无记忆），折叠态回到收起——收起是常态、展开是偶发
+    const jsErrorsFold2 = []
+    const vcFold2 = new VirtualConsole()
+    vcFold2.on('jsdomError', (e) => jsErrorsFold2.push(String((e && e.message) || e)))
+    const foldDom2 = uiDom({
+      runScripts: 'dangerously',
+      url: 'http://127.0.0.1:39325/',
+      pretendToBeVisual: true,
+      virtualConsole: vcFold2,
+      beforeParse(window) {
+        window.fetch = () => Promise.resolve({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(allPayload)) })
+      },
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    const foDoc2 = foldDom2.window.document
+    assert.deepEqual(Array.from(foDoc2.querySelectorAll('#tabs button')).map((b) => b.textContent), ['alpha', 'beta', '✓ 完工 (2)', '全部'], '新会话首渲染即收起（展开态不落盘）')
+    assert.deepEqual(jsErrorsFold2, [])
+    // 文件级：展开态是主区渲染的一个输入，得进签名——否则某条别的路重画主区时会按收起的
+    // 形态重建切换条，把用户刚展开的列表又吞回去（jsdom 钉不到这条：点按走的是直接 render()）
+    const sigBody = deckHtml.slice(deckHtml.indexOf('function mainRenderSignature'), deckHtml.indexOf('function snapshotScrolls'))
+    assert.match(sigBody, /doneFoldOpen/, '展开态进了主区渲染签名')
+    foldDom.window.close()
+    foldDom2.window.close()
+    ok('切换条完工折叠（jsdom + 文件级）：按 chain.complete 分组（进行中平铺在前、完工收进折叠入口、纵览垫底）、计数文案中英双语、折叠入口可 Tab 到达且 aria-expanded 如实、展开/收起即时重画、选中项例外（选中的完工 effort 照常平铺、切走才收）、展开态进渲染签名且刷新回落收起、零写请求')
+
     // ── 项目总览弹窗（票 03 + 票 01 收编）：打开才单拍、坏行标注、行与行内按钮都开为标签页 ──
     const jsErrorsOv = []
     const vcOv = new VirtualConsole()
@@ -4388,6 +4504,12 @@ async function runScenarios(tmp) {
     assert.deepEqual(cjkResidue(shDoc).filter((h) => /tabcard|tdot|tabhandle/.test(h)), [], '标签条零中文残留（卡面、状态点与把手）')
     shClick(shTab('All'))
     assert.deepEqual(cjkResidue(shDoc), [], '「全部」视图零残留（表头、折叠行、行 aria-label）')
+    // 切换条的完工折叠入口（票 01）：英文态自己也得零残留，展开后 gamma 才点得到
+    const shFold = () => shDoc.querySelector('#tabs button[aria-expanded]')
+    assert.match(shFold().textContent, /^✓ Done \(\d+\)$/, '英文态折叠入口出英文文案与计数')
+    assert.equal(shFold().getAttribute('aria-expanded'), 'false', '英文态折叠入口的展开态照实自报')
+    shClick(shFold())
+    assert.equal(shFold().getAttribute('aria-expanded'), 'true', '英文态展开后 aria-expanded 翻 true')
     shClick(shTab('gamma'))
     assert.match(shDoc.querySelector('.next .label').textContent, /all done|complete/i, '完工卡的标签也随语言')
     assert.deepEqual(cjkResidue(shDoc), [], '完工 effort（四格全绿）零残留')
@@ -4446,7 +4568,7 @@ async function runScenarios(tmp) {
     assert.deepEqual(cjkResidue(shDoc), [], '空态页零残留（约定与骨架指令都出英文）')
     assert.deepEqual(jsErrorsShell, [])
     shellDom.window.close()
-    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/完工卡/推定标注/前沿面板/项目标签条/开新标签菜单/设置/项目总览/票正文/技能弹窗（含正文）/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
+    ok('英文态整页无残留（jsdom）：链卡/票表/地图规格/全部视图/切换条完工折叠入口/完工卡/推定标注/前沿面板/项目标签条/开新标签菜单/设置/项目总览/票正文/技能弹窗（含正文）/空态页逐视图扫中文，含 title、aria-label、placeholder 与文档标题')
 
     // ── 英文态内容随语言（票 02）：一键复制、桌面通知、报错措辞三处人话都翻；未知 code 回落原文 ──
     const jsErrorsLang = []
